@@ -1,3 +1,4 @@
+#include "../DisplayScheduler.h"
 #include "PackedFont.h"
 #include <lvgl_private.h>
 #include "../Hardware.h"
@@ -18,8 +19,8 @@
 #include "../Pins.h"
 #include "../PowerSense.h"
 #include "../PowerMonitor.h"
-#include "../E6Driver.h"
-#include "../E6Profiles.h"
+#include "../drivers/e6/E6Driver.h"
+#include "../drivers/e6/E6Profiles.h"
 #include "../Defaults.h"
 #include "../DriverRequests.h"
 #include "../WifiManager.h"
@@ -125,14 +126,15 @@ static void sdVolumeSnapshot(bool);
 static SdLinkState sdLink;
 static uint32_t panelSpiHz=16000000;
 static uint8_t imuAddress = 0x19;
-static std::atomic<bool> audioRunning{false}, audioStop{false}, displayActive{false},
-    streaming{false};
+static std::atomic<bool> audioRunning{false}, audioStop{false}, streaming{false};
+static bool displayActive();
+static bool displayInputBusy();
 static char displayError[64] = "none", displayState[24] = "idle", frameHash[65]{};
 static uint32_t streamId = 0, nextStream = 1, streamDeadline = 0, lastClear = 0;
 static bool frameValid = false;
 static uint8_t frameProfile = 0xff;
 static void applyPanelClockIfIdle(){
-  if(!displayActive&&!streaming&&panel.safeToIdle()&&colorPanel.safeToIdle())
+  if(!displayActive()&&!streaming&&panel.safeToIdle()&&colorPanel.safeToIdle())
     panelSpiHz=policies.get<uint32_t>("/sys/bus","display_spi_hz",16000000);
 }
 static mbedtls_sha256_context digest;
@@ -255,7 +257,7 @@ static const char *ensureSdReady(){
 }
 static const char *railOff() {
   if(vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "storage_in_use";
-  if (audioRunning || audioSpooling || displayActive || streaming)
+  if (audioRunning || audioSpooling || displayActive() || streaming)
     return "resource_busy";
   if (!takeSPI())
     return "spi_busy";
@@ -423,7 +425,7 @@ static const char *boardHandler(const char *, JsonObjectConst, JsonObject out) {
 static const char *clockHandler(const char *m, JsonObjectConst a, JsonObject out) {
   if (!strcmp(m, "write")) {
     ClockChange change;if(auto e=validateClockChange(a,change,{80,160}))return e;
-    if(change.cpu&&(audioRunning||audioSpooling||displayActive||streaming||networkActive()))return "resource_busy";
+    if(change.cpu&&(audioRunning||audioSpooling||displayActive()||streaming||networkActive()))return "resource_busy";
     uint32_t previous=getCpuFrequencyMhz();
     if(change.cpu&&!setCpuFrequencyMhz(change.cpuMhz))return "clock_failed";
     if(change.wall){timeval t{time_t(change.unixSeconds),0};
@@ -692,8 +694,8 @@ static const char*remoteHandler(const char*m,JsonObjectConst a,JsonObject o){
 #include "../ScriptService.h"
 #include "../WorkerService.h"
 #include "../UiService.h"
-#include "../E6UiSurface.h"
-#include "../DisplayService.h"
+#include "E6UiSurface.inc"
+#include "E6Display.inc"
 static const char *powerHandler(const char *m, JsonObjectConst a, JsonObject out) {
   if(workers.active()&&Policies::choice("sleep,shutdown,reboot",m))return "workers_active";
   if (!strcmp(m, "read")) {
@@ -707,7 +709,7 @@ static const char *powerHandler(const char *m, JsonObjectConst a, JsonObject out
   }
   if (!strcmp(m, "peripherals_off"))
     return railOff();
-  if (audioRunning || audioSpooling || displayActive || streaming || networkActive() || workers.active() || pendingPower[0] || shutdownRequested)
+  if (audioRunning || audioSpooling || displayActive() || streaming || networkActive() || workers.active() || pendingPower[0] || shutdownRequested)
     return "resource_busy";
   if (!strcmp(m, "write")) {
     const char *mode = a["mode"] | "";
@@ -795,7 +797,7 @@ static void sendHTTP() {
 static void commitPower() {
   if (!pendingPower[0] || int32_t(millis() - powerAt) < 0)
     return;
-  if (audioRunning || audioSpooling || displayActive || streaming || networkActive() || workers.active()) {
+  if (audioRunning || audioSpooling || displayActive() || streaming || networkActive() || workers.active()) {
     pendingPower[0] = 0;shutdownRequested=false;
     event("/sys/power", "aborted", "activity_started");
     return;
@@ -1119,7 +1121,7 @@ void poll() {
   conditions.tick(uptime());
   auto powerReading=powerMonitor.read(uptime());
   if(powerReading.valid&&conditions.active("system:low-battery")&&shutdownOnLowBattery()&&
-     !pendingPower[0]&&!audioRunning&&!audioSpooling&&!displayActive&&!streaming&&!networkActive()&&!shutdownRequested&&!bleOperation&&!zbStarting&&!workers.active()&&
+     !pendingPower[0]&&!audioRunning&&!audioSpooling&&!displayActive()&&!streaming&&!networkActive()&&!shutdownRequested&&!bleOperation&&!zbStarting&&!workers.active()&&
      (!shutdownAttemptAt||uptime()-shutdownAttemptAt>=1000)){
     tcpService.closeAll();udpService.stop();httpApps.clear();stopWebSocket();stopBle();
     if(meshOwner==MeshOwner::Thread){OThread.end();meshOwner=MeshOwner::None;}
@@ -1127,14 +1129,14 @@ void poll() {
     if(nfsService.active()){if(auto error=nfsService.stop()){event("/services/nfs","stop_failed",error);serviceStopped=false;}else event("/services/nfs","stopped","low_battery_shutdown");}
     if(serviceStopped){JsonDocument a,r;powerHandler("shutdown",a.as<JsonObjectConst>(),r.to<JsonObject>());}
   }
-  if (!audioRunning && !audioSpooling && !displayActive && !streaming && !pendingCount &&
+  if (!audioRunning && !audioSpooling && !displayActive() && !streaming && !displayScheduler.pending() &&
       esp_clk_rtc_time() - lastRefreshRTC >= 86220000000ULL) {
     JsonDocument a, r;
     a["force"]=true;
     const char*e=nullptr;uint32_t current=presentationState.active();a["force"]=true;
     if(uiDocument(current))e=uiHandler("refresh",a.as<JsonObjectConst>(),r.to<JsonObject>());
     else if(current){a["view_id"]=current;e=displayHandler("clear",a.as<JsonObjectConst>(),r.to<JsonObject>());}
-    else{auto p=new(std::nothrow)nm::Payload;if(!p)e="memory_low";else{const char*blank="{\"format\":\"scene-v1\",\"background\":1,\"commands\":[]}";p->size=strlen(blank);memcpy(p->bytes,blank,p->size);e=queueDisplay(p,E6Profile::StockUI,false,r.to<JsonObject>());if(!e&&pendingCount){pendingDisplays[pendingCount-1].maintenance=true;pendingDisplays[pendingCount-1].force=true;}}}
+    else{auto p=new(std::nothrow)nm::Payload;if(!p)e="memory_low";else{const char*blank="{\"format\":\"scene-v1\",\"background\":1,\"commands\":[]}";p->size=strlen(blank);memcpy(p->bytes,blank,p->size);e=queueDisplay(p,E6Profile::StockUI,false,r.to<JsonObject>(),appScope,{},true,true);}}
     if (!e)
       event("/dev/display", "maintenance_clear");
   }

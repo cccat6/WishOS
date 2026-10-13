@@ -5,7 +5,7 @@
 namespace notesos::boardpack {
 inline constexpr char ID[]="e6-nova-c6";
 inline constexpr char MCU[]="ESP32-C6FH4";
-inline constexpr char FINGERPRINT[]="583dc4aff9fe324ea8a9a3c600794bcef6a3c3d7aae1dec0bdf06bf9d3ea9aea";
+inline constexpr char FINGERPRINT[]="1ee98abc2fc644976855f83cb232a7f6cf89249e976ef3879494a8645550eb02";
 inline constexpr char STARTUP_SCRIPT[]="/system/startup.lua";
 inline constexpr size_t STARTUP_MEMORY_BYTES=65536;
 struct Asset {const char*path;const char*data;size_t size;};

@@ -111,3 +111,39 @@ The packaged native font was compiled from Noto Sans SC Regular, source SHA256
 the source is provided via `--font` and the SIL OFL is included next to the compiled
 subset. Ordinary firmware builds use the checked-in subset and do not need Python
 font dependencies or any private research workspace.
+
+## Display adapter boundary
+
+The portable `DisplayScheduler.h` supplies request ownership, queue policy,
+view/revision filtering and completion receipts. Its request type extends
+`DisplayRequest`; it deliberately has no frame size, color table, BUSY GPIO or
+refresh timer. Native adapters implement the small compile-time contract documented
+at the top of that header. They report transport, controller or frame-latch completion
+rather than guessing from elapsed time. Driver callbacks set flags or queue native
+notifications; the service loop delivers application events.
+
+The E6 engine, fixed profiles and palettes reside in
+`firmware/AgenticOS/src/drivers/e6/`. The C6 package binds those engines to GPIO/SPI,
+file/scene/UI sources and power in `ports/esp32-c6-e6/E6Display.inc` and
+`E6UiSurface.inc`. All E6 profiles share one scheduler and one physical resource.
+The native binding also provides `displayInputBusy()`; the shared input policy
+uses that state without referencing an E6 phase or GPIO.
+The LVGL renderer reads geometry from the selected board package and emits RGB565
+regions; each native sink performs its own packing/rotation/transport. It is not
+required to use E6's column bands or keep a full frame in RAM.
+
+To port another screen, implement/compose its native engine and binding in a new
+port, describe its actual profiles/formats/completion conditions, and select that
+port from `board.json` when compiling. No hot driver loading or runtime GPIO editing
+is provided. The portable Core, scheduler and runtime application ABI remain the
+same. The binding must retain buffers until native I/O has finished reading them;
+continuous scanout buffers remain owned by the driver after a presentation receipt.
+All physical bus operations use that port's arbiter, with DMA transfers holding their
+bus lease only as long as the transfer needs it. An independent EPD optical cycle
+does not hold SPI. Recovery and power-down remain native lifecycle operations.
+
+The public [display interface](../../skills/agentic-notes-hardware/references/display-interface.md)
+describes event evidence and the distinction between a hardware component and its
+presentation profiles. Host fixtures cover immediate transfer, DMA, EPD BUSY and
+frame-latched continuous scanout with the same scheduler. Actual non-E6 panel
+implementations are future adapters, not hidden capabilities of the E6 build.

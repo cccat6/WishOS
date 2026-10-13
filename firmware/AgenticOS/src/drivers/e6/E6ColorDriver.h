@@ -1,7 +1,7 @@
 #pragma once
 #include "E6Driver.h"
 #include "E6MonoCache.h"
-#include "display/E6Waveforms.h"
+#include "E6Waveforms.h"
 #include <string.h>
 namespace notesos {
 // Fixed compound presentations. The caller supplies a replayable image in bands;

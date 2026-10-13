@@ -74,7 +74,7 @@ static const char* sdHandler(const char*m,JsonObjectConst a,JsonObject out){
   if(!strcmp(m,"off"))return railOff();
   if(!strcmp(m,"probe")){
     if(vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "storage_in_use";
-    if(audioRunning||audioSpooling||displayActive||streaming)return "resource_busy";
+    if(audioRunning||audioSpooling||displayActive()||streaming)return "resource_busy";
     if(!takeSPI())return "spi_busy";
     auto e=ensureRail();
     if(!e)sdMountConfigured();
@@ -85,7 +85,7 @@ static const char* sdHandler(const char*m,JsonObjectConst a,JsonObject out){
   }
   if(!strcmp(m,"mount")){
     if(vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "storage_in_use";
-    if(audioRunning||audioSpooling||displayActive||streaming)return "resource_busy";
+    if(audioRunning||audioSpooling||displayActive()||streaming)return "resource_busy";
     if(!takeSPI())return "spi_busy";
     auto e=ensureRail();
     if(!e&&(!sdTuned||!sdConfiguration(policies).sameLink(sdLink.applied)))sdMountConfigured();
@@ -161,7 +161,7 @@ static const char* policyHandler(const char*m,JsonObjectConst a,JsonObject out){
     }
     bool sdLocked=false;
     if(sdChanged&&!strcmp(m,"apply")){
-      if(audioRunning||audioSpooling||displayActive||streaming||vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "resource_busy";
+      if(audioRunning||audioSpooling||displayActive()||streaming||vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "resource_busy";
       if(!takeSPI())return "spi_busy";
       sdLocked=true;
     }
@@ -205,13 +205,13 @@ static void sampleStats(){
 }
 static const char* statsHandler(const char*,JsonObjectConst,JsonObject o){
   o["at_ms"]=statsAt;o["window_ms"]=statsWindow;o["heap_free_bytes"]=ESP.getFreeHeap();o["heap_min_free_bytes"]=ESP.getMinFreeHeap();o["largest_free_block_bytes"]=ESP.getMaxAllocHeap();o["clock_mhz"]=getCpuFrequencyMhz();if(cpuKnown)o["cpu_percent"]=cpuPercent;else{o["cpu_percent"]=nullptr;o["cpu_reason"]="sampling_unavailable_or_warmup";}
-  o["psram_bytes"]=ESP.getPsramSize();o["psram_free_bytes"]=ESP.getFreePsram();o["flash_bytes"]=ESP.getFlashChipSize();o["firmware_bytes"]=ESP.getSketchSize();o["event_drops"]=eventDrops.load();o["audio_dropped_samples"]=audioDrops.load();o["audio_queue_blocks"]=uxQueueMessagesWaiting(audioQueue);o["display_active"]=bool(displayActive);o["card_mounted"]=mounted;return nullptr;
+  o["psram_bytes"]=ESP.getPsramSize();o["psram_free_bytes"]=ESP.getFreePsram();o["flash_bytes"]=ESP.getFlashChipSize();o["firmware_bytes"]=ESP.getSketchSize();o["event_drops"]=eventDrops.load();o["audio_dropped_samples"]=audioDrops.load();o["audio_queue_blocks"]=uxQueueMessagesWaiting(audioQueue);o["display_active"]=bool(displayActive());o["card_mounted"]=mounted;return nullptr;
 }
 
 static int inputGate(const Event&e){
   // Input policy follows the presentation lifecycle, not one waveform phase.
   // A terminal fault must not prevent the user from invoking recovery controls.
-  if(!colorPanel.active()&&(!panel.active()||panel.receiving()))return 0;JsonDocument d;policies.resolve("/sys/input",appScope,d.to<JsonObject>());
+  if(!displayInputBusy())return 0;JsonDocument d;policies.resolve("/sys/input",appScope,d.to<JsonObject>());
   if(!Policies::choice(d["gated_sources"]|"",e.path))return 0;
   const char*mode=d["during_display_busy"]|"dispatch";
   return !strcmp(mode,"queue")?1:!strcmp(mode,"drop")?2:0;
@@ -239,7 +239,7 @@ static const char*nfsHandler(const char*m,JsonObjectConst a,JsonObject out){
     NfsOptions parsed;if(auto e=NfsOptions::parse(options.as<JsonObjectConst>(),parsed))return e;
     auto provider=vfs.get(parsed.provider);if(!provider)return "unknown_provider";
     if(provider==&sdFiles){
-      if(audioRunning||audioSpooling||displayActive||streaming)return "resource_busy";
+      if(audioRunning||audioSpooling||displayActive()||streaming)return "resource_busy";
       if(!takeSPI())return "spi_busy";auto e=ensureSdReady();giveSPI();if(e)return e;
       // This is an explicitly requested volume service, not a presence test.
       if(!sdFiles.freeKnown){if(auto e=sdFiles.refreshSpace())return e;}

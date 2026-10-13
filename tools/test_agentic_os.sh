@@ -14,6 +14,8 @@ mkdir -p build/previews
 build/os-interaction-test
 "$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_e6_color_test.cpp -o build/os-e6-color-test
 build/os-e6-color-test
+"$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_display_scheduler_test.cpp -o build/os-display-scheduler-test
+build/os-display-scheduler-test
 build/os-core-test
 "$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_retention_test.cpp -o build/os-retention-test
 build/os-retention-test

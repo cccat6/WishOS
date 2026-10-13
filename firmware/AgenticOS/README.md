@@ -1,6 +1,6 @@
 # AgenticOS
 
-Runtime-loadable UI and Lua applications above portable resource, policy and file interfaces. Current Arduino BSP targets the shared ESP32-C6FH4 E6/Nova board; the implemented display backend is E6. Nova and alternative MCU/display/network adapters are not yet implemented.
+Runtime-loadable UI and Lua applications above portable resource, policy and file interfaces. Current Arduino BSP targets the shared ESP32-C6FH4 E6/Nova board; the implemented display backend is E6. A separate headless ESP32-C3 validation port uses the same runtime. Nova and other display-controller bindings are not yet implemented.
 
 See [runtime/API status](../../docs/agent-os-runtime.md), [agent skill](../../skills/agentic-notes-hardware/SKILL.md) and [example package](../../examples/agent-os/dashboard).
 

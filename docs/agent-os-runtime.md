@@ -282,3 +282,19 @@ E6 端口提供蓝黄双色、快速彩色、高质量彩色三个固定复合�
 图标是小型索引色文件，经同一 VFS 逐行读取；字体沿用方格像素对齐的
 主机编译流程。外部字库使用可随机读取的 NMF1 字形索引，不在设备执行
 无界 TrueType 解析。图片解码失败传递给显示事务，不把缺图提交为成功。
+
+
+### 可编译替换的显示组件
+
+`DisplayScheduler.h` 统一管理请求队列、视图版本、完成回执与资源释放；
+`drivers/e6/` 和 E6 端口绑定处理具体色表、像素布局、BUSY 和硬件时序。
+三种复合模式属于同一个 `e6-ist7601` 组件的 profiles，上层 `driver` 参数
+选择 profile。替换底层屏幕需要原生适配和重新编译，页面/行为仍可运行时替换。
+
+完成事件区分 `transport_complete`、`device_ready`、`frame_latched`、
+`unchanged`。`on_event` 在服务循环内执行，并用 job/view/revision 关联请求；
+不会在 DMA/VSYNC 的 ISR 内调用用户脚本。LCD/OLED 并不被一概视为同步完成，
+连续扫描的显示器也不因一次请求完成就释放扫描缓冲区。具体协议见
+[显示接口](../skills/agentic-notes-hardware/references/display-interface.md)。
+当前真正接入的硬件驱动仍是 E6；其他完成模型使用同一个调度器做主机行为测试，
+并不代表已实现或实测各型号 LCD/OLED/LED 驱动。

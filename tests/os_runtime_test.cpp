@@ -1,6 +1,6 @@
 #include "../firmware/AgenticOS/src/Defaults.h"
 #include "../firmware/AgenticOS/src/Vfs.h"
-#include "../firmware/AgenticOS/src/E6Driver.h"
+#include "../firmware/AgenticOS/src/drivers/e6/E6Driver.h"
 #include "../firmware/AgenticOS/src/PowerSense.h"
 #include <cassert>
 #include <iostream>

@@ -1,6 +1,6 @@
 #pragma once
 #include "E6ColorDriver.h"
-#include "display/E6Palette.h"
+#include "E6Palette.h"
 namespace notesos {
 enum class E6Profile:uint8_t {StockUI,StockImage,BlueYellow,ColorFast,ColorQuality};
 struct E6ProfileInfo {const char*id;E6Profile profile;unsigned colors;size_t sourceBytes;const char*format;uint32_t estimateMs;const char*guide;};

@@ -69,10 +69,12 @@ class Client:
         if driver:args['driver']=driver
         result=self.call('/sys/ui','open',args)
         return {'root':root,'presentation':result}
-    def present_native(self,frame:bytes,driver='e6.ink6.ui-v1',force=False,view_id=None):
-        if len(frame)!=172800: raise ValueError('Expected raw native720x480 4bpp (172800 bytes)')
-        inks={0,1,2,3,5,6}
-        if any(x>>4 not in inks or x&15 not in inks for x in frame): raise ValueError('Invalid native six-color ink code')
+    def present_native(self,frame:bytes,driver,force=False,view_id=None):
+        if not driver:raise ValueError('Choose an advertised display profile for raw frame bytes')
+        profiles=self.call('/dev/display','drivers',{'driver':driver})['drivers']
+        profile=next((p for p in profiles if p['id']==driver),None)
+        if not profile or not profile.get('streaming'):raise ValueError('This profile requires a replayable source')
+        if len(frame)!=profile['frame_bytes']:raise ValueError('Frame size does not match the selected profile')
         created=view_id is None
         if created:
             view_id=self.call('/sys/ui','create')['view_id']
@@ -91,8 +93,10 @@ class Client:
             if time.monotonic()>=deadline:raise TimeoutError('Display preparation timed out; inspect job before retrying')
             time.sleep(.02)
         try:
-            for offset in range(0,len(frame),1024):
-                chunk=frame[offset:offset+1024]; self.call('/dev/display','chunk',{'stream_id':sid,'offset':offset,'hex':chunk.hex()})
+            chunk_size=min(1024,r['chunk_limit'])
+            if chunk_size<=0:raise ValueError('Invalid display chunk limit')
+            for offset in range(0,len(frame),chunk_size):
+                chunk=frame[offset:offset+chunk_size]; self.call('/dev/display','chunk',{'stream_id':sid,'offset':offset,'hex':chunk.hex()})
             return self.call('/dev/display','commit',{'stream_id':sid,'sha256':hashlib.sha256(frame).hexdigest()})
         except Exception:
             # Before commit, abort only this stream. Never abort an active waveform.
@@ -104,8 +108,10 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     t=p.add_mutually_exclusive_group(required=True);t.add_argument('--url');t.add_argument('--port')
     p.add_argument('path');p.add_argument('method',nargs='?',default='read');p.add_argument('--args',default='{}')
-    p.add_argument('--publish-ui',type=Path);p.add_argument('--mount',default='/storage/user');p.add_argument('--entry',default='ui.json');p.add_argument('--native',type=Path);p.add_argument('--driver',default='e6.ink6.ui-v1');p.add_argument('--force',action='store_true')
-    a=p.parse_args();c=Client(a.url,a.port)
+    p.add_argument('--publish-ui',type=Path);p.add_argument('--mount',default='/storage/user');p.add_argument('--entry',default='ui.json');p.add_argument('--native',type=Path);p.add_argument('--driver');p.add_argument('--force',action='store_true')
+    a=p.parse_args()
+    if a.native and not a.driver:p.error('--native requires --driver from device discovery')
+    c=Client(a.url,a.port)
     result=c.publish_ui(a.publish_ui,a.mount,a.entry,a.driver) if a.publish_ui else c.present_native(a.native.read_bytes(),a.driver,a.force) if a.native else c.call(a.path,a.method,json.loads(a.args))
     print(json.dumps(result,ensure_ascii=False,indent=2))
 if __name__=='__main__':main()

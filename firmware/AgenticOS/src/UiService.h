@@ -11,7 +11,7 @@ static const char*validateUiView(JsonObjectConst a,UiView&v){
   for(auto f:values)if(strlen(f.key().c_str())>48||!f.value().is<const char*>())return "ui_values_type";serializeJson(values,v.values,sizeof v.values);}
  return nullptr;
 }
-static lv_display_t* uiDisplay=nullptr;static lv_obj_t* uiRoot=nullptr;static uint8_t uiDrawBuffer[board::WIDTH*8*2];
+static lv_display_t* uiDisplay=nullptr;static lv_obj_t* uiRoot=nullptr;static uint8_t uiDrawBuffer[boardpack::DISPLAY_WIDTH*8*2];
 struct UiSink {void*context;void(*write)(void*,const lv_area_t&,const uint16_t*);};
 static UiSink*uiSink=nullptr;static char uiBase[256]{},uiCurrent[256]{},uiPresented[256]{};
 static unsigned uiDepth=0;static const char*uiError="none";
@@ -59,7 +59,7 @@ static void initUi(){if(uiDisplay)return;lv_init();observeUiDecoders();lv_tick_s
  fs.read_cb=[](lv_fs_drv_t*,void*x,void*out,uint32_t n,uint32_t*got)->lv_fs_res_t{auto f=(LvFile*)x;size_t z=0;memset(out,0,n);auto e=f->p->read(f->relative,f->at,(uint8_t*)out,n,z);*got=z;f->at+=z;if(e)uiReadError=e;return e?LV_FS_RES_FS_ERR:LV_FS_RES_OK;};
  fs.seek_cb=[](lv_fs_drv_t*,void*x,uint32_t at,lv_fs_whence_t whence)->lv_fs_res_t{auto f=(LvFile*)x;FileInfo info;if(whence==LV_FS_SEEK_SET)f->at=at;else if(whence==LV_FS_SEEK_CUR)f->at+=at;else{if(f->p->stat(f->relative,info))return LV_FS_RES_FS_ERR;f->at=info.size+at;}return f->at<=UINT32_MAX?LV_FS_RES_OK:LV_FS_RES_INV_PARAM;};
  fs.tell_cb=[](lv_fs_drv_t*,void*x,uint32_t*at)->lv_fs_res_t{*at=((LvFile*)x)->at;return LV_FS_RES_OK;};lv_fs_drv_register(&fs);
- uiDisplay=lv_display_create(board::WIDTH,board::HEIGHT);lv_display_set_color_format(uiDisplay,LV_COLOR_FORMAT_RGB565);lv_display_set_buffers(uiDisplay,uiDrawBuffer,nullptr,sizeof(uiDrawBuffer),LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_flush_cb(uiDisplay,uiFlush);uiRoot=lv_screen_active();lv_obj_set_style_bg_color(uiRoot,lv_color_white(),0);
+ uiDisplay=lv_display_create(boardpack::DISPLAY_WIDTH,boardpack::DISPLAY_HEIGHT);lv_display_set_color_format(uiDisplay,LV_COLOR_FORMAT_RGB565);lv_display_set_buffers(uiDisplay,uiDrawBuffer,nullptr,sizeof(uiDrawBuffer),LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_flush_cb(uiDisplay,uiFlush);uiRoot=lv_screen_active();lv_obj_set_style_bg_color(uiRoot,lv_color_white(),0);
 }
 static char* uiFallbackText(const char*text,unsigned size){
  size_t n=strlen(text);char*out=(char*)malloc(n+1);if(!out)return nullptr;size_t at=0,wrote=0;
@@ -117,8 +117,8 @@ static bool prepareUi(const char*path,const UiView&view=UiView{},bool validateOn
  char rootBase[256];copy(rootBase,sizeof(rootBase),path);char*slash=strrchr(rootBase,'/');if(slash)*slash=0;
  UiView previousView=uiRenderedView;uiRenderedView=view;
  uiValues.clear();if(deserializeJson(uiValues,view.values)){uiRenderedView=previousView;uiError="ui_values_invalid";return false;}
- lv_display_set_resolution(uiDisplay,view.rotation%180?board::HEIGHT:board::WIDTH,view.rotation%180?board::WIDTH:board::HEIGHT);
- auto candidate=lv_obj_create(nullptr);if(!candidate){uiRenderedView=previousView;lv_display_set_resolution(uiDisplay,previousView.rotation%180?board::HEIGHT:board::WIDTH,previousView.rotation%180?board::WIDTH:board::HEIGHT);uiError="ui_memory_low";return false;}
+ lv_display_set_resolution(uiDisplay,view.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,view.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT);
+ auto candidate=lv_obj_create(nullptr);if(!candidate){uiRenderedView=previousView;lv_display_set_resolution(uiDisplay,previousView.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,previousView.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT);uiError="ui_memory_low";return false;}
  unsigned oldNodes=uiNodes,oldMissing=uiMissingGlyphs;uiNodes=0;uiMissingGlyphs=0;uiError="none";bool found=false,ok=true;
  lv_image_cache_drop(nullptr);
  for(auto a:d["assets"].as<JsonArrayConst>()){
@@ -135,7 +135,7 @@ static bool prepareUi(const char*path,const UiView&view=UiView{},bool validateOn
    found=true;if(!buildNode(obj,candidate)){ok=false;break;}
  }
  if(!found&&ok){uiError="screen_missing";ok=false;}
- if(!ok||validateOnly){lv_obj_delete(candidate);uiNodes=oldNodes;uiMissingGlyphs=oldMissing;uiRenderedView=previousView;lv_display_set_resolution(uiDisplay,previousView.rotation%180?board::HEIGHT:board::WIDTH,previousView.rotation%180?board::WIDTH:board::HEIGHT);return ok;}
+ if(!ok||validateOnly){lv_obj_delete(candidate);uiNodes=oldNodes;uiMissingGlyphs=oldMissing;uiRenderedView=previousView;lv_display_set_resolution(uiDisplay,previousView.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,previousView.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT);return ok;}
  auto previous=uiRoot;uiRoot=candidate;lv_screen_load(uiRoot);lv_obj_delete(previous);lv_obj_update_layout(uiRoot);return true;
 }
 static bool renderUiRegion(const lv_area_t&area,UiSink&sink){if(!uiDisplay)return false;uiReadError=nullptr;uiSink=&sink;lv_obj_invalidate_area(uiRoot,&area);lv_refr_now(uiDisplay);uiSink=nullptr;if(uiReadError){uiError=uiReadError;lv_image_cache_drop(nullptr);return false;}return true;}
