@@ -1,0 +1,21 @@
+#pragma once
+#include <ArduinoJson.h>
+#include <initializer_list>
+namespace notesos {
+// Method completion is driver metadata, independent of the scripting language.
+// Mapping keys name event.data fields; values name fields in the accepted reply.
+inline JsonObject asyncContract(JsonObject out,const char*method,const char*source,
+ std::initializer_list<const char*>events={"completed","failed"}){
+ auto spec=out["async"][method].to<JsonObject>();spec["source"]=source;
+ auto names=spec["events"].to<JsonArray>();for(auto event:events)names.add(event);
+ return spec["match"].to<JsonObject>();
+}
+inline void workerAsyncDescription(JsonObject out){asyncContract(out,"submit","/sys/workers")["id"]="id";}
+inline void remoteAsyncDescription(JsonObject out){
+ asyncContract(out,"submit","/services/remote")["id"]="id";
+ auto settled=out["async"]["submit"]["settled"].to<JsonObject>();settled["field"]="state";
+ settled["events"]["completed"]="completed";settled["events"]["failed"]="failed";
+}
+inline void httpAsyncDescription(JsonObject out){asyncContract(out,"request","/net/http")["job_id"]="job_id";}
+inline void uiAsyncDescription(JsonObject out){for(auto method:{"open","update","refresh"}){auto match=asyncContract(out,method,"/dev/display");match["view_id"]="view_id";match["view_revision"]="revision";}}
+}

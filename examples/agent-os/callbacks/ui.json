@@ -1,0 +1,1 @@
+{"version":"0.1.1","assets":[{"type":"viewScreen","style":{"bgColor":"#ffffff","padding":8},"children":[{"type":"label","id":"message","labelProps":{"text":"Ready"},"style":{"fontSize":16,"textColor":"#000000"}}]}]}

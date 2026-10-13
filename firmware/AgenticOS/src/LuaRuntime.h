@@ -1,6 +1,9 @@
 #pragma once
 #include "Core.h"
 #include "Vfs.h"
+#include "RuntimeCallbacks.h"
+#include "RuntimeCallbacksBytecode.h"
+static_assert(notesos::CALLBACK_BYTECODE_SOURCE_HASH==notesos::callbackSourceHash(),"Regenerate the runtime callback library");
 #include <cmath>
 #include <stddef.h>
 #include <stdlib.h>
@@ -20,7 +23,7 @@ private:
   ArduinoJson::Allocator*jsonAllocator_=nullptr;
   JsonDocument*document(){return jsonAllocator_?new(std::nothrow)JsonDocument(jsonAllocator_):new(std::nothrow)JsonDocument;}
   Resize resize_=nullptr;void*allocatorContext_=nullptr;bool ownerReleased_=false;
-  void releaseOwned(){if(!isolated_&&!ownerReleased_){ownerReleased_=true;core_.releaseOwner(owner_);}}
+  void releaseOwned(){if(!isolated_&&!ownerReleased_){ownerReleased_=true;clearCallbacks();core_.releaseOwner(owner_);}}
   Reader reader_=nullptr;void*readerContext_=nullptr;char base_[256]="/";
   char modules_[8][256]{};bool moduleReady_[8]{};int moduleRefs_[8]{};unsigned moduleCount_=0;
   uint32_t reservation_=0,owner_=0;bool stopped_=false,isolated_=false;
@@ -30,7 +33,8 @@ private:
   Core &core_;lua_State*state_=nullptr;size_t used_=0,peak_=0,budget_;
   uint32_t steps_=0,stepLimit_,calls_=0,callLimit_;bool loading_=false,preparing_=false,executing_=false,fault_=false,consumed_=false;
   const char*source_=nullptr;size_t sourceSize_=0;const Event*event_=nullptr;int operation_=0;
-  char subscriptions_[16][48]{};unsigned subscriptionCount_=0;char error_[160]{};
+  struct Subscription{char path[48]{};bool manual=false,callbacks=false;};
+  Subscription subscriptions_[16];unsigned subscriptionCount_=0,callbackCount_=0;int callbacksRef_=LUA_NOREF;bool callbacksPending_=false,legacyEvent_=false;char error_[160]{};
   char*scratch_=nullptr;JsonDocument*input_=nullptr,*output_=nullptr;size_t jsonBudget_=0;
   static LuaRuntime& self(lua_State*L){return **(LuaRuntime**)lua_getextraspace(L);}
   static void*allocate(void*context,void*ptr,size_t,size_t n){
@@ -88,7 +92,33 @@ private:
     if(s.output_->overflowed()){s.cleanup();return luaL_error(L,"system_response_memory_low");}
     (*s.output_)["ok"]=!e;if(e)(*s.output_)["error"]=e;toLua(L,s.output_->as<JsonVariantConst>());s.cleanup();return 1;
   }
-  static int subscribe(lua_State*L){auto&s=self(L);if(s.isolated_)return luaL_error(L,"worker_subscriptions_unavailable");const char*path=luaL_checkstring(L,1);if(strlen(path)>=48)return luaL_error(L,"event_source_limit");for(unsigned i=0;i<s.subscriptionCount_;++i)if(!strcmp(path,s.subscriptions_[i]))return 0;if(s.subscriptionCount_==16)return luaL_error(L,"subscription_capacity");strcpy(s.subscriptions_[s.subscriptionCount_++],path);return 0;}
+  static void setSubscription(lua_State*L,const char*path,bool enabled,bool managed){
+    auto&s=self(L);if(s.isolated_)luaL_error(L,"worker_subscriptions_unavailable");
+    if(*path!='/'||strlen(path)>=48)luaL_error(L,"event_source_limit");
+    unsigned i=0;for(;i<s.subscriptionCount_;++i)if(!strcmp(path,s.subscriptions_[i].path))break;
+    if(i==s.subscriptionCount_){if(!enabled)return;if(i==16)luaL_error(L,"subscription_capacity");s.subscriptions_[i]={};copy(s.subscriptions_[i].path,48,path);++s.subscriptionCount_;}
+    auto&entry=s.subscriptions_[i];(managed?entry.callbacks:entry.manual)=enabled;
+    if(!entry.manual&&!entry.callbacks){for(unsigned j=i+1;j<s.subscriptionCount_;++j)s.subscriptions_[j-1]=s.subscriptions_[j];s.subscriptions_[--s.subscriptionCount_]={};}
+  }
+  static int subscribe(lua_State*L){setSubscription(L,luaL_checkstring(L,1),true,false);return 0;}
+  static int callbackListen(lua_State*L){auto&s=self(L);size_t size;const char*path=luaL_checklstring(L,1,&size);if(strlen(path)!=size)return luaL_error(L,"event_source_limit");setSubscription(L,path,lua_toboolean(L,2),true);s.callbackCount_=lua_tointeger(L,3);lua_pushinteger(L,s.core_.sequence());return 1;}
+  static int callbackSchedule(lua_State*L){auto&s=self(L);s.callbacksPending_=true;lua_pushinteger(L,s.core_.now());return 1;}
+  static int callbackResult(lua_State*L,int,lua_KContext){return lua_gettop(L);}
+  static int callbackApi(lua_State*L){
+    auto&s=self(L);if(s.isolated_)return luaL_error(L,"worker_subscriptions_unavailable");int args=lua_gettop(L);
+    if(s.callbacksRef_==LUA_NOREF){
+      if(luaL_loadbufferx(L,reinterpret_cast<const char*>(CALLBACK_BYTECODE),sizeof(CALLBACK_BYTECODE),"system callbacks","b")!=LUA_OK)return lua_error(L);
+      lua_pushcfunction(L,callbackListen);lua_pushcfunction(L,invoke);lua_pushcfunction(L,callbackSchedule);lua_pushlightuserdata(L,&nullTag_);
+      lua_call(L,4,1);s.callbacksRef_=luaL_ref(L,LUA_REGISTRYINDEX);
+    }
+    lua_rawgeti(L,LUA_REGISTRYINDEX,s.callbacksRef_);lua_getfield(L,-1,lua_tostring(L,lua_upvalueindex(1)));lua_remove(L,-2);lua_insert(L,1);
+    lua_callk(L,args,LUA_MULTRET,0,callbackResult);return lua_gettop(L);
+  }
+  void clearCallbacks(){
+    if(state_&&callbacksRef_!=LUA_NOREF)luaL_unref(state_,LUA_REGISTRYINDEX,callbacksRef_);
+    callbacksRef_=LUA_NOREF;callbacksPending_=false;callbackCount_=0;
+    unsigned n=0;for(unsigned i=0;i<subscriptionCount_;++i)if(subscriptions_[i].manual){subscriptions_[n]=subscriptions_[i];subscriptions_[n++].callbacks=false;}subscriptionCount_=n;
+  }
   static int log(lua_State*L){auto&s=self(L);if(s.isolated_||s.preparing_)return 0;const char*text=lua_tostring(L,1);s.cleanup();s.output_=s.document();if(s.output_){(*s.output_)["message"]=text&&strlen(text)<256?text:"log_value_limit";s.core_.emit("/sys/runtime","log",s.output_->as<JsonObjectConst>());s.cleanup();}return 0;}
   static int decode(lua_State*L){auto&s=self(L);size_t n;const char*text=luaL_checklstring(L,1,&n);if(n>4096)return luaL_error(L,"json_limit");s.cleanup();s.input_=s.document();if(!s.input_)return luaL_error(L,"memory_low");if(deserializeJson(*s.input_,text,n)){s.cleanup();return luaL_error(L,"invalid_json");}toLua(L,s.input_->as<JsonVariantConst>());s.cleanup();return 1;}
   static int encode(lua_State*L){auto&s=self(L);s.cleanup();s.input_=s.document();if(!s.input_)return luaL_error(L,"memory_low");s.jsonBudget_=0;if(!fromLua(L,1,s.input_->to<JsonVariant>())||s.input_->overflowed()){s.cleanup();return luaL_error(L,"json_limit");}size_t n=measureJson(*s.input_);if(n>4096){s.cleanup();return luaL_error(L,"json_limit");}s.scratch_=(char*)malloc(n+1);if(!s.scratch_){s.cleanup();return luaL_error(L,"memory_low");}serializeJson(*s.input_,s.scratch_,n+1);lua_pushlstring(L,s.scratch_,n);s.cleanup();return 1;}
@@ -104,13 +134,19 @@ private:
     lua_pushcfunction(L,array);lua_setfield(L,-2,"array");lua_pushcfunction(L,unsubscribe);lua_setfield(L,-2,"unsubscribe");
     lua_pushcfunction(L,resolve);lua_setfield(L,-2,"resolve");lua_pushcfunction(L,findLiteral);lua_setfield(L,-2,"find");lua_pushcfunction(L,requireModule);lua_setfield(L,-2,"require");
     const char*names[]={"hex","unhex","base64","unbase64"};for(int i=0;i<4;++i){lua_pushinteger(L,i);lua_pushcclosure(L,bytes,1);lua_setfield(L,-2,names[i]);}
+    for(auto name:{"on","off","request"}){lua_pushstring(L,name);lua_pushcclosure(L,callbackApi,1);lua_setfield(L,-2,name);}
     lua_setglobal(L,"notes");lua_gc(L,LUA_GCINC,100,200,10);return 0;
   }
   static int run(lua_State*L){auto&s=self(L);
     if(s.operation_==0){if(luaL_loadbufferx(L,s.source_,s.sourceSize_,"application","t")!=LUA_OK)return lua_error(L);lua_callk(L,0,0,0,continuation);return 0;}
-    lua_getglobal(L,s.operation_==1?"on_start":s.operation_==3?"on_stop":s.operation_==4?"compute":s.operation_==5?"on_prepare":"on_event");if(!lua_isfunction(L,-1)){lua_pop(L,1);if(s.operation_==4)return luaL_error(L,"compute_function_required");return 0;}
+    bool dispatch=s.operation_==2&&s.callbacksRef_!=LUA_NOREF;
+    if(dispatch||s.operation_==6){lua_rawgeti(L,LUA_REGISTRYINDEX,s.callbacksRef_);lua_getfield(L,-1,dispatch?"dispatch":"flush");lua_remove(L,-2);}
+    else lua_getglobal(L,s.operation_==1?"on_start":s.operation_==3?"on_stop":s.operation_==4?"compute":s.operation_==5?"on_prepare":"on_event");
+    if(!lua_isfunction(L,-1)){lua_pop(L,1);if(s.operation_==4)return luaL_error(L,"compute_function_required");return 0;}
     int args=0;if(s.operation_==4){toLua(L,s.computeInput_);args=1;}
-    if(s.operation_==2){s.cleanup();s.input_=s.document();if(!s.input_)return luaL_error(L,"memory_low");auto o=s.input_->to<JsonObject>();o["source"]=s.event_->path;o["event"]=s.event_->name;o["sequence"]=s.event_->sequence;o["at_ms"]=s.event_->time;s.output_=s.document();if(!s.output_)return luaL_error(L,"memory_low");if(deserializeJson(*s.output_,s.event_->data))return luaL_error(L,"event_decode_failed");o["data"]=s.output_->as<JsonVariantConst>();if(s.input_->overflowed())return luaL_error(L,"event_memory_low");toLua(L,s.input_->as<JsonVariantConst>());s.cleanup();args=1;}
+    if(s.operation_==2){s.cleanup();s.input_=s.document();if(!s.input_)return luaL_error(L,"memory_low");auto o=s.input_->to<JsonObject>();o["source"]=s.event_->path;o["event"]=s.event_->name;o["sequence"]=s.event_->sequence;o["at_ms"]=s.event_->time;s.output_=s.document();if(!s.output_)return luaL_error(L,"memory_low");if(deserializeJson(*s.output_,s.event_->data))return luaL_error(L,"event_decode_failed");o["data"]=s.output_->as<JsonVariantConst>();if(s.input_->overflowed())return luaL_error(L,"event_memory_low");toLua(L,s.input_->as<JsonVariantConst>());s.cleanup();args=1;
+      if(dispatch){if(s.legacyEvent_)lua_getglobal(L,"on_event");else lua_pushnil(L);args=2;}
+    }
     int results=(s.operation_==2||s.operation_==4)?1:0;lua_callk(L,args,results,results,continuation);return continuation(L,LUA_OK,results);
   }
   static int makeThread(lua_State*L){lua_newthread(L);return 1;}
@@ -144,11 +180,12 @@ public:
   bool compute(JsonVariantConst input,JsonVariant output){computeInput_=input;computeOutput_=output;bool ok=execute(4);computeInput_=JsonVariantConst();computeOutput_=JsonVariant();return ok;}
   bool prepare(){preparing_=true;bool ok=execute(5);preparing_=false;return ok;}
   bool start(){return execute(1);}
+  bool flushCallbacks(){if(!callbacksPending_||fault_||stopped_)return false;callbacksPending_=false;return execute(6);}
   bool event(const Event&e){if(fault_||stopped_)return false;
     if(e.targetOwner&&e.targetOwner!=owner_)return false;
-    bool match=false;for(unsigned i=0;i<subscriptionCount_;++i)if(!strcmp(e.path,subscriptions_[i]))match=true;if(!match)return false;event_=&e;execute(2);event_=nullptr;return consumed_;}
+    bool match=false;legacyEvent_=false;for(unsigned i=0;i<subscriptionCount_;++i)if(!strcmp(e.path,subscriptions_[i].path)){match=true;legacyEvent_=subscriptions_[i].manual;}if(!match)return false;event_=&e;execute(2);event_=nullptr;return consumed_;}
   bool admitted()const{return reservation_!=0;}
   bool executing()const{return executing_;}const char*error()const{return error_;}
-  void describe(JsonObject o)const{o["engine"]="lua-5.4.8";o["native_call_depth_limit"]=LUAI_MAXCCALLS;o["owner"]=owner_;o["modules_loaded"]=moduleCount_;o["subscription_limit"]=16;o["base_path"]=base_;o["stopped"]=stopped_;o["memory_used"]=used_;o["memory_peak"]=peak_;o["memory_budget"]=budget_;o["memory_region"]=core_.resources().allocationRegion(reservation_);o["instruction_budget"]=stepLimit_;o["system_call_budget"]=callLimit_;o["last_system_calls"]=calls_;o["last_instructions"]=steps_;o["fault"]=fault_;o["error"]=error_;auto subscriptions=o["subscriptions"].to<JsonArray>();for(unsigned i=0;i<subscriptionCount_;++i)subscriptions.add(subscriptions_[i]);}
+  void describe(JsonObject o)const{o["engine"]="lua-5.4.8";o["native_call_depth_limit"]=LUAI_MAXCCALLS;o["owner"]=owner_;o["modules_loaded"]=moduleCount_;o["subscription_limit"]=16;o["callback_allocation"]="on_demand_vm_budget";o["callbacks"]=callbackCount_;o["callback_flush_pending"]=callbacksPending_;o["base_path"]=base_;o["stopped"]=stopped_;o["memory_used"]=used_;o["memory_peak"]=peak_;o["memory_budget"]=budget_;o["memory_region"]=core_.resources().allocationRegion(reservation_);o["instruction_budget"]=stepLimit_;o["system_call_budget"]=callLimit_;o["last_system_calls"]=calls_;o["last_instructions"]=steps_;o["fault"]=fault_;o["error"]=error_;auto subscriptions=o["subscriptions"].to<JsonArray>();for(unsigned i=0;i<subscriptionCount_;++i)subscriptions.add(subscriptions_[i].path);}
 };
 }

@@ -58,6 +58,7 @@ cmake --build build/os-ui -j 4
 build/os-ui/notes_ui_test
 build/os-ui/notes_suite_test
 build/os-ui/notes_lua_test
+build/os-ui/notes_callback_test
 build/os-ui/notes_memory_test
 build/os-ui/notes_app_test
 build/os-ui/notes_failure_test

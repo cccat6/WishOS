@@ -20,9 +20,11 @@ must name their profile: they contain no universal pixel-format identifier.
 stream support instead of assuming E6's encoding. Pixel validity is checked by the
 native adapter. A display without streaming must not silently spool to Flash.
 
-All adapters use a terminal `completed` or `failed` event. Subscribe through
-`notes.subscribe('/dev/display')`, handle `on_event(e)`, and match `job_id` or
-`view_id` + `view_revision` (UI admission can be deferred). Events include `owner`,
+All adapters use a terminal `completed` or `failed` event. Use
+`notes.request('/sys/ui', 'open', args, fn)` to associate a one-shot completion
+function, or `notes.on('/dev/display', {'completed','failed'}, fn)` to observe events.
+The request wrapper matches job ID or view ID + revision from the method's async
+contract; deferred UI admission needs no manual correlation. See [callbacks](callbacks.md). Events include `owner`,
 `activation`, `state`, `success`, `error`, `total_ms`, and `completion.kind/source`.
 They are delivered in the system event loop, not by running user code in an ISR.
 Intermediate BUSY/ready edges are not whole-job completion: a compound E6 update

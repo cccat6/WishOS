@@ -149,3 +149,10 @@ reservations, and `unallocated_reserved_bytes` is their unspent portion. These
 counters do not include every SDK allocation; consult physical heap readings too.
 NFS retains its own configurable protocol budget within this shared allocation
 policy. RAM/PSRAM file quotas are separate ceilings, not preallocated partitions.
+
+
+For application-facing event/completion registration, use `notes.on`, `notes.off`
+and `notes.request` as documented in [callbacks](callbacks.md). This is a lazy
+runtime standard library, charged to the existing VM memory/instruction budgets.
+Driver async metadata determines correlation, not hard-coded display or HTTP cases
+inside the scripting engine. The low-level on_event entrypoint is still available.

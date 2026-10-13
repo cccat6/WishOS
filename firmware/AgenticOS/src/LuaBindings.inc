@@ -1,7 +1,7 @@
   inline static char nullTag_,arrayTag_;
   static int array(lua_State*L){luaL_checktype(L,1,LUA_TTABLE);lua_pushvalue(L,1);lua_rawgetp(L,LUA_REGISTRYINDEX,&arrayTag_);lua_setmetatable(L,-2);return 1;}
   static bool isArray(lua_State*L,int index){if(!lua_getmetatable(L,index))return false;lua_rawgetp(L,LUA_REGISTRYINDEX,&arrayTag_);bool same=lua_rawequal(L,-1,-2);lua_pop(L,2);return same;}
-  static int unsubscribe(lua_State*L){auto&s=self(L);const char*p=luaL_checkstring(L,1);for(unsigned i=0;i<s.subscriptionCount_;++i)if(!strcmp(p,s.subscriptions_[i])){for(unsigned j=i+1;j<s.subscriptionCount_;++j)strcpy(s.subscriptions_[j-1],s.subscriptions_[j]);--s.subscriptionCount_;break;}return 0;}
+  static int unsubscribe(lua_State*L){setSubscription(L,luaL_checkstring(L,1),false,false);return 0;}
   static int resolve(lua_State*L){auto&s=self(L);const char*p=luaL_checkstring(L,1);char full[256];if(!normalizePath(s.base_,p,full,sizeof full))return luaL_error(L,"invalid_path");lua_pushstring(L,full);return 1;}
   static int findLiteral(lua_State*L){size_t n,z;const char*hay=luaL_checklstring(L,1,&n),*needle=luaL_checklstring(L,2,&z);lua_Integer start=luaL_optinteger(L,3,1);if(n>4096||z>256)return luaL_error(L,"literal_search_limit");if(start<1||start>lua_Integer(n+1)){lua_pushnil(L);return 1;}for(size_t at=start-1;at<=n&&z<=n-at;++at)if(!memcmp(hay+at,needle,z)){lua_pushinteger(L,at+1);lua_pushinteger(L,at+z);return 2;}lua_pushnil(L);return 1;}
   static int bytes(lua_State*L){

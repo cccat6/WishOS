@@ -5,6 +5,8 @@ description: Discover and operate Notes OS resources, inspect live system state 
 
 # Notes OS resource control
 
+For direct event registration and asynchronous completion functions, read [application callbacks](references/callbacks.md).
+
 For script modules, startup/lifecycle, binary data and background compute, read [runtime applications](references/runtime-apps.md). Hardware wiring belongs to the deployment package; runtime applications operate exclusively through system resources.
 
 The factory suite is a default runtime application reference and its resources. Replace it through the same application loading/startup interfaces as user programs. Preserve necessary system coordination among the runtime, display, power and native services; changing pages or interaction behavior does not require dismantling those services.

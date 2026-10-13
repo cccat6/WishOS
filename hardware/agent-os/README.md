@@ -28,8 +28,8 @@ can instead be replaced at runtime on writable providers. `/defaults.json` is a
 normal `Policies` restore snapshot, not an unchecked bypass; saved settings override
 package defaults. Optional `startup.script` references an ordinary Lua entrypoint;
 `startup.memory_bytes` is its optional VM ceiling, not a preallocated partition.
-The E6 suite requests 65536 bytes; other applications retain the system default.
-Its measured 64-bit host startup peak is about 56 KiB; device use differs.
+The E6 suite requests 81920 bytes; other applications retain the system default.
+Its measured 64-bit host startup peak is about 63 KiB; device use differs.
 The E6 package's entrypoint loads its UI manifest and opens its entry through public
 resource calls. There is no independent native factory-UI boot step. Explicit
 `/sys/runtime configure` startup settings override that reference, including when

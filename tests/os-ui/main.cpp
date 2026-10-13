@@ -24,11 +24,11 @@ static CountedFiles files;
 static bool resolveFile(const char*in,char*full,const char*&rel,FileProvider*&p){if(!normalizePath("/",in,full,256))return false;p=vfs.resolve(full,rel);return p;}
 #include "UiService.h"
 #include "../../hardware/agent-os/ports/esp32-c6-e6/E6UiSurface.inc"
-static unsigned uiQueueCalls=0;static PresentationState::Stamp lastUiStamp;
+static unsigned uiQueueCalls=0;static bool deferUi=false;static ScriptHost*callbackRuntime=nullptr;static PresentationState::Stamp lastUiStamp;
 static unsigned micStarts=0;
 static const char*defaultUiDriver(){return "test.rgb565";}
 static const char*validateUiDriver(const char*){return nullptr;}
-static const char*queueUi(const char*,const char*,bool,JsonObject out,const char*,const UiView*,PresentationState::Stamp stamp){++uiQueueCalls;lastUiStamp=stamp;out["job_id"]=uiQueueCalls;out["status"]="queued";return nullptr;}
+static const char*queueUi(const char*,const char*,bool,JsonObject out,const char*,const UiView*,PresentationState::Stamp stamp){if(deferUi)return "display_busy";++uiQueueCalls;lastUiStamp=stamp;out["job_id"]=uiQueueCalls;out["status"]="queued";return nullptr;}
 }
 int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  assert(prepareUi("/system/ui/home.json"));std::ofstream image("build/os-ui-default.native",std::ios::binary);nm::Stripe stripe;
@@ -92,7 +92,7 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  for(;;){JsonDocument state;presentationState.describe(state.to<JsonObject>());if(!state["views"].size())break;uint32_t id=state["views"][0]["id"];unsigned slot=presentationState.slot(id);assert(!presentationState.close(id,0));freeUiDocument(slot);}assert(core.resources().promised()==0);
  // The real factory entrypoint uses the exact runtime/GUI loader used by a user
  // replacement. No special native boot path or system-owned button bindings.
- core.add({"/sys/ui","read,app_load,open,update,refresh,back", "",uiHandler});
+ core.add({"/sys/ui","read,app_load,open,update,refresh,back,close", "",uiHandler,uiAsyncDescription});
  core.add({"/dev/buttons","read","",[](const char*,JsonObjectConst,JsonObject)->const char*{return nullptr;}});
  core.add({"/dev/mic","start,stop","",[](const char*m,JsonObjectConst,JsonObject)->const char*{if(!strcmp(m,"start"))++micStarts;return nullptr;}});
  core.add({"/sys/rules","write","",[](const char*,JsonObjectConst a,JsonObject o){return core.setRule(a,o);}});
@@ -116,6 +116,23 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  a["button"]="A";core.emit("/dev/buttons","press",a.as<JsonObjectConst>());core.dispatch(cursor);assert(micStarts==2);
  a.clear();assert(!runtime.invoke("stop",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(!presentationState.active());assert(core.resources().promised()==0);
  core.listRules(r["rules"].to<JsonArray>());assert(r["rules"].size()==0);
+ // Completion callbacks also settle UI revisions that never obtained a job:
+ // latest model replacement and close must not leave subscribers waiting forever.
+ core.add({"/sys/capabilities","describe","",[](const char*,JsonObjectConst a,JsonObject o){return core.describe(a["path"]|"",o);}});
+ callbackRuntime=&runtime;core.setEventObserver([](const Event&e){return callbackRuntime->event(e);});deferUi=true;cursor=core.sequence();unsigned callbacksBefore=micStarts;
+ a.clear();a["memory_bytes"]=65536;a["source"]=R"lua(function on_start()
+  local first=notes.request('/sys/ui','open',{path='/storage/ram/updated.json'},function(e)
+   assert(e.event=='failed' and e.data.error=='view_revision_replaced' and e.data.completion.source=='not_admitted')
+   notes.call('/dev/mic','start',{})
+  end);assert(first.ok)
+  local second=notes.request('/sys/ui','update',{view_id=first.result.view_id},function(e)
+   assert(e.event=='failed' and e.data.error=='view_closed');notes.call('/dev/mic','start',{})
+  end);assert(second.ok)
+  assert(notes.call('/sys/ui','close',{view_id=first.result.view_id}).ok)
+ end)lua";
+ if(auto error=runtime.invoke("load",a.as<JsonObjectConst>(),r.to<JsonObject>())){std::cerr<<error<<" ";serializeJson(r,std::cerr);assert(false);}assert(micStarts==callbacksBefore);
+ core.dispatch(cursor);assert(micStarts==callbacksBefore+2);a.clear();assert(!runtime.invoke("read",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["callbacks"]==0&&!r["fault"].as<bool>());
+ assert(!runtime.invoke("stop",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(core.resources().promised()==0);core.setEventObserver(nullptr);callbackRuntime=nullptr;deferUi=false;
  std::cout<<"Full-screen image bytes="<<bin.size()<<", largest provider read="<<files.largestRead<<", image reads="<<imageReadBytes<<", image read calls="<<imageReadOps<<"\n";
  std::cout<<"LVGL runtime-loaded UI, native stripe render, VFS hot replacement, refresh/back history passed\n";
 }

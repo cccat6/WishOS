@@ -147,13 +147,21 @@ static PresentationState presentationState;
 struct UiDocument {char path[256]{},scope[49]{},driver[48]{};UiView view;bool force=false;uint32_t memory=0,lastJob=0;PresentationState::Stamp scheduled;};
 static UiDocument*uiDocuments[PresentationState::Capacity]{};
 static UiDocument*uiDocument(uint32_t id){unsigned slot=presentationState.slot(id);return slot<PresentationState::Capacity?uiDocuments[slot]:nullptr;}
+// Every accepted model revision has an outcome, including revisions replaced
+// before a display queue could admit them. Admitted work has its driver's receipt.
+static void finishDeferredUi(PresentationState::Stamp stamp,uint32_t owner,const UiDocument*doc,const char*reason){
+ if(!doc||(doc->scheduled.view==stamp.view&&doc->scheduled.revision==stamp.revision))return;
+ JsonDocument data;data["view_id"]=stamp.view;data["view_revision"]=stamp.revision;data["owner"]=owner;data["activation"]=stamp.activation;
+ data["success"]=false;data["state"]="superseded";data["error"]=reason;data["completion"]["kind"]="none";data["completion"]["source"]="not_admitted";
+ core.emit("/dev/display","failed",data.as<JsonObjectConst>(),owner);
+}
 static void freeUiDocument(unsigned slot){if(slot>=PresentationState::Capacity)return;auto d=uiDocuments[slot];if(d){core.resources().release(d->memory);delete d;uiDocuments[slot]=nullptr;}}
 static void uiStateChanged(const char*event="activated",uint32_t view=0){uiDepth=presentationState.depth();auto d=uiDocument(presentationState.active());copy(uiCurrent,sizeof uiCurrent,d?d->path:"");JsonDocument data;data["view_id"]=view?view:presentationState.active();data["active_view"]=presentationState.active();core.emit("/sys/ui",event,data.as<JsonObjectConst>());}
 static bool sameStamp(PresentationState::Stamp a,PresentationState::Stamp b){return a.view==b.view&&a.revision==b.revision&&a.activation==b.activation;}
 static void pollUiPresentation(){auto id=presentationState.active();auto d=uiDocument(id);if(!d)return;auto stamp=presentationState.stamp(id);if(sameStamp(stamp,d->scheduled))return;
  JsonDocument out;if(!queueUi(d->path,d->driver,d->force,out.to<JsonObject>(),d->scope,&d->view,stamp)){d->scheduled=stamp;d->lastJob=out["job_id"]|0u;}
 }
-static bool initUiLifecycle(){static bool initialized=false;if(initialized)return true;initialized=core.onOwnerRelease(&presentationState,[](void*,uint32_t owner){if(uiAppOwner==owner){uiAppOwner=0;uiRuleCount=0;uiAppFile[0]=uiAppEntry[0]=0;copy(appScope,sizeof appScope,"system");}bool changed=false;for(unsigned i=0;i<PresentationState::Capacity;++i){auto v=presentationState.at(i);if(v.id&&v.owner==owner&&!presentationState.close(v.id,0)){freeUiDocument(i);changed=true;}}if(changed)uiStateChanged();});return initialized;}
+static bool initUiLifecycle(){static bool initialized=false;if(initialized)return true;initialized=core.onOwnerRelease(&presentationState,[](void*,uint32_t owner){if(uiAppOwner==owner){uiAppOwner=0;uiRuleCount=0;uiAppFile[0]=uiAppEntry[0]=0;copy(appScope,sizeof appScope,"system");}bool changed=false;for(unsigned i=0;i<PresentationState::Capacity;++i){auto v=presentationState.at(i);if(v.id&&v.owner==owner){auto stamp=presentationState.stamp(v.id);if(!presentationState.close(v.id,0)){finishDeferredUi(stamp,owner,uiDocuments[i],"view_closed");freeUiDocument(i);changed=true;}}}if(changed)uiStateChanged();});return initialized;}
 static const char*displayViewStamp(JsonObjectConst a,PresentationState::Stamp&stamp){
  if(!a["view_id"].is<uint32_t>())return "view_context_required";uint32_t id=a["view_id"];if(auto e=presentationState.access(id,core.callerOwner()))return e;
  if(presentationState.get(id)->document)return "document_requires_ui_update";stamp=presentationState.stamp(id);if(!stamp.activation)return "view_not_foreground";
@@ -187,8 +195,8 @@ static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
  if(!strcmp(m,"activate")||!strcmp(m,"close")||!strcmp(m,"back")){
   uint32_t id=a["view_id"]|0u;const char*e=nullptr;
   if(!strcmp(m,"activate"))e=presentationState.activate(id,strcmp(a["history"]|"push","replace"),core.callerOwner());
-  else if(!strcmp(m,"close")){unsigned slot=presentationState.slot(id);e=presentationState.close(id,core.callerOwner());if(!e)freeUiDocument(slot);}
-  else{uint32_t old=presentationState.active();unsigned slot=presentationState.slot(old);uint32_t disposed=0;e=presentationState.back(core.callerOwner(),disposed);if(!e&&disposed)freeUiDocument(slot);}
+  else if(!strcmp(m,"close")){unsigned slot=presentationState.slot(id);auto stamp=presentationState.stamp(id);auto v=presentationState.get(id);uint32_t owner=v?v->owner:0;e=presentationState.close(id,core.callerOwner());if(!e){finishDeferredUi(stamp,owner,uiDocuments[slot],"view_closed");freeUiDocument(slot);}}
+  else{uint32_t old=presentationState.active();unsigned slot=presentationState.slot(old);auto stamp=presentationState.stamp(old);auto v=presentationState.get(old);uint32_t owner=v?v->owner:0;uint32_t disposed=0;e=presentationState.back(core.callerOwner(),disposed);if(!e&&disposed){finishDeferredUi(stamp,owner,uiDocuments[slot],"view_closed");freeUiDocument(slot);}}
   if(e)return e;uiStateChanged(!strcmp(m,"close")?"closed":"activated",!strcmp(m,"close")?id:0);pollUiPresentation();out["view_id"]=presentationState.active();out["status"]="applied";return nullptr;
  }
  if(!strcmp(m,"open")||!strcmp(m,"update")||!strcmp(m,"refresh")){
@@ -206,7 +214,7 @@ static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
   if(auto e=validateUiDriver(driver))return e;if(strlen(driver)>=sizeof next.driver)return "driver_id_limit";copy(next.driver,sizeof next.driver,driver);
   uint32_t expected=a["expected_revision"]|0u;if(a.containsKey("expected_revision")&&(!a["expected_revision"].is<uint32_t>()||!expected))return "view_revision_type";if(prior&&expected!=0&&presentationState.get(id)->revision!=expected)return "view_revision_conflict";
   uint32_t previousLease=uiLeaseOwner;constexpr uint32_t validationLease=0xffffffe8u;uiLeaseOwner=validationLease;bool valid=prepareUi(next.path,next.view,true);uiLeaseOwner=previousLease;vfs.release(validationLease);if(!valid)return uiError;
-  if(prior){if(auto e=presentationState.revise(id,core.callerOwner(),expected))return e;*prior=next;}
+  if(prior){auto stamp=presentationState.stamp(id);auto owner=presentationState.get(id)->owner;if(auto e=presentationState.revise(id,core.callerOwner(),expected))return e;finishDeferredUi(stamp,owner,prior,"view_revision_replaced");*prior=next;}
   else{
    next.memory=core.resources().acquire(sizeof(UiDocument),core.callerOwner());if(!next.memory)return "ui_memory_budget";auto model=new(std::nothrow)UiDocument(next);if(!model){core.resources().release(next.memory);return "memory_low";}core.resources().used(next.memory,sizeof(UiDocument));
    if(auto e=presentationState.create(core.callerOwner(),true,true,id)){core.resources().release(next.memory);delete model;return e;}unsigned slot=presentationState.slot(id);uiDocuments[slot]=model;

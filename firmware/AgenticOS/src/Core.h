@@ -1,6 +1,7 @@
 #pragma once
 #include <ArduinoJson.h>
 #include "ResourceBudget.h"
+#include "AsyncContract.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>

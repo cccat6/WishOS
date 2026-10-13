@@ -52,3 +52,13 @@ target_include_directories(notes_failure_test PRIVATE "${NOTES_ROOT}/firmware/Ag
 target_compile_options(notes_failure_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
 target_link_options(notes_failure_test PRIVATE -fsanitize=address,undefined)
 target_link_libraries(notes_failure_test PRIVATE notes_lua)
+
+add_executable(notes_callback_test callback_test.cpp)
+target_include_directories(notes_callback_test PRIVATE "${NOTES_ROOT}/firmware/AgenticOS/src" "${NOTES_ARDUINO_LIBS}/ArduinoJson/src")
+target_compile_options(notes_callback_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
+target_link_options(notes_callback_test PRIVATE -fsanitize=address,undefined)
+target_link_libraries(notes_callback_test PRIVATE notes_lua)
+
+add_executable(notes_callback_compiler "${NOTES_ROOT}/tools/compile_runtime_callbacks.cpp")
+target_include_directories(notes_callback_compiler PRIVATE "${NOTES_ROOT}/firmware/AgenticOS/src")
+target_link_libraries(notes_callback_compiler PRIVATE notes_lua)

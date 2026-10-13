@@ -92,6 +92,25 @@ end"""
   if report.get('ip'):
    assert b'<html' in urllib.request.urlopen('http://'+report['ip']+'/',timeout=5).read().lower()
    report['checks'].append('runtime_homepage_replace_and_release')
+  callback_source="""function on_start()
+ notes.on('/sys/timers','fired',function(e) print('callback_timer_verified') end,{once=true})
+ assert(notes.call('/sys/timers','write',{delay_ms=1000}).ok)
+ local r=notes.request('/sys/workers','submit',{source='function compute(x) local s=0 for i=1,5000 do s=s+i end return s end',input={},memory_bytes=16384,instruction_budget=1000000},function(e)
+  assert(e.event=='completed');local result=notes.call('/sys/workers','read',{id=e.data.id});assert(result.ok and result.result.result==12502500)
+  assert(notes.call('/sys/workers','release',{id=e.data.id}).ok);print('callback_worker_verified')
+ end);assert(r.ok,r.error)
+end"""
+  rpc('/sys/runtime','load',{'source':callback_source,'memory_bytes':32768})
+  seen=set();after=0
+  for _ in range(50):
+   batch=rpc('/sys/events','read',{'after':after,'limit':8})['result'];after=batch['cursor']
+   for event in batch['events']:
+    if event.get('event')=='log':seen.add(event.get('data',{}).get('message'))
+   if {'callback_timer_verified','callback_worker_verified'}<=seen:break
+   time.sleep(.1)
+  assert {'callback_timer_verified','callback_worker_verified'}<=seen,seen
+  report['callback_runtime']=rpc('/sys/runtime')['result'];assert not report['callback_runtime']['fault'] and report['callback_runtime']['callbacks']==0
+  rpc('/sys/runtime','stop');report['checks'].append('callback_timer_worker_and_auto_release')
   for code,expected in [("function on_start() while true do end end",'instruction'),("function on_start() local x=string.rep('x',1000000) end",'memory')]:
    fail=rpc('/sys/runtime','load',{'source':code,'memory_bytes':24576,'instruction_budget':3000},ok=False);assert not fail['ok'];assert rpc('/sys/runtime')['result']['fault'];rpc('/sys/runtime','stop');rpc('/sys/stats');report['checks'].append(expected+'_fault_and_recovery')
   rpc('/services/nfs','start',{'provider':'flash','export_path':'/flash'});assert rpc('/services/nfs')['result']['running'];rpc('/services/nfs','stop');assert rpc('/services/nfs')['result']['owned_heap_bytes']==0;report['checks'].append('nfs_start_stop_release')

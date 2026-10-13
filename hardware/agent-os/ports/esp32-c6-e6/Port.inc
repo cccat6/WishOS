@@ -972,7 +972,7 @@ void begin() {
       {"/net/thread","read,start,stop","Thread dataset and IPv6 network transport",threadHandler,threadDescription},
       {"/net/zigbee","read,start,pause,resume,permit_join,send","Zigbee network and raw APS datagrams",zigbeeHandler,zigbeeDescription},
       {"/net/http","read,request,receive,cancel,release","bounded asynchronous HTTP operations; HTTPS with explicit CA",networkHandler,httpDescription},
-      {"/sys/ui","read,capabilities,create,open,update,activate,close,refresh,back,app_load,fonts,font_register,font_unregister","LVGL UI from VFS, configurable input bindings and SD fonts",uiHandler},
+      {"/sys/ui","read,capabilities,create,open,update,activate,close,refresh,back,app_load,fonts,font_register,font_unregister","LVGL UI from VFS, configurable input bindings and SD fonts",uiHandler,uiAsyncDescription},
       {"/sys/cache","resolve,prepare","resolve a cache path without I/O; explicitly prepare its directory",cacheHandler},
       {"/fs", "mounts,stat,list,read,write,remove,mkdir,rename", "virtual file providers; byte offsets as decimal strings",fsHandler},
       {"/sys/storage","read,list","providers, volumes, quotas and physical capacity",storageHandler},
