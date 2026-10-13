@@ -4,7 +4,7 @@ import argparse,json,time,uuid,urllib.request
 from pathlib import Path
 import serial
 from serial.tools.list_ports import comports
-p=argparse.ArgumentParser();p.add_argument('--serial-mac',required=True);p.add_argument('--wifi-config',type=Path);p.add_argument('--format-storage',action='store_true');p.add_argument('--output',type=Path,required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--serial-mac',required=True);p.add_argument('--check-time',action='store_true');p.add_argument('--wifi-config',type=Path);p.add_argument('--format-storage',action='store_true');p.add_argument('--output',type=Path,required=True);a=p.parse_args()
 ports=[p for p in comports() if (p.serial_number or '').upper()==a.serial_mac.upper()]
 assert len(ports)==1,'Expected exactly one matching USB serial identity'
 s=serial.Serial();s.port=ports[0].device;s.baudrate=115200;s.timeout=.2;s.dtr=False;s.rts=False;s.open();time.sleep(1)
@@ -34,6 +34,16 @@ try:
    time.sleep(.25)
   report['wifi_state']={k:state.get(k) for k in ['connected','reason','enabled','radio_mode','ssid','ip','connection_pending','configuration_pending','selection','sdk_status','disconnect_reason']}
   assert state.get('connected');report['ip']=state['ip'];report['checks'].append('wifi_connected')
+ if a.check_time:
+  prior=rpc('/services/time')['result'];old=prior['last_sync_ms']
+  if not prior['active']:rpc('/services/time','sync')
+  for _ in range(80):
+   ntp=rpc('/services/time')['result']
+   if ntp['last_sync_ms']>old and not ntp['active']:break
+   time.sleep(.25)
+  assert ntp['last_sync_ms']>old and not ntp['active'],ntp
+  clock=rpc('/sys/clock')['result'];assert clock['wall_clock_valid'] and abs(clock['unix_s']-time.time())<5
+  report['time_sync']=ntp;report['clock']=clock;report['checks'].append('real_ntp_synchronization')
  mount=rpc('/sys/storage','mount',ok=False)
  if not mount['ok']:
   assert a.format_storage,mount;rpc('/sys/storage','format')

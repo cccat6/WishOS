@@ -9,12 +9,14 @@ class Client:
         self.url=url.rstrip('/') if url else None
         self.timeout=timeout
         self.serial=None
+        self.boot_id=None
         self.serial_buffer=bytearray()
         if port:
             import serial
-            self.serial=serial.Serial(port,115200,timeout=.1)
+            self.serial=serial.Serial();self.serial.port=port;self.serial.baudrate=115200;self.serial.timeout=.1;self.serial.dtr=False;self.serial.rts=False;self.serial.open()
     def call(self,path,method='read',args=None,request_id=None):
         request={'id':request_id or uuid.uuid4().hex,'path':path,'method':method,'args':args or {}}
+        if self.boot_id:request['expected_boot_id']=self.boot_id
         data=json.dumps(request,separators=(',',':'),ensure_ascii=False).encode()
         if len(data)>4096: raise ValueError('Request exceeds 4096 byte limit')
         if self.serial:
@@ -33,6 +35,8 @@ class Client:
             try:
                 with urllib.request.urlopen(r,timeout=self.timeout) as res: reply=json.load(res)
             except urllib.error.HTTPError as e: reply=json.load(e)
+        if self.boot_id and reply.get('boot_id')!=self.boot_id:raise RuntimeError('Device rebooted; create a new client before reusing handles')
+        if reply.get('boot_id'):self.boot_id=reply['boot_id']
         if not reply.get('ok'): raise RuntimeError(reply.get('error',reply))
         return reply['result']
     def upload(self, source, destination):
@@ -65,11 +69,20 @@ class Client:
         if driver:args['driver']=driver
         result=self.call('/sys/ui','open',args)
         return {'root':root,'presentation':result}
-    def present_native(self,frame:bytes,driver='e6.ink6.ui-v1',force=False):
+    def present_native(self,frame:bytes,driver='e6.ink6.ui-v1',force=False,view_id=None):
         if len(frame)!=172800: raise ValueError('Expected raw native720x480 4bpp (172800 bytes)')
         inks={0,1,2,3,5,6}
         if any(x>>4 not in inks or x&15 not in inks for x in frame): raise ValueError('Invalid native six-color ink code')
-        r=self.call('/dev/display','begin',{'driver':driver,'force':force}); sid=r['stream_id']
+        created=view_id is None
+        if created:
+            view_id=self.call('/sys/ui','create')['view_id']
+            self.call('/sys/ui','activate',{'view_id':view_id})
+        self.last_view_id=view_id
+        try:r=self.call('/dev/display','begin',{'driver':driver,'force':force,'view_id':view_id})
+        except RuntimeError:
+            if created:self.call('/sys/ui','close',{'view_id':view_id})
+            raise
+        sid=r['stream_id']
         deadline=time.monotonic()+self.timeout
         while True:
             state=self.call('/dev/display','read')

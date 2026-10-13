@@ -6,6 +6,7 @@ class Fake(m.Client):
     def __init__(self):self.calls=[];self.timeout=1
     def call(self,path,method='read',args=None,request_id=None):
         self.calls.append((path,method,args))
+        if method=='create':return {'view_id':1}
         if method=='read':return {'receiving':True}
         if method in ('open','begin'):return {'stream_id':3,'chunk_limit':1024}
         if method=='chunk':
@@ -36,6 +37,6 @@ class Tests(unittest.TestCase):
         self.assertTrue(result['root'].startswith('/storage/ram/app-'))
     def test_public_native_driver(self):
         c=Fake();c.present_native(bytes([0x11])*172800)
-        self.assertEqual(c.calls[0][2]['driver'],'e6.ink6.ui-v1')
+        begin=next(a for _,m,a in c.calls if m=='begin');self.assertEqual(begin['driver'],'e6.ink6.ui-v1');self.assertEqual(begin['view_id'],1)
         self.assertFalse(hasattr(c,'wave'))
 if __name__=='__main__':unittest.main()

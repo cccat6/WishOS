@@ -77,5 +77,17 @@ function on_stop() notes.call('/effect','write',{stopped=true}) end
  // An online next-boot edit does not silently retarget a previously scheduled boot snapshot.
  assert(h.restore(R"({"auto_start":true,"file":"/system/default-app.json","memory_bytes":32768,"instruction_budget":20000,"delay_ms":10})"));h.scheduleBoot(300);
  auto nextBoot=parse(R"({"startup":{"file":"/system/missing.lua"}})");assert(!h.invoke("configure",nextBoot.as<JsonObjectConst>(),out.to<JsonObject>()));h.tick(310);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["boot_error"]=="script_load_failed");
+ // VM quota is a system resource policy, not a 64/128 KiB hardware boundary.
+ auto large=parse(R"({"source":"function on_start() local text=string.rep('x',70000); assert(#text==70000) end","memory_bytes":196608})");if(auto error=h.invoke("load",large.as<JsonObjectConst>(),out.to<JsonObject>())){std::cerr<<error<<" ";serializeJsonPretty(out,std::cerr);assert(false);}assert(out["memory_peak"].as<unsigned>()>65536);assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));
+ auto memoryPolicy=parse(R"({"default_vm_memory_bytes":49152})");assert(!c.resources().configure(memoryPolicy.as<JsonObjectConst>()));auto inherited=parse(R"({"source":"function on_start() end"})");assert(!h.invoke("load",inherited.as<JsonObjectConst>(),out.to<JsonObject>()));assert(out["memory_budget"]==49152);assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));
+ // Candidate preparation cannot mutate devices or stop the previous app.
+ auto stable=parse(R"({"source":"function on_start() notes.subscribe('/button') end function on_event() return true end"})");assert(!h.invoke("load",stable.as<JsonObjectConst>(),out.to<JsonObject>()));unsigned snapshot=effects;
+ auto unsafe=parse(R"({"source":"function on_prepare() notes.call('/effect','write',{}) end"})");assert(h.invoke("load",unsafe.as<JsonObjectConst>(),out.to<JsonObject>()));assert(effects==snapshot);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["fault"]==false);
+ // Explicit next-boot preparation happens before the source lookup. Malformed
+ // preparation and unavailable operations preserve/report state instead of hanging.
+ assert(!h.restore(R"({"auto_start":true,"file":"/system/main.lua","memory_bytes":65536,"instruction_budget":20000,"delay_ms":0,"prepare":[{"path":"/effect","method":"write"}]})"));
+ assert(h.restore(R"({"auto_start":true,"file":"/system/missing.lua","memory_bytes":32768,"instruction_budget":20000,"delay_ms":0,"prepare":[{"path":"/effect","method":"write","args":{}}]})"));h.scheduleBoot(500);h.tick(500);assert(effects==snapshot+1);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["boot_error"]=="not_found"&&out["fault"]==false);
+ // Application teardown reclaims pending remote request slots as well as timers.
+ auto pending=parse(R"({"source":"function on_start() assert(notes.call('/services/remote','submit',{route='service',payload={}}).ok) end"})");assert(!h.invoke("load",pending.as<JsonObjectConst>(),out.to<JsonObject>()));assert(requests.pending());assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(!requests.pending());
  std::cout<<"Runtime modules, JSON/binary fidelity, owned timers, startup validation, HTTP event applications and isolated workers passed\n";
 }

@@ -10,6 +10,8 @@ SDK=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Develop
 export CPLUS_INCLUDE_PATH="$NFS_LIB/src:$SDK/usr/include/c++/v1${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
 mkdir -p build/previews
 "$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_core_test.cpp -o build/os-core-test
+"$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_interaction_test.cpp -o build/os-interaction-test
+build/os-interaction-test
 build/os-core-test
 "$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_retention_test.cpp -o build/os-retention-test
 build/os-retention-test

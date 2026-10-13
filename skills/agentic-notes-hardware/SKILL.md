@@ -7,6 +7,8 @@ description: Discover and operate Notes OS resources, inspect live system state 
 
 For script modules, startup/lifecycle, binary data and background compute, read [runtime applications](references/runtime-apps.md). Hardware wiring belongs to the deployment package; runtime applications operate exclusively through system resources.
 
+For button gestures, contextual navigation, motion/tap events, clock synchronization and presentation state and resource-policy boundaries, read [interaction applications](references/interactions.md).
+
 For Wi-Fi profile priorities, manual selection ownership and independent BLE configuration, read [wireless configuration](references/wireless-config.md).
 
 For network sockets, BLE, Thread/Zigbee boot selection and local/remote execution, read [connectivity](references/connectivity.md).

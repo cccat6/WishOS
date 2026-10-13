@@ -1,0 +1,1 @@
+{"version": "0.1.1", "assets": [{"type": "viewScreen", "style": {"padding": 0}, "children": [{"type": "label", "id": "title", "labelProps": {"text": "View model", "missingGlyph": "replace"}, "style": {"fontSize": 24}}, {"type": "container", "id": "indicator", "placement": {"x": 40, "y": 60, "width": 20, "height": 20}, "style": {"bgColor": "#ff0000"}}]}]}

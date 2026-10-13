@@ -24,10 +24,10 @@ public:
      for(auto f:a)if(!Policies::choice("source,file,input,core,memory_bytes,instruction_budget",f.key().c_str()))return "unknown_worker_field";
      if(!registered_)return "owner_hook_capacity";
      if(!backend_.launch)return "worker_backend_unavailable";
-     unsigned affinity=backend_.cores-1,budget=a["memory_bytes"]|32768u,steps=a["instruction_budget"]|200000u;
+     unsigned affinity=backend_.cores-1,budget=a["memory_bytes"]|uint32_t(core_.resources().defaultVmLimit()),steps=a["instruction_budget"]|200000u;
      if(a.containsKey("core")){if(a["core"].is<const char*>()&&!strcmp(a["core"],"auto")){}else if(a["core"].is<unsigned>())affinity=a["core"];else return "worker_core";}
      if(affinity>=backend_.cores)return "worker_core_unavailable";
-     if((a.containsKey("memory_bytes")&&!a["memory_bytes"].is<unsigned>())||(a.containsKey("instruction_budget")&&!a["instruction_budget"].is<unsigned>())||budget<16384||budget>131072||steps<1000||steps>10000000)return "worker_budget_range";
+     if((a.containsKey("memory_bytes")&&!a["memory_bytes"].is<unsigned>())||(a.containsKey("instruction_budget")&&!a["instruction_budget"].is<unsigned>())||budget<16384||budget>core_.resources().limit()||steps<1000||steps>10000000)return "worker_budget_range";
      if(measureJson(a["input"])>4096)return "worker_input_limit";
      Job**slot=nullptr;for(auto&j:jobs_)if(!j){slot=&j;break;}if(!slot)return "worker_capacity";
      size_t reservation=budget+24576;

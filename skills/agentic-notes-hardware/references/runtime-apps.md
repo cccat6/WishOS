@@ -90,3 +90,32 @@ its RTOS task. `read` reports completion separately from cancellation requested.
 Instruction limits also stop runaway scripts. Active workers block sleep/reboot/
 shutdown until completed/cancelled. Native drivers remain responsible for bounded
 I/O; VM instruction budgets are not timing guarantees for a native driver call.
+
+
+Optional `on_prepare()` runs on the candidate VM before the previous app stops.
+Use it to validate package files. It permits `/fs` read/stat/mounts and `/sys/capabilities list`
+discovery, not hardware mutations. A preparation error leaves the previous app
+running. `on_start` is still side-effectful and cannot be rolled back globally.
+Application packages can validate their own configuration in this phase. Callbacks reclaim temporary
+coroutines at their bounded VM boundary; app and worker memory remain separate.
+
+For a startup file on a removable volume, explicitly configure a preparation
+step (up to four) alongside the persisted startup file:
+
+```json
+{"startup":{"auto_start":true,"file":"/storage/user/apps/default/main.lua","memory_bytes":null,"prepare":[{"path":"/dev/sd","method":"mount","args":{}}]},"persist":true}
+```
+
+The selected driver's mount operation still respects leases and reports missing,
+unformatted or unsupported media. Discovery does not mount storage. Preparation
+runs at the next boot; failure reports `boot_failed` while system services remain
+available. Install a replacement into a new versioned directory, then activate it;
+do not overwrite files of an active application one by one.
+
+Instance `memory_bytes` is a ceiling, not a preallocated RAM partition. Omission
+(or null for the main runtime) inherits `/sys/resources default_vm_memory_bytes`.
+The shared policy and physical heap reserve determine admission, replacing the
+previous fixed 128 KiB validation ceiling. Query effective limits before requesting
+a larger instance. Resource exhaustion still fails explicitly and preserves other
+instances/services. Global resource policy is writable by system callers, not by
+a running application lowering its own safeguards.

@@ -59,3 +59,12 @@ native port, independently compiled and validated on that hardware. A common OS
 source tree/API is portable; a C6 binary cannot be flashed onto C3/S3 unchanged.
 Use the generated sketch under `build/agentic-os-sketch/AgenticOS` in Arduino IDE.
 The build command never flashes a device or copies a reference project's firmware.
+
+The common presentation manager owns foreground navigation and view revisions.
+Display adapters expose driver selection and completion, not application-specific
+priority rules. Background document updates do not navigate. Binary drawing also
+uses an explicit surface context. Input meanings and UI flow stay in user packages.
+
+VM memory ceilings are configurable resource policy, not fixed RAM partitions.
+A package may request a ceiling; otherwise the system default applies. Admission
+uses physical headroom, system reserve and shared commitments.

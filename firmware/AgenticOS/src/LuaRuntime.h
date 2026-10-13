@@ -28,9 +28,9 @@ private:
   JsonVariantConst computeInput_;JsonVariant computeOutput_;
   struct alignas(max_align_t) Block {size_t size;};
   Core &core_;lua_State*state_=nullptr;size_t used_=0,peak_=0,budget_;
-  uint32_t steps_=0,stepLimit_,calls_=0,callLimit_;bool loading_=false,executing_=false,fault_=false,consumed_=false;
+  uint32_t steps_=0,stepLimit_,calls_=0,callLimit_;bool loading_=false,preparing_=false,executing_=false,fault_=false,consumed_=false;
   const char*source_=nullptr;size_t sourceSize_=0;const Event*event_=nullptr;int operation_=0;
-  char subscriptions_[8][48]{};unsigned subscriptionCount_=0;char error_[160]{};
+  char subscriptions_[16][48]{};unsigned subscriptionCount_=0;char error_[160]{};
   char*scratch_=nullptr;JsonDocument*input_=nullptr,*output_=nullptr;size_t jsonBudget_=0;
   static LuaRuntime& self(lua_State*L){return **(LuaRuntime**)lua_getextraspace(L);}
   static void*allocate(void*context,void*ptr,size_t,size_t n){
@@ -76,6 +76,7 @@ private:
   static int invoke(lua_State*L){
     auto&s=self(L);const char*path=luaL_checkstring(L,1),*method=luaL_optstring(L,2,"read");
     if(s.isolated_)return luaL_error(L,"worker_system_calls_require_main_application");
+    if(s.preparing_&&!((!strcmp(path,"/fs")&&(!strcmp(method,"read")||!strcmp(method,"stat")||!strcmp(method,"mounts")))||(!strcmp(path,"/sys/capabilities")&&(!strcmp(method,"list")||!strcmp(method,"read")))))return luaL_error(L,"Preparation only permits file reads and capability discovery");
     if(s.loading_)return luaL_error(L,"System calls belong in on_start/on_event, not module loading");
     if(!strcmp(path,"/sys/runtime")&&strcmp(method,"read"))return luaL_error(L,"Runtime mutation is not reentrant");
     if(++s.calls_>s.callLimit_)return luaL_error(L,"system_call_budget_exhausted");
@@ -87,8 +88,8 @@ private:
     if(s.output_->overflowed()){s.cleanup();return luaL_error(L,"system_response_memory_low");}
     (*s.output_)["ok"]=!e;if(e)(*s.output_)["error"]=e;toLua(L,s.output_->as<JsonVariantConst>());s.cleanup();return 1;
   }
-  static int subscribe(lua_State*L){auto&s=self(L);if(s.isolated_)return luaL_error(L,"worker_subscriptions_unavailable");const char*path=luaL_checkstring(L,1);if(strlen(path)>=48)return luaL_error(L,"event_source_limit");for(unsigned i=0;i<s.subscriptionCount_;++i)if(!strcmp(path,s.subscriptions_[i]))return 0;if(s.subscriptionCount_==8)return luaL_error(L,"subscription_capacity");strcpy(s.subscriptions_[s.subscriptionCount_++],path);return 0;}
-  static int log(lua_State*L){auto&s=self(L);if(s.isolated_)return 0;const char*text=lua_tostring(L,1);s.cleanup();s.output_=s.document();if(s.output_){(*s.output_)["message"]=text&&strlen(text)<256?text:"log_value_limit";s.core_.emit("/sys/runtime","log",s.output_->as<JsonObjectConst>());s.cleanup();}return 0;}
+  static int subscribe(lua_State*L){auto&s=self(L);if(s.isolated_)return luaL_error(L,"worker_subscriptions_unavailable");const char*path=luaL_checkstring(L,1);if(strlen(path)>=48)return luaL_error(L,"event_source_limit");for(unsigned i=0;i<s.subscriptionCount_;++i)if(!strcmp(path,s.subscriptions_[i]))return 0;if(s.subscriptionCount_==16)return luaL_error(L,"subscription_capacity");strcpy(s.subscriptions_[s.subscriptionCount_++],path);return 0;}
+  static int log(lua_State*L){auto&s=self(L);if(s.isolated_||s.preparing_)return 0;const char*text=lua_tostring(L,1);s.cleanup();s.output_=s.document();if(s.output_){(*s.output_)["message"]=text&&strlen(text)<256?text:"log_value_limit";s.core_.emit("/sys/runtime","log",s.output_->as<JsonObjectConst>());s.cleanup();}return 0;}
   static int decode(lua_State*L){auto&s=self(L);size_t n;const char*text=luaL_checklstring(L,1,&n);if(n>4096)return luaL_error(L,"json_limit");s.cleanup();s.input_=s.document();if(!s.input_)return luaL_error(L,"memory_low");if(deserializeJson(*s.input_,text,n)){s.cleanup();return luaL_error(L,"invalid_json");}toLua(L,s.input_->as<JsonVariantConst>());s.cleanup();return 1;}
   static int encode(lua_State*L){auto&s=self(L);s.cleanup();s.input_=s.document();if(!s.input_)return luaL_error(L,"memory_low");s.jsonBudget_=0;if(!fromLua(L,1,s.input_->to<JsonVariant>())||s.input_->overflowed()){s.cleanup();return luaL_error(L,"json_limit");}size_t n=measureJson(*s.input_);if(n>4096){s.cleanup();return luaL_error(L,"json_limit");}s.scratch_=(char*)malloc(n+1);if(!s.scratch_){s.cleanup();return luaL_error(L,"memory_low");}serializeJson(*s.input_,s.scratch_,n+1);lua_pushlstring(L,s.scratch_,n);s.cleanup();return 1;}
   static int init(lua_State*L){
@@ -103,11 +104,11 @@ private:
     lua_pushcfunction(L,array);lua_setfield(L,-2,"array");lua_pushcfunction(L,unsubscribe);lua_setfield(L,-2,"unsubscribe");
     lua_pushcfunction(L,resolve);lua_setfield(L,-2,"resolve");lua_pushcfunction(L,findLiteral);lua_setfield(L,-2,"find");lua_pushcfunction(L,requireModule);lua_setfield(L,-2,"require");
     const char*names[]={"hex","unhex","base64","unbase64"};for(int i=0;i<4;++i){lua_pushinteger(L,i);lua_pushcclosure(L,bytes,1);lua_setfield(L,-2,names[i]);}
-    lua_setglobal(L,"notes");return 0;
+    lua_setglobal(L,"notes");lua_gc(L,LUA_GCINC,100,200,10);return 0;
   }
   static int run(lua_State*L){auto&s=self(L);
     if(s.operation_==0){if(luaL_loadbufferx(L,s.source_,s.sourceSize_,"application","t")!=LUA_OK)return lua_error(L);lua_callk(L,0,0,0,continuation);return 0;}
-    lua_getglobal(L,s.operation_==1?"on_start":s.operation_==3?"on_stop":s.operation_==4?"compute":"on_event");if(!lua_isfunction(L,-1)){lua_pop(L,1);if(s.operation_==4)return luaL_error(L,"compute_function_required");return 0;}
+    lua_getglobal(L,s.operation_==1?"on_start":s.operation_==3?"on_stop":s.operation_==4?"compute":s.operation_==5?"on_prepare":"on_event");if(!lua_isfunction(L,-1)){lua_pop(L,1);if(s.operation_==4)return luaL_error(L,"compute_function_required");return 0;}
     int args=0;if(s.operation_==4){toLua(L,s.computeInput_);args=1;}
     if(s.operation_==2){s.cleanup();s.input_=s.document();if(!s.input_)return luaL_error(L,"memory_low");auto o=s.input_->to<JsonObject>();o["source"]=s.event_->path;o["event"]=s.event_->name;o["sequence"]=s.event_->sequence;o["at_ms"]=s.event_->time;s.output_=s.document();if(!s.output_)return luaL_error(L,"memory_low");if(deserializeJson(*s.output_,s.event_->data))return luaL_error(L,"event_decode_failed");o["data"]=s.output_->as<JsonVariantConst>();if(s.input_->overflowed())return luaL_error(L,"event_memory_low");toLua(L,s.input_->as<JsonVariantConst>());s.cleanup();args=1;}
     int results=(s.operation_==2||s.operation_==4)?1:0;lua_callk(L,args,results,results,continuation);return continuation(L,LUA_OK,results);
@@ -120,10 +121,14 @@ private:
     int results=0;int status=lua_resume(thread,nullptr,0,&results);consumed_=status==LUA_OK&&operation==2&&results&&lua_toboolean(thread,-1);
     cleanup();
     if(status!=LUA_OK){releaseOwned();if(!copy(error_,sizeof(error_),status==LUA_YIELD?"instruction_budget_exhausted":lua_tostring(thread,-1)))copy(error_,sizeof(error_),"lua_execution_error");fault_=true;}
-    lua_sethook(thread,nullptr,0,0);lua_pop(state_,1);executing_=false;return status==LUA_OK&&!fault_;
+    lua_sethook(thread,nullptr,0,0);lua_pop(state_,1);
+    // Callback coroutines and conversion tables are temporary. Reclaim at the
+    // bounded VM boundary so a burst of valid events cannot exhaust the heap
+    // merely because the next incremental collection has not run yet.
+    lua_gc(state_,LUA_GCCOLLECT);executing_=false;return status==LUA_OK&&!fault_;
   }
 public:
-  LuaRuntime(Core&core,size_t budget=32768,uint32_t steps=20000,uint32_t calls=32):core_(core),budget_(budget),stepLimit_(steps),callLimit_(calls),owner_(core.acquireOwner()){reservation_=core_.resources().acquire(budget_,owner_);if(!reservation_)copy(error_,sizeof error_,"system_memory_budget");}
+  LuaRuntime(Core&core,size_t budget=0,uint32_t steps=20000,uint32_t calls=32):core_(core),budget_(budget?budget:core.resources().defaultVmLimit()),stepLimit_(steps),callLimit_(calls),owner_(core.acquireOwner()){reservation_=core_.resources().acquire(budget_,owner_);if(!reservation_)copy(error_,sizeof error_,"system_memory_budget");}
   ~LuaRuntime(){releaseOwned();loading_=true;cleanup();if(state_)lua_close(state_);core_.resources().release(reservation_);}
   void fileContext(const char*file,Reader reader,void*context){reader_=reader;readerContext_=context;copy(base_,sizeof base_,file);auto end=strrchr(base_,'/');if(end==base_)end[1]=0;else if(end)*end=0;else strcpy(base_,"/");}
   bool stop(){if(stopped_)return !fault_;stopped_=true;bool ok=fault_?false:execute(3);releaseOwned();return ok;}
@@ -137,12 +142,13 @@ public:
   }
   void isolate(void(*yield)(void*),bool(*cancelled)(void*),void*context){isolated_=true;yield_=yield;cancelled_=cancelled;executionContext_=context;}
   bool compute(JsonVariantConst input,JsonVariant output){computeInput_=input;computeOutput_=output;bool ok=execute(4);computeInput_=JsonVariantConst();computeOutput_=JsonVariant();return ok;}
+  bool prepare(){preparing_=true;bool ok=execute(5);preparing_=false;return ok;}
   bool start(){return execute(1);}
   bool event(const Event&e){if(fault_||stopped_)return false;
-    if(!strcmp(e.path,"/sys/timers")||!strcmp(e.path,"/sys/workers")||!strcmp(e.path,"/net/tcp")||!strcmp(e.path,"/net/http-server")||!strcmp(e.path,"/net/udp")){JsonDocument d;if(!deserializeJson(d,e.data)){uint32_t owner=d["owner"]|0u;if(owner&&owner!=owner_)return false;}}
+    if(!strcmp(e.path,"/services/remote")||!strcmp(e.path,"/sys/timers")||!strcmp(e.path,"/sys/workers")||!strcmp(e.path,"/net/tcp")||!strcmp(e.path,"/net/http-server")||!strcmp(e.path,"/net/udp")){JsonDocument d;if(!deserializeJson(d,e.data)){uint32_t owner=d["owner"]|0u;if(owner&&owner!=owner_)return false;}}
     bool match=false;for(unsigned i=0;i<subscriptionCount_;++i)if(!strcmp(e.path,subscriptions_[i]))match=true;if(!match)return false;event_=&e;execute(2);event_=nullptr;return consumed_;}
   bool admitted()const{return reservation_!=0;}
   bool executing()const{return executing_;}const char*error()const{return error_;}
-  void describe(JsonObject o)const{o["engine"]="lua-5.4.8";o["native_call_depth_limit"]=LUAI_MAXCCALLS;o["owner"]=owner_;o["modules_loaded"]=moduleCount_;o["base_path"]=base_;o["stopped"]=stopped_;o["memory_used"]=used_;o["memory_peak"]=peak_;o["memory_budget"]=budget_;o["instruction_budget"]=stepLimit_;o["system_call_budget"]=callLimit_;o["last_system_calls"]=calls_;o["last_instructions"]=steps_;o["fault"]=fault_;o["error"]=error_;auto subscriptions=o["subscriptions"].to<JsonArray>();for(unsigned i=0;i<subscriptionCount_;++i)subscriptions.add(subscriptions_[i]);}
+  void describe(JsonObject o)const{o["engine"]="lua-5.4.8";o["native_call_depth_limit"]=LUAI_MAXCCALLS;o["owner"]=owner_;o["modules_loaded"]=moduleCount_;o["subscription_limit"]=16;o["base_path"]=base_;o["stopped"]=stopped_;o["memory_used"]=used_;o["memory_peak"]=peak_;o["memory_budget"]=budget_;o["instruction_budget"]=stepLimit_;o["system_call_budget"]=callLimit_;o["last_system_calls"]=calls_;o["last_instructions"]=steps_;o["fault"]=fault_;o["error"]=error_;auto subscriptions=o["subscriptions"].to<JsonArray>();for(unsigned i=0;i<subscriptionCount_;++i)subscriptions.add(subscriptions_[i]);}
 };
 }

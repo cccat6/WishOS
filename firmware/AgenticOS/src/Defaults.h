@@ -19,8 +19,6 @@ inline constexpr Setting SETTINGS[]={
  Setting{"/services/nfs","replay_window_ms","integer","60000","",1,2147483647}.inSystem().at("next_service_start"),
  {"/sys/input","gated_sources","string","\"/dev/buttons,/dev/imu\"","",0,192},
  {"/sys/input","during_display_busy","enum","\"dispatch\"","dispatch,queue,drop"},
- {"/sys/input","debounce_ms","integer","25","",5,100},
- {"/sys/input","long_press_ms","integer","800","",100,4294967295.0},
  {"/dev/display","driver","enum","\"e6.ink6.ui-v1\"","e6.ink6.ui-v1,e6.ink6.image-v1"},
  {"/dev/display","pending","enum","\"latest\"","latest,fifo,reject"},
  {"/dev/display","queue_limit","integer","2","",1,4},

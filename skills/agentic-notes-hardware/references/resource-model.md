@@ -27,7 +27,7 @@ Examples using the same interface:
 ```
 
 ```json
-{"id":"button-held","source":"/dev/buttons","property":"A.pressed","operator":"equal","value":true,"hold_ms":800}
+{"id":"button-held","source":"/dev/buttons","property":"buttons.A.pressed","operator":"equal","value":true,"hold_ms":800}
 ```
 
 ```json

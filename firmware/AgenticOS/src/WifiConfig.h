@@ -17,7 +17,7 @@ struct WifiConfig {
    for(auto key:{"enabled","auto_connect","roam_same_priority","roam_with_sessions","ap_enabled"})fields[key]["type"]="boolean";
    for(auto r:Ranges){auto f=fields[r.key].to<JsonObject>();f["type"]="integer";f["minimum"]=r.low;f["maximum"]=r.high;}
    fields["selection"]["choices"]="auto,manual";fields["manual_profile"]["type"]="profile_id";fields["switch_policy"]["choices"]="on_disconnect,prefer_priority";
-   fields["power_save"]["choices"]="off,minimum,maximum";fields["tx_power_dbm"]["minimum"]=2;fields["tx_power_dbm"]["maximum"]=20;
+   fields["power_save"]["choices"]="off,minimum,maximum";fields["tx_power_dbm"]["minimum"]=2;fields["tx_power_dbm"]["maximum"]=20;fields["tx_power_dbm"]["multipleOf"]=0.25;
    for(auto key:{"ap_ssid","ap_password"})fields[key]["type"]="string";
    out["manual_holds"]="until_resume,until_disconnect,timed";out["manual_hold_default"]="until_disconnect";out["ssid_max_bytes"]=32;out["profile_priority_min"]=-1000;out["profile_priority_max"]=1000;out["profile_update"]="omitted_password_preserved_empty_password_is_open";
  }

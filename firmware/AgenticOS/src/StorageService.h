@@ -170,7 +170,7 @@ static const char* policyHandler(const char*m,JsonObjectConst a,JsonObject out){
     if(sdLocked)giveSPI();
     if(!e&&busChanged){out["sd_apply_time"]="next_probe";out["display_apply_time"]="idle_boundary";}
     if(!e&&!strcmp(m,"apply")){
-      applyInputPolicy();
+
       applyPanelClockIfIdle();
       if(busChanged&&sdLink.ready&&!strcmp(sdLink.volumeError,"experimental_link_only")&&
          policies.get<bool>("/sys/bus","sd_allow_experimental_io",false))
