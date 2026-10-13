@@ -16,7 +16,7 @@ struct UiSink {void*context;void(*write)(void*,const lv_area_t&,const uint16_t*)
 static UiSink*uiSink=nullptr;static char uiBase[256]{},uiCurrent[256]{},uiPresented[256]{};
 static unsigned uiDepth=0;static const char*uiError="none";
 static const char*uiReadError=nullptr;
-static uint32_t uiLeaseOwner=0;static unsigned uiNodes=0;static uint32_t uiRules[16]{};static size_t uiRuleCount=0;
+static uint32_t uiLeaseOwner=0;static unsigned uiNodes=0;static uint32_t uiRules[16]{},uiAppOwner=0;static size_t uiRuleCount=0;static char uiAppFile[256]{},uiAppEntry[256]{};
 static lv_font_t localFonts[7]{};static constexpr uint8_t fontSizes[]={16,20,24,32,40,48,60};
 struct FontFile{char name[48]{},path[256]{};uint32_t size=0;lv_font_t*font=nullptr;};static FontFile fontFiles[4];
 struct LvFile{FileProvider*p;char relative[256];uint64_t at;};
@@ -136,7 +136,7 @@ static bool sameStamp(PresentationState::Stamp a,PresentationState::Stamp b){ret
 static void pollUiPresentation(){auto id=presentationState.active();auto d=uiDocument(id);if(!d)return;auto stamp=presentationState.stamp(id);if(sameStamp(stamp,d->scheduled))return;
  JsonDocument out;if(!queueUi(d->path,d->driver,d->force,out.to<JsonObject>(),d->scope,&d->view,stamp)){d->scheduled=stamp;d->lastJob=out["job_id"]|0u;}
 }
-static bool initUiLifecycle(){static bool initialized=false;if(initialized)return true;initialized=core.onOwnerRelease(&presentationState,[](void*,uint32_t owner){bool changed=false;for(unsigned i=0;i<PresentationState::Capacity;++i){auto v=presentationState.at(i);if(v.id&&v.owner==owner&&!presentationState.close(v.id,0)){freeUiDocument(i);changed=true;}}if(changed)uiStateChanged();});return initialized;}
+static bool initUiLifecycle(){static bool initialized=false;if(initialized)return true;initialized=core.onOwnerRelease(&presentationState,[](void*,uint32_t owner){if(uiAppOwner==owner){uiAppOwner=0;uiRuleCount=0;uiAppFile[0]=uiAppEntry[0]=0;copy(appScope,sizeof appScope,"system");}bool changed=false;for(unsigned i=0;i<PresentationState::Capacity;++i){auto v=presentationState.at(i);if(v.id&&v.owner==owner&&!presentationState.close(v.id,0)){freeUiDocument(i);changed=true;}}if(changed)uiStateChanged();});return initialized;}
 static const char*displayViewStamp(JsonObjectConst a,PresentationState::Stamp&stamp){
  if(!a["view_id"].is<uint32_t>())return "view_context_required";uint32_t id=a["view_id"];if(auto e=presentationState.access(id,core.callerOwner()))return e;
  if(presentationState.get(id)->document)return "document_requires_ui_update";stamp=presentationState.stamp(id);if(!stamp.activation)return "view_not_foreground";
@@ -144,6 +144,7 @@ static const char*displayViewStamp(JsonObjectConst a,PresentationState::Stamp&st
 }
 static bool uiUsesFont(lv_obj_t*node,const lv_font_t*font){if(!node)return false;if(lv_obj_get_style_text_font(node,LV_PART_MAIN)==font)return true;for(uint32_t i=0;i<lv_obj_get_child_count(node);++i)if(uiUsesFont(lv_obj_get_child(node,i),font))return true;return false;}
 static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
+ if(!strcmp(m,"read")){out["application"]["file"]=uiAppFile;out["application"]["entry"]=uiAppEntry;out["application"]["owner"]=uiAppOwner;out["application"]["binding_count"]=uiRuleCount;}
  if(Policies::choice("create,activate,close,back,open,update,refresh",m)){
   const char*allowed=!strcmp(m,"create")?"":!strcmp(m,"activate")?"view_id,history":!strcmp(m,"close")?"view_id":!strcmp(m,"back")?"":"view_id,path,driver,scope,values,focus,hidden,rotation,force,history,expected_revision";
   for(auto f:a)if(!Policies::choice(allowed,f.key().c_str()))return "unknown_ui_argument";
@@ -190,15 +191,24 @@ static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
   uiStateChanged(prior?"updated":"activated",id);pollUiPresentation();auto stamp=presentationState.stamp(id);out["view_id"]=id;out["revision"]=stamp.revision;out["foreground"]=bool(stamp.activation);auto current=uiDocument(id);if(current&&sameStamp(current->scheduled,stamp))out["job_id"]=current->lastJob;out["status"]=stamp.activation?"updated_pending_presentation":"updated";return nullptr;
  }
  if(!strcmp(m,"app_load")){
-  const char*file=a["file"]|"/system/default-app.json";JsonDocument d;if(auto e=loadJsonFile(file,d))return e;if(strcmp(d["format"]|"","notes-app/1"))return "app_format";
+  if(!initUiLifecycle())return "lifecycle_capacity";
+  for(auto field:a)if(strcmp(field.key().c_str(),"file"))return "unknown_app_argument";
+  if(!a["file"].is<const char*>())return "app_file_required";
+  char file[256];if(!normalizePath("/",a["file"],file,sizeof file))return "app_file_path";
+  if(core.callerOwner()&&uiAppOwner&&uiAppOwner!=core.callerOwner())return "app_owned_by_other";
+  JsonDocument d;if(auto e=loadJsonFile(file,d))return e;if(strcmp(d["format"]|"","notes-app/1"))return "app_format";
+  for(auto field:d.as<JsonObjectConst>())if(!Policies::choice("format,entry,bindings,policy_scope",field.key().c_str()))return "unknown_app_field";
+  if(!d["entry"].is<const char*>()||!*d["entry"].as<const char*>())return "app_entry_path";
+  if(d.containsKey("bindings")&&!d["bindings"].is<JsonArrayConst>())return "app_bindings_type";
+  if(d.containsKey("policy_scope")&&!d["policy_scope"].is<const char*>())return "scope_type";
   if(d["bindings"].size()>16)return "app_binding_limit";
-  const char*scope=d["policy_scope"]|"system";if(!*scope||strlen(scope)>=sizeof(appScope))return "scope_limit";
+  const char*scope=d["policy_scope"]|"system";if(!Policies::validScope(scope)||strlen(scope)>=sizeof(appScope))return "scope_limit";
   char base[256],entry[256];copy(base,sizeof(base),file);auto slash=strrchr(base,'/');if(slash)*slash=0;if(!normalizePath(base,d["entry"]|"",entry,sizeof(entry)))return "app_entry_path";
-  JsonDocument check;if(auto e=loadJsonFile(entry,check))return e;
+  uint32_t previousLease=uiLeaseOwner;constexpr uint32_t validationLease=0xffffffe8u;uiLeaseOwner=validationLease;bool valid=prepareUi(entry,UiView{},true);uiLeaseOwner=previousLease;vfs.release(validationLease);if(!valid)return uiError;
   // Core validates the complete replacement and restores the old group on failure.
   for(auto binding:d["bindings"].as<JsonArrayConst>()){if(!binding.is<JsonObjectConst>())return "invalid_rule";}
   JsonDocument updated;auto ids=updated.to<JsonArray>();if(auto e=core.replaceRules(d["bindings"].as<JsonArrayConst>(),uiRules,uiRuleCount,ids))return e;
-  uiRuleCount=ids.size();for(size_t i=0;i<uiRuleCount;++i)uiRules[i]=ids[i];copy(appScope,sizeof(appScope),scope);
+  uiRuleCount=ids.size();for(size_t i=0;i<uiRuleCount;++i)uiRules[i]=ids[i];copy(appScope,sizeof(appScope),scope);uiAppOwner=core.callerOwner();copy(uiAppFile,sizeof uiAppFile,file);copy(uiAppEntry,sizeof uiAppEntry,entry);
   // Loading and navigating are separate operations. An admitted app remains queryable
   // even if the display queue is full; callers can open its entry when ready.
   out["entry"]=entry;out["policy_scope"]=appScope;out["binding_count"]=uiRuleCount;out["status"]="loaded";return nullptr;

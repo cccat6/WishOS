@@ -41,11 +41,15 @@ No ecosystem adapter, account login or vendor appliance schema is built into the
   uses IPv6. Inspect packet source address/port and consume the readable notification.
 - `/net/ws connect/send/receive/close`: WS/WSS client, bounded messages. Configure
   host/port/path, TLS CA and reconnect interval. Consume the queue and observe drops.
-- `/net/http-server route`: install GET/POST/PUT/DELETE routes below `/app/`, either
+- `/net/http-server route`: install GET/POST/PUT/DELETE routes at `/` or below `/app/`, either
   static responses or `dynamic:true`. Dynamic requests return HTTP 202 with an ID,
   emit `request`, and can be read/responded/released through this resource. Clients
   retrieve the response via `/os/invoke`. Six routes/four requests, 2048-byte bodies.
   `stop` removes routes/requests. This shares the existing HTTP listener on port 80.
+  An app-owned GET `/` replaces the default management page while that application
+  runs; stopping/replacing it restores the package page if no replacement route is
+  registered. `/os/*` remains reserved for system transport. Larger pages can load
+  additional app routes/resources; the bounded text-response limit still applies.
 - `/dev/wifi scan_start/scan_results/scan_clear`: async scan with result paging.
   Existing connection, TX-power and modem-sleep interfaces remain available.
 

@@ -16,13 +16,17 @@ releases VM memory. Stop does not erase startup configuration.
 
 The callbacks are `on_start()`, `on_event(event)`, and optional `on_stop()`.
 `notes.subscribe(path)` / `notes.unsubscribe(path)` control subscriptions. Returning
-true consumes an event before rules. Timers and rules created through the script's
-calls belong to that VM; replacement, stop and fault remove them. Omit timer ID to
+true consumes an event before rules. Timers, rules, UI-manifest bindings and condition
+monitors created through the script's calls belong to that VM; replacement, stop and
+fault remove them. System condition monitors remain active. Omit timer ID to
 allocate a free ID. Script-created TCP listeners/accepted sockets, UDP endpoints and HTTP routes/requests
 are also owned and automatically removed on replacement, stop or fault. Their
 handles cannot be mutated by a different script owner. Script-owned compute jobs
 are cancelled cooperatively and reaped after completion; the replacement app does
-not receive their stale completion events. The C6 HTTP client/WS/microphone adapter
+not receive their stale completion events. Targeted event routing uses the event's
+instance identity, independently of its path and payload. The same routing applies
+to rules; a newly installed rule begins with the next event, not the input currently
+executing a rule replacement. The C6 HTTP client/WS/microphone adapter
 also closes or requests cancellation/stop on owner exit, with asynchronous tasks
 retained until safe. Shared persistent driver settings and explicit system services
 (such as NFS and BLE) are not rolled back automatically: stop those deliberately
@@ -69,6 +73,21 @@ new startup configuration is not saved for reboot. Reads do not probe files or m
 media. Disable `auto_start` to cancel pending boot admission. The startup delay is
 configurable and is not a display-refresh delay.
 
+The factory suite is simply the hardware package's default `startup.script`
+reference. Its Lua entrypoint loads page and interaction resources through the same
+interfaces used by a user script. Saved runtime startup configuration takes
+precedence. A successful explicit `load` cancels a pending boot load, so a delayed
+factory start cannot overwrite an already selected user application. It does not
+silently persist the new selection; use `configure` with `persist:true` for that.
+
+`/sys/ui app_load {file}` loads a UI/interaction manifest and returns its `entry`.
+It validates the entry UI before replacing bindings; call `open {path: entry}`
+separately to navigate. Pass distinct argument objects to those operations. UI
+`read` reports the loaded manifest and binding count. The manifest's rules omit
+explicit IDs: the loader manages group identity without overwriting unrelated rules.
+Application exit releases its views and bindings, without interrupting a committed
+physical refresh. Pages and interaction choices are files, not privileged factory code.
+
 ## Background computations
 
 Use `/sys/workers submit` for calculations that should not run in the event callback.
@@ -93,7 +112,7 @@ I/O; VM instruction budgets are not timing guarantees for a native driver call.
 
 
 Optional `on_prepare()` runs on the candidate VM before the previous app stops.
-Use it to validate package files. It permits `/fs` read/stat/mounts and `/sys/capabilities list`
+Use it to validate package files. It permits `/fs` read/stat/mounts and `/sys/capabilities list/describe`
 discovery, not hardware mutations. A preparation error leaves the previous app
 running. `on_start` is still side-effectful and cannot be rolled back globally.
 Application packages can validate their own configuration in this phase. Callbacks reclaim temporary

@@ -11,11 +11,11 @@ private:
   struct Entry {
     char id[33]{},source[48]{},property[64]{},op[12]{},type[12]{};
     char target[128]{},baseline[128]{},candidate[128]{},error[64]{};
-    double hysteresis=0;uint32_t holdMs=0,intervalMs=100;
+    double hysteresis=0;uint32_t holdMs=0,intervalMs=100,owner=0;
     uint64_t due=0,pendingAt=0,lastAt=0;
     bool initialEvent=false,known=false,available=false,active=false,pending=false,candidateActive=false,sampled=false;
   } entries_[CAPACITY];
-  Core&core_;
+  Core&core_;bool registered_=false;
   static JsonVariantConst property(JsonVariantConst root,const char*path){
     char name[64];if(!copy(name,sizeof(name),path))return {};
     char*save=nullptr;for(char*part=strtok_r(name,".",&save);part;part=strtok_r(nullptr,".",&save)){
@@ -29,9 +29,9 @@ private:
     return (!strcmp(type,"number")||!strcmp(type,"integer"))&&v.is<double>()&&std::isfinite(v.as<double>());
   }
   void emit(Entry&e,const char*event,JsonVariantConst value,bool initial,uint64_t now){
-    JsonDocument d;d["id"]=e.id;d["source"]=e.source;d["property"]=e.property;d["value"]=value;d["initial"]=initial;d["at_ms"]=now;
+    JsonDocument d;d["id"]=e.id;d["owner"]=e.owner;d["source"]=e.source;d["property"]=e.property;d["value"]=value;d["initial"]=initial;d["at_ms"]=now;
     if(strcmp(e.op,"change"))d["active"]=e.active;
-    core_.emit("/sys/conditions",event,d.as<JsonObjectConst>());
+    core_.emit("/sys/conditions",event,d.as<JsonObjectConst>(),e.owner);
   }
   void observe(Entry&e,JsonVariantConst value,uint64_t now){
     if(!typeMatches(e.type,value)){e.available=e.pending=false;copy(e.error,sizeof(e.error),"sample_unavailable");return;}
@@ -64,8 +64,10 @@ private:
     if(changed&&(!initial||(desired&&e.initialEvent)))emit(e,desired?"entered":"exited",value,initial,now);
   }
 public:
-  explicit Conditions(Core&core):core_(core){}
+  explicit Conditions(Core&core):core_(core){registered_=core_.onOwnerRelease(this,[](void*p,uint32_t owner){for(auto&e:static_cast<Conditions*>(p)->entries_)if(e.owner==owner)e={};});}
+  ~Conditions(){core_.removeOwnerHook(this);}
   const char*set(JsonObjectConst a,JsonObject out,bool system=false){
+    if(!registered_)return "owner_hook_capacity";
     const char*id=a["id"]|"",*source=a["source"]|"",*field=a["property"]|"",*op=a["operator"]|"";
     if(!*id||strlen(id)>32)return "condition_id_limit";
     if(!system&&!strncmp(id,"system:",7))return "system_condition_use_policy";
@@ -86,13 +88,14 @@ public:
     if(next.holdMs>3600000||next.intervalMs<20||next.intervalMs>60000)return "condition_timing_range";
     if(measureJson(a["value"])>=sizeof(next.target))return "condition_value_limit";serializeJson(a["value"],next.target,sizeof(next.target));
     Entry*slot=nullptr;for(auto&e:entries_)if(!strcmp(e.id,id)){slot=&e;break;}if(!slot)for(auto&e:entries_)if(!e.id[0]){slot=&e;break;}if(!slot)return "condition_capacity";
-    *slot=next;out["id"]=id;out["status"]="armed";return nullptr;
+    if(slot->id[0]&&core_.callerOwner()&&!system&&slot->owner!=core_.callerOwner())return "condition_owned_by_other";
+    next.owner=system?0:core_.callerOwner();*slot=next;out["id"]=id;out["status"]="armed";return nullptr;
   }
-  const char*remove(const char*id){if(!strncmp(id,"system:",7))return "system_condition_use_policy";for(auto&e:entries_)if(e.id[0]&&!strcmp(e.id,id)){e={};return nullptr;}return "condition_not_found";}
+  const char*remove(const char*id){if(!strncmp(id,"system:",7))return "system_condition_use_policy";for(auto&e:entries_)if(e.id[0]&&!strcmp(e.id,id)){if(core_.callerOwner()&&e.owner!=core_.callerOwner())return "condition_owned_by_other";e={};return nullptr;}return "condition_not_found";}
   bool active(const char*id)const {for(auto&e:entries_)if(!strcmp(e.id,id))return e.known&&e.available&&e.active;return false;}
   void list(JsonObject out)const {
     out["capacity"]=CAPACITY;auto arr=out["conditions"].to<JsonArray>();
-    for(auto&e:entries_)if(e.id[0]){auto o=arr.add<JsonObject>();o["id"]=e.id;o["source"]=e.source;o["property"]=e.property;o["operator"]=e.op;JsonDocument v;deserializeJson(v,e.target);if(strcmp(e.op,"change"))o["value"]=v.as<JsonVariantConst>();o["hysteresis"]=e.hysteresis;o["hold_ms"]=e.holdMs;o["interval_ms"]=e.intervalMs;o["emit_initial"]=e.initialEvent;if(e.known&&e.available)o["active"]=e.active;else o["active"]=nullptr;if(e.error[0])o["error"]=e.error;}
+    for(auto&e:entries_)if(e.id[0]){auto o=arr.add<JsonObject>();o["id"]=e.id;o["owner"]=e.owner;o["source"]=e.source;o["property"]=e.property;o["operator"]=e.op;JsonDocument v;deserializeJson(v,e.target);if(strcmp(e.op,"change"))o["value"]=v.as<JsonVariantConst>();o["hysteresis"]=e.hysteresis;o["hold_ms"]=e.holdMs;o["interval_ms"]=e.intervalMs;o["emit_initial"]=e.initialEvent;if(e.known&&e.available)o["active"]=e.active;else o["active"]=nullptr;if(e.error[0])o["error"]=e.error;}
   }
   void tick(uint64_t now){
     bool processed[CAPACITY]{};

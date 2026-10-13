@@ -25,6 +25,10 @@ int main(){
  assert(p.apply(a.as<JsonObjectConst>(),out.to<JsonObject>()));
  a=j(R"({"changes":[{"resource":"/dev/mic","settings":{"sample_rate_hz":32000}}]})");assert(p.apply(a.as<JsonObjectConst>(),out.to<JsonObject>()));
  a=j(R"({"changes":[{"resource":"/dev/mic","settings":{"network_queue":false,"gpio":8}}]})");assert(p.apply(a.as<JsonObjectConst>(),out.to<JsonObject>()));assert(p.get<bool>("/dev/mic","network_queue",false));
+ // Malformed persistence/envelope options must not apply the otherwise-valid
+ // settings, nor silently fall back to a non-persistent transaction.
+ a=j(R"({"persist":"true","changes":[{"resource":"/dev/mic","settings":{"network_queue":false}}]})");unsigned revision=p.revision();assert(p.apply(a.as<JsonObjectConst>(),out.to<JsonObject>()));assert(p.revision()==revision&&p.get<bool>("/dev/mic","network_queue",false));
+ a["persist"]=false;a["changes"][0]["apply_now"]=true;assert(p.apply(a.as<JsonObjectConst>(),out.to<JsonObject>()));assert(p.revision()==revision);
  a=j(R"({"scope":"app:test","changes":[{"resource":"/sys/input","settings":{"during_display_busy":"drop"}}]})");assert(!p.apply(a.as<JsonObjectConst>(),out.to<JsonObject>()));p.resolve("/sys/input","app:test",values.to<JsonObject>());assert(values["during_display_busy"]=="drop");p.resolve("/sys/input","system",values.to<JsonObject>());assert(values["during_display_busy"]=="dispatch");
  MemoryFiles mem("ram","/storage/ram","ram");assert(mem.budget(8));size_t n=0;uint8_t b[8]={1,2,3,4};
  assert(!mem.mkdir("/app"));assert(!mem.write("/app/a",0,b,4,false,n)&&n==4);assert(!mem.write("/app/a",6,b,2,false,n));assert(!mem.budget(7));assert(!mem.read("/app/a",0,b,8,n)&&n==8&&b[4]==0&&b[6]==1);

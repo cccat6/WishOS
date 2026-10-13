@@ -16,7 +16,7 @@ namespace notesos {
 class SocketService {
  struct Socket{int fd=-1;uint32_t id=0;bool listener=false,connecting=false,notified=false;uint32_t owner=0;};
  Socket sockets_[4];uint32_t next_=1;Core&core_;bool registered_=false;
- void event(Socket&s,const char*name){JsonDocument d;d["id"]=s.id;d["owner"]=s.owner;core_.emit("/net/tcp",name,d.as<JsonObjectConst>());}
+ void event(Socket&s,const char*name){JsonDocument d;d["id"]=s.id;d["owner"]=s.owner;core_.emit("/net/tcp",name,d.as<JsonObjectConst>(),s.owner);}
  Socket*find(uint32_t id){for(auto&s:sockets_)if(s.id==id&&id)return &s;return nullptr;}
  Socket*vacant(){for(auto&s:sockets_)if(s.fd<0)return &s;return nullptr;}
  static bool transient(){return errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR;}

@@ -68,11 +68,10 @@ def load(package):
     defaults = json.loads(assets.get('/defaults.json','{}'))
     if not isinstance(defaults,dict):
         raise ValueError('defaults object required')
-    ui = b['startup']['ui']
-    if not ui.startswith('/system/') or ui[7:] not in assets:
-        raise ValueError('startup UI missing')
+    if not isinstance(b['startup'], dict) or set(b['startup']) - {'script'}:
+        raise ValueError('startup must reference an optional runtime script')
     script=b['startup'].get('script','')
-    if script and (not script.startswith('/system/') or script[7:] not in assets or len(assets[script[7:]].encode())>8192):
+    if not isinstance(script,str) or (script and (not script.startswith('/system/') or script[7:] not in assets or len(assets[script[7:]].encode())>8192)):
         raise ValueError('startup script missing or too large')
     return root,b,port,p,assets
 
@@ -84,7 +83,7 @@ def generate(package, output):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     port_hashes={str(f.relative_to(port)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(port.rglob('*')) if f.is_file()}
     fingerprint=hashlib.sha256(json.dumps({'board':b,'port':p,'assets':assets,'port_files':port_hashes},sort_keys=True).encode()).hexdigest()
-    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>',f'#define NOTES_HAS_VBUS_ADC {int(b.get("hardware",{}).get("vbus_clamps_battery_adc",False))}','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};',f'inline constexpr char STARTUP_UI[]={literal(b["startup"]["ui"])};',f'inline constexpr char STARTUP_SCRIPT[]={literal(b["startup"].get("script",""))};','struct Asset {const char*path;const char*data;};','inline constexpr Asset ASSETS[]={']
+    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>',f'#define NOTES_HAS_VBUS_ADC {int(b.get("hardware",{}).get("vbus_clamps_battery_adc",False))}','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};',f'inline constexpr char STARTUP_SCRIPT[]={literal(b["startup"].get("script",""))};','struct Asset {const char*path;const char*data;};','inline constexpr Asset ASSETS[]={']
     lines += [f'{{{literal(k)},{literal(v)}}},' for k,v in sorted(assets.items())]
     lines += ['};','inline constexpr size_t ASSET_COUNT=sizeof(ASSETS)/sizeof(ASSETS[0]);','struct Pin {const char*signal;int gpio;int pad;};','inline constexpr Pin PINS[]={']
     lines += [f'{{{literal(k)},{v},{p.get("package_pins",{}).get(str(v),-1)}}},' for k,v in b['pins'].items()]

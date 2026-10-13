@@ -24,7 +24,7 @@ def rpc(path,method='read',args=None,timeout=12,ok=True):
 try:
  board=rpc('/sys/board')['result'];assert board['mcu']=='ESP32-C3';report['board']=board
  report['initial_stats']=rpc('/sys/stats')['result'];report['checks'].append('identity_and_runtime_boot')
- rpc('/sys/resources','configure',{'heap_reserve_bytes':12000})
+ report['initial_resources']=rpc('/sys/resources')['result']
  if a.wifi_config:
   rpc("/dev/wifi","configure",{"settings":{"ap_enabled":False,"tx_power_dbm":8.5,"power_save":"off","connect_timeout_ms":30000}})
   config=json.loads(a.wifi_config.read_text());rpc('/dev/wifi','connect',{'ssid':config['ssid'],'password':config['password'],'persist':False,'hold':'until_resume'})
@@ -56,13 +56,14 @@ function on_start()
  notes.subscribe('/sys/timers');notes.subscribe('/net/http-server');notes.subscribe('/sys/workers')
  local r=notes.call('/sys/timers','write',{delay_ms=50,period_ms=100});assert(r.ok);timer=r.result.id
  assert(notes.call('/net/http-server','route',{path='/app/runtime-test',body='runtime alive'}).ok)
- local task=notes.call('/sys/workers','submit',{source='function compute(x) local s=0 for i=1,20000 do s=s+i end return s end',input={},memory_bytes=20480,instruction_budget=1000000});assert(task.ok,task.error)
+ assert(notes.call('/net/http-server','route',{path='/',body='runtime home',content_type='text/plain'}).ok)
+ local task=notes.call('/sys/workers','submit',{source='function compute(x) local s=0 for i=1,20000 do s=s+i end return s end',input={},memory_bytes=16384,instruction_budget=1000000});assert(task.ok,task.error)
 end
 function on_event(e)
  if e.source=='/sys/workers' then local r=notes.call('/sys/workers','read',{id=e.data.id});assert(r.ok and r.result.ok and r.result.result==200010000);notes.call('/sys/workers','release',{id=e.data.id});print('worker_verified')
  elseif e.source=='/sys/timers' then assert(notes.call('/sys/stats','read').ok) end
 end"""
-  rpc('/sys/runtime','load',{'source':source,'memory_bytes':28672});time.sleep(1)
+  rpc('/sys/runtime','load',{'source':source,'memory_bytes':24576});time.sleep(1)
   state=rpc('/sys/runtime')['result'];assert not state['fault'],state
   events=rpc('/sys/events','read',{'after':0,'limit':8})['result'];after=events['cursor'];logs=events['events']
   for _ in range(6):
@@ -71,9 +72,13 @@ end"""
   assert any(x.get('event')=='log' and x.get('data',{}).get('message')=='worker_verified' for x in logs),logs
   if report.get('ip'):
    assert urllib.request.urlopen('http://'+report['ip']+'/app/runtime-test',timeout=5).read()==b'runtime alive'
+   assert urllib.request.urlopen('http://'+report['ip']+'/',timeout=5).read()==b'runtime home'
   report['checks'].append('lua_timer_worker_http_concurrency')
   bad=rpc('/sys/runtime','load',{'source':'invalid Lua !'},ok=False);assert not bad['ok'];assert not rpc('/sys/runtime')['result']['fault']
   rpc('/sys/runtime','stop');assert rpc('/sys/timers')['result']['timers']==[];assert not rpc('/net/http-server')['result']['active']
+  if report.get('ip'):
+   assert b'<html' in urllib.request.urlopen('http://'+report['ip']+'/',timeout=5).read().lower()
+   report['checks'].append('runtime_homepage_replace_and_release')
   for code,expected in [("function on_start() while true do end end",'instruction'),("function on_start() local x=string.rep('x',1000000) end",'memory')]:
    fail=rpc('/sys/runtime','load',{'source':code,'memory_bytes':24576,'instruction_budget':3000},ok=False);assert not fail['ok'];assert rpc('/sys/runtime')['result']['fault'];rpc('/sys/runtime','stop');rpc('/sys/stats');report['checks'].append(expected+'_fault_and_recovery')
   rpc('/services/nfs','start',{'provider':'flash','export_path':'/flash'});assert rpc('/services/nfs')['result']['running'];rpc('/services/nfs','stop');assert rpc('/services/nfs')['result']['owned_heap_bytes']==0;report['checks'].append('nfs_start_stop_release')

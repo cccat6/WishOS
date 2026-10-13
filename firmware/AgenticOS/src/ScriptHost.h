@@ -34,7 +34,7 @@ public:
  ~ScriptHost(){delete vm_;}
  bool restore(const char*text){JsonDocument d;if(deserializeJson(d,text)||validate(d.as<JsonObjectConst>())||validateProvider(d.as<JsonObjectConst>())){restoreValid_=false;return false;}swap(startup_,d);restoreValid_=true;persisted_=true;return true;}
  void scheduleBoot(uint64_t now){bootStartup_.set(startup_);bootPending_=!bootStartup_.overflowed()&&(startup_["auto_start"]|false);bootDue_=now+(startup_["delay_ms"]|1000u);}
- void tick(uint64_t now){if(!bootPending_||now<bootDue_)return;bootPending_=false;JsonDocument args,out;for(auto s:bootStartup_["prepare"].as<JsonArrayConst>()){if(auto error=core_.invoke(s["path"],s["method"],s["args"].as<JsonObjectConst>(),out.to<JsonObject>())){copy(bootError_,sizeof bootError_,error);notify("boot_failed",error);return;}}for(auto key:{"file","memory_bytes","instruction_budget","system_call_budget"})if(!bootStartup_[key].isNull())args[key]=bootStartup_[key];bootStartup_.clear();auto error=invoke("load",args.as<JsonObjectConst>(),out.to<JsonObject>());if(error){copy(bootError_,sizeof bootError_,error);notify("boot_failed",error);}}
+ void tick(uint64_t now){if(!bootPending_||now<bootDue_)return;bootPending_=false;JsonDocument boot=std::move(bootStartup_);JsonDocument args,out;for(auto s:boot["prepare"].as<JsonArrayConst>()){if(auto error=core_.invoke(s["path"],s["method"],s["args"].as<JsonObjectConst>(),out.to<JsonObject>())){copy(bootError_,sizeof bootError_,error);notify("boot_failed",error);return;}}for(auto key:{"file","memory_bytes","instruction_budget","system_call_budget"})if(!boot[key].isNull())args[key]=boot[key];auto error=invoke("load",args.as<JsonObjectConst>(),out.to<JsonObject>());if(error){copy(bootError_,sizeof bootError_,error);notify("boot_failed",error);}}
  bool event(const Event&e){if(!vm_)return false;bool before=*vm_->error();bool consumed=vm_->event(e);if(!before&&*vm_->error())notify("fault",vm_->error());return consumed;}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out,Persist persist=nullptr){
    if(!strcmp(m,"read")){out["loaded"]=vm_!=nullptr;out["file"]=file_;if(vm_)vm_->describe(out);out["default_vm_memory_bytes"]=core_.resources().defaultVmLimit();out["memory_policy_limit_bytes"]=core_.resources().limit();out["source_limit_bytes"]=8192;out["module_limit"]=8;out["native_driver_loading"]=false;out["configured_startup"]=startup_;out["configuration_revision"]=revision_;out["configuration_persisted"]=persisted_;out["restore_valid"]=restoreValid_;out["boot_pending"]=bootPending_;out["boot_error"]=bootError_;return nullptr;}
@@ -49,9 +49,10 @@ public:
      swap(startup_,next);++revision_;persisted_=a["persist"]|false;if(!(startup_["auto_start"]|false))bootPending_=false;
      out["revision"]=revision_;out["apply_time"]=persisted_?"next_boot":"requires_persistence";return nullptr;
    }
-   if(!strcmp(m,"stop")){bootPending_=false;if(vm_){bool clean=vm_->stop();out["cleanup_ok"]=clean;if(!clean)out["cleanup_error"]=vm_->error();notify("stopped");delete vm_;vm_=nullptr;}file_[0]=0;return nullptr;}
+   if(!strcmp(m,"stop")){bootPending_=false;bootStartup_.clear();if(vm_){bool clean=vm_->stop();out["cleanup_ok"]=clean;if(!clean)out["cleanup_error"]=vm_->error();notify("stopped");delete vm_;vm_=nullptr;}file_[0]=0;return nullptr;}
    if(strcmp(m,"load")&&strcmp(m,"restart"))return "unsupported_method";
    for(auto f:a)if(!Policies::choice("file,source,memory_bytes,instruction_budget,system_call_budget",f.key().c_str()))return "unknown_runtime_field";
+   for(auto key:{"file","source"})if(a.containsKey(key)&&!a[key].is<const char*>())return "script_source_type";
    unsigned budget=a["memory_bytes"]|uint32_t(core_.resources().defaultVmLimit()),steps=a["instruction_budget"]|20000u,calls=a["system_call_budget"]|32u;
    if((a.containsKey("system_call_budget")&&!a["system_call_budget"].is<uint32_t>())||calls<1||calls>256)return "runtime_budget_range";
    if((a.containsKey("memory_bytes")&&!a["memory_bytes"].isNull()&&!a["memory_bytes"].is<uint32_t>())||(a.containsKey("instruction_budget")&&!a["instruction_budget"].is<uint32_t>())||budget<16384||budget>core_.resources().limit()||steps<1000||steps>200000)return "runtime_budget_range";
@@ -64,6 +65,7 @@ public:
    auto candidate=new(std::nothrow)LuaRuntime(core_,budget,steps,calls);if(!candidate){free(text);return "memory_low";}candidate->fileContext(file,source,this);
    bool loaded=candidate->load(text,size);free(text);if(loaded)loaded=candidate->prepare();if(!loaded){out["detail"]=candidate->error();delete candidate;return "script_load_failed";}
    // Preparation is atomic. on_start is side-effectful and cannot be rolled back.
+   bootPending_=false;bootStartup_.clear();bootError_[0]=0;
    if(vm_){out["previous_cleanup_ok"]=vm_->stop();delete vm_;}vm_=candidate;copy(file_,sizeof file_,file);
    bool started=vm_->start();vm_->describe(out);out["status"]=started?"running":"fault";notify(started?"started":"fault",started?"":vm_->error());return started?nullptr:"script_start_failed";
  }

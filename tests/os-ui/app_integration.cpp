@@ -3,6 +3,7 @@
 #include "Workers.h"
 #include "HttpApplications.h"
 #include "RemoteRequests.h"
+#include "Conditions.h"
 #include <cassert>
 #include <thread>
 #include <vector>
@@ -10,6 +11,7 @@
 #include <iostream>
 using namespace notesos;
 static Core*kernel;static ScriptHost*host;static Workers*pool;static HttpApplications*web;static RemoteRequests*remote;
+static Conditions*watchers;
 static unsigned effects=0;static std::vector<std::thread>threads;
 static JsonDocument parse(const char*s){JsonDocument d;assert(!deserializeJson(d,s));return d;}
 static const char*timers(const char*m,JsonObjectConst a,JsonObject o){if(!strcmp(m,"write"))return kernel->timer(a,o);if(!strcmp(m,"remove"))return kernel->removeTimer(a["id"]|0u)?nullptr:"not_found";kernel->listTimers(o["timers"].to<JsonArray>());return nullptr;}
@@ -20,10 +22,14 @@ int main(){
  Core c;kernel=&c;Vfs v;MemoryFiles ram("ram","/storage/ram","ram");SystemFiles system;v.add(ram);v.add(system);ScriptHost h(c,v);host=&h;
  Workers workers(c,v,{2,[](void(*fn)(void*),void*p,unsigned core){assert(core<2);threads.emplace_back([=]{fn(p);});return true;},[](void*){std::this_thread::yield();},nullptr});pool=&workers;
  HttpApplications apps(c);web=&apps;RemoteRequests requests(c);remote=&requests;
+ Conditions conditions(c);watchers=&conditions;
  c.add({"/sys/runtime","read,load,stop,configure", "",[](const char*m,JsonObjectConst a,JsonObject o){return host->invoke(m,a,o);}});
  c.add({"/sys/workers","read,submit,cancel,release","",[](const char*m,JsonObjectConst a,JsonObject o){return pool->invoke(m,a,o);}});
  c.add({"/net/http-server","read,route,respond,release","",[](const char*m,JsonObjectConst a,JsonObject o){return web->invoke(m,a,o);}});
- c.add({"/services/remote","read,submit,complete,release","",[](const char*m,JsonObjectConst a,JsonObject o){return remote->invoke(m,a,o,kernel->now(),"test");}});
+ c.add({"/services/remote","read,peek,submit,complete,release","",[](const char*m,JsonObjectConst a,JsonObject o){return remote->invoke(m,a,o,kernel->now(),"test");}});
+ c.add({"/sys/capabilities","list,describe","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"describe"))return kernel->describe(a["path"]|"",o);kernel->list(o["devices"].to<JsonArray>());return nullptr;}});
+ c.add({"/sys/conditions","read,write,remove","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write"))return watchers->set(a,o);if(!strcmp(m,"remove"))return watchers->remove(a["id"]|"");watchers->list(o);return nullptr;}});
+ c.add({"/sensor","read","",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["value"]=42;return nullptr;},[](JsonObject o){o["properties"]["value"]["type"]="number";o["properties"]["value"]["access"]="r";}});
  c.add({"/sys/timers","write,read,remove","",timers});c.add({"/effect","write","",effect});
  c.setEventObserver([](const Event&e){return host->event(e);});
  assert(!ram.mkdir("/app"));assert(!ram.mkdir("/app/lib"));
@@ -89,5 +95,25 @@ function on_stop() notes.call('/effect','write',{stopped=true}) end
  assert(h.restore(R"({"auto_start":true,"file":"/system/missing.lua","memory_bytes":32768,"instruction_budget":20000,"delay_ms":0,"prepare":[{"path":"/effect","method":"write","args":{}}]})"));h.scheduleBoot(500);h.tick(500);assert(effects==snapshot+1);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["boot_error"]=="not_found"&&out["fault"]==false);
  // Application teardown reclaims pending remote request slots as well as timers.
  auto pending=parse(R"({"source":"function on_start() assert(notes.call('/services/remote','submit',{route='service',payload={}}).ok) end"})");assert(!h.invoke("load",pending.as<JsonObjectConst>(),out.to<JsonObject>()));assert(requests.pending());assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(!requests.pending());
+ // Early manual load supersedes a scheduled factory boot. Discovery works in
+ // on_prepare, and a successful recovery clears the previous boot error.
+ assert(h.restore(R"({"auto_start":true,"file":"/system/missing.lua","memory_bytes":null,"instruction_budget":20000,"delay_ms":10})"));h.scheduleBoot(600);
+ auto manual=parse(R"({"source":"function on_prepare() local r=notes.call('/sys/capabilities','describe',{path='/sensor'}); assert(r.ok and r.result.properties.value.type=='number') end function on_start() end"})");
+ assert(!h.invoke("load",manual.as<JsonObjectConst>(),out.to<JsonObject>()));h.tick(1000);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["fault"]==false&&out["boot_pending"]==false&&out["boot_error"]=="");
+ // App-owned conditions are reclaimed like timers; pending completions from an
+ // old app cannot drive the replacement's handlers.
+ auto watched=parse(R"({"source":"function on_start() assert(notes.call('/sys/conditions','write',{id='watch',source='/sensor',property='value',operator='above',value=10,emit_initial=true}).ok); assert(notes.call('/services/remote','submit',{request_id='owned',route='service',payload={}}).ok) end"})");
+ assert(!h.invoke("load",watched.as<JsonObjectConst>(),out.to<JsonObject>()));uint32_t oldOwner=out["owner"];conditions.tick(0);conditions.list(out.to<JsonObject>());assert(out["conditions"].size()==1&&out["conditions"][0]["owner"]==oldOwner);
+ uint32_t stranger=c.acquireOwner();auto watch=parse(R"({"id":"watch","source":"/sensor","property":"value","operator":"above","value":1})");
+ assert(!strcmp(c.invoke("/sys/conditions","write",watch.as<JsonObjectConst>(),out.to<JsonObject>(),stranger),"condition_owned_by_other"));assert(!strcmp(c.invoke("/sys/conditions","remove",watch.as<JsonObjectConst>(),out.to<JsonObject>(),stranger),"condition_owned_by_other"));
+ auto collision=parse(R"({"request_id":"owned","route":"service","payload":{}})");assert(!strcmp(c.invoke("/services/remote","submit",collision.as<JsonObjectConst>(),out.to<JsonObject>(),stranger),"request_owned_by_other"));
+ assert(!c.invoke("/services/remote","peek",empty.as<JsonObjectConst>(),out.to<JsonObject>()));auto ownedId=out["id"].as<uint32_t>();auto reply=parse(R"({"ok":true,"result":{}})");reply["id"]=ownedId;
+ assert(!strcmp(c.invoke("/services/remote","complete",reply.as<JsonObjectConst>(),out.to<JsonObject>(),stranger),"request_owned_by_other"));assert(requests.pending());
+ auto receiver=parse(R"({"source":"function on_start() notes.subscribe('/sys/conditions') end function on_event() notes.call('/effect','write',{}) end"})");assert(!h.invoke("load",receiver.as<JsonObjectConst>(),out.to<JsonObject>()));conditions.list(out.to<JsonObject>());assert(out["conditions"].size()==0&&!requests.pending());
+ unsigned priorEffects=effects;Event stale;stale.targetOwner=oldOwner;strcpy(stale.path,"/sys/conditions");strcpy(stale.name,"entered");snprintf(stale.data,sizeof stale.data,"{\"id\":\"watch\",\"owner\":%lu}",(unsigned long)oldOwner);h.event(stale);assert(effects==priorEffects);
+ assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(c.resources().promised()==0);
+ // A configured preparation call can stop the current runtime. Its cleanup must
+ // not invalidate the still-executing boot snapshot or skip following steps.
+ assert(h.restore(R"({"auto_start":true,"file":"/system/missing.lua","memory_bytes":null,"instruction_budget":20000,"delay_ms":0,"prepare":[{"path":"/sys/runtime","method":"stop","args":{}},{"path":"/effect","method":"write","args":{}}]})"));h.scheduleBoot(2000);priorEffects=effects;h.tick(2000);assert(effects==priorEffects+1);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["boot_error"]=="not_found");
  std::cout<<"Runtime modules, JSON/binary fidelity, owned timers, startup validation, HTTP event applications and isolated workers passed\n";
 }

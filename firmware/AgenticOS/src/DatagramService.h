@@ -7,7 +7,7 @@ class DatagramService {
 public:
  explicit DatagramService(Core&c):core_(c){registered_=core_.onOwnerRelease(this,[](void*p,uint32_t owner){auto&s=*(DatagramService*)p;if(s.owner_==owner)s.stop();});}~DatagramService(){core_.removeOwnerHook(this);stop();}
  bool active()const{return fd_>=0;}void stop(){if(fd_>=0)::close(fd_);fd_=-1;notified_=false;owner_=0;}
- void poll(){if(fd_<0||notified_)return;uint8_t b;int n=recv(fd_,&b,1,MSG_PEEK|MSG_DONTWAIT);if(n>=0){notified_=true;JsonDocument d;d["owner"]=owner_;core_.emit("/net/udp","readable",d.as<JsonObjectConst>());}}
+ void poll(){if(fd_<0||notified_)return;uint8_t b;int n=recv(fd_,&b,1,MSG_PEEK|MSG_DONTWAIT);if(n>=0){notified_=true;JsonDocument d;d["owner"]=owner_;core_.emit("/net/udp","readable",d.as<JsonObjectConst>(),owner_);}}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
    if(strcmp(m,"read")&&active()&&core_.callerOwner()&&owner_!=core_.callerOwner())return "udp_owned_by_other";
    if(!strcmp(m,"close")){stop();return nullptr;}

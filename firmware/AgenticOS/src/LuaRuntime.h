@@ -76,7 +76,7 @@ private:
   static int invoke(lua_State*L){
     auto&s=self(L);const char*path=luaL_checkstring(L,1),*method=luaL_optstring(L,2,"read");
     if(s.isolated_)return luaL_error(L,"worker_system_calls_require_main_application");
-    if(s.preparing_&&!((!strcmp(path,"/fs")&&(!strcmp(method,"read")||!strcmp(method,"stat")||!strcmp(method,"mounts")))||(!strcmp(path,"/sys/capabilities")&&(!strcmp(method,"list")||!strcmp(method,"read")))))return luaL_error(L,"Preparation only permits file reads and capability discovery");
+    if(s.preparing_&&!((!strcmp(path,"/fs")&&(!strcmp(method,"read")||!strcmp(method,"stat")||!strcmp(method,"mounts")))||(!strcmp(path,"/sys/capabilities")&&(!strcmp(method,"list")||!strcmp(method,"describe")))))return luaL_error(L,"Preparation only permits file reads and capability discovery");
     if(s.loading_)return luaL_error(L,"System calls belong in on_start/on_event, not module loading");
     if(!strcmp(path,"/sys/runtime")&&strcmp(method,"read"))return luaL_error(L,"Runtime mutation is not reentrant");
     if(++s.calls_>s.callLimit_)return luaL_error(L,"system_call_budget_exhausted");
@@ -145,7 +145,7 @@ public:
   bool prepare(){preparing_=true;bool ok=execute(5);preparing_=false;return ok;}
   bool start(){return execute(1);}
   bool event(const Event&e){if(fault_||stopped_)return false;
-    if(!strcmp(e.path,"/services/remote")||!strcmp(e.path,"/sys/timers")||!strcmp(e.path,"/sys/workers")||!strcmp(e.path,"/net/tcp")||!strcmp(e.path,"/net/http-server")||!strcmp(e.path,"/net/udp")){JsonDocument d;if(!deserializeJson(d,e.data)){uint32_t owner=d["owner"]|0u;if(owner&&owner!=owner_)return false;}}
+    if(e.targetOwner&&e.targetOwner!=owner_)return false;
     bool match=false;for(unsigned i=0;i<subscriptionCount_;++i)if(!strcmp(e.path,subscriptions_[i]))match=true;if(!match)return false;event_=&e;execute(2);event_=nullptr;return consumed_;}
   bool admitted()const{return reservation_!=0;}
   bool executing()const{return executing_;}const char*error()const{return error_;}

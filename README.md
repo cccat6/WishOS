@@ -6,6 +6,24 @@ Hardware packages supply board wiring, native adapters and initial UI/configurat
 Applications use the resource ABI; they cannot change GPIO wiring or create native
 RTOS tasks. No local model is required for deterministic application behavior.
 
+The architectural boundary is between the system implementation and runtime-loaded
+applications, not between every pair of system components. The runtime, rule loaders,
+presentation services and native drivers may coordinate directly. Explicit branches
+for a service's shutdown, bus use, timing or hardware capabilities are appropriate
+when they make that coordination correct and efficient. Additional abstraction is
+justified by an actual application or portability boundary, not by branch counts.
+
+Page content, layout, navigation choices, button meanings, recording interaction and
+the sequence of hardware calls belong to runtime application files. The system
+implements loading and executing them; it does not prescribe a particular product
+flow. A hardware package supplies a startup reference to a factory runtime application
+and its resources, using these same public interfaces. There is no separate factory
+execution layer. Saved runtime startup configuration selects the user's replacement.
+Replacing an application must preserve hardware invariants and system resource
+controls. Current implementation coverage and limits are listed in
+`docs/agent-os-runtime.md`; this boundary does not imply every application lifecycle
+or update path is already implemented.
+
 This local Git repository tracks the public system only. The `hub/` directory is
 an independent Git repository containing the MCP server, Harness adapters and host
 rendering pipeline. E6 waveform research and local credentials/data are not part

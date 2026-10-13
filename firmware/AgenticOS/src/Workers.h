@@ -18,7 +18,7 @@ public:
  ~Workers(){core_.removeOwnerHook(this);for(auto j:jobs_){if(j&&!j->done.load())std::abort();delete j;}}
  bool active()const{for(auto j:jobs_)if(j&&!j->done.load())return true;return false;}
  void releaseOwner(uint32_t owner){for(auto j:jobs_)if(j&&j->owner==owner){j->cancel=true;j->orphan=true;}}
- void poll(){for(auto&j:jobs_)if(j&&j->orphan&&j->done.load(std::memory_order_acquire)){delete j;j=nullptr;}for(auto j:jobs_)if(j&&j->done.load(std::memory_order_acquire)&&!j->notified){j->notified=true;JsonDocument d;d["id"]=j->id;d["owner"]=j->owner;d["ok"]=j->ok;d["cancel_requested"]=j->cancel.load();if(!j->ok)d["error"]=j->failure?j->failure:*j->vm->error()?j->vm->error():"cancelled";core_.emit("/sys/workers",j->ok?"completed":"failed",d.as<JsonObjectConst>());}}
+ void poll(){for(auto&j:jobs_)if(j&&j->orphan&&j->done.load(std::memory_order_acquire)){delete j;j=nullptr;}for(auto j:jobs_)if(j&&j->done.load(std::memory_order_acquire)&&!j->notified){j->notified=true;JsonDocument d;d["id"]=j->id;d["owner"]=j->owner;d["ok"]=j->ok;d["cancel_requested"]=j->cancel.load();if(!j->ok)d["error"]=j->failure?j->failure:*j->vm->error()?j->vm->error():"cancelled";core_.emit("/sys/workers",j->ok?"completed":"failed",d.as<JsonObjectConst>(),j->owner);}}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
    if(!strcmp(m,"submit")){
      for(auto f:a)if(!Policies::choice("source,file,input,core,memory_bytes,instruction_budget",f.key().c_str()))return "unknown_worker_field";

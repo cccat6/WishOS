@@ -88,6 +88,7 @@ static SemaphoreHandle_t spiLease;
 static QueueHandle_t eventQueue, audioQueue, spoolQueue;
 struct PendingEvent {
   char path[48], name[40], data[MAX_EVENT];
+  uint32_t targetOwner=0;
 };
 struct AudioChunk {
   uint32_t sequence;
@@ -164,8 +165,9 @@ static bool lastImu = false, lastBusy = false;
 static uint64_t uptime() {
   return uint64_t(esp_timer_get_time()) / 1000;
 }
-static void emit(const char *path, const char *event, JsonObjectConst data) {
+static void emit(const char *path, const char *event, JsonObjectConst data,uint32_t targetOwner=0) {
   PendingEvent e{};
+  e.targetOwner=targetOwner;
   if (!copy(e.path, sizeof(e.path), path) || !copy(e.name, sizeof(e.name), event) ||
       measureJson(data) >= sizeof(e.data))
     return;
@@ -190,7 +192,7 @@ static void drainEvents() {
       }
     }
     core.clock(uptime());
-    core.emit(e.path, e.name, d.as<JsonObjectConst>());
+    core.emit(e.path, e.name, d.as<JsonObjectConst>(),e.targetOwner);
   }
 }
 static void event(const char *path, const char *name, const char *value = nullptr) {
@@ -849,7 +851,7 @@ static void commitPower() {
     for (int p : {pins::PERIPHERAL_ENABLE, pins::SHUTDOWN, pins::PANEL_CS, pins::RESET, pins::DC,
                   pins::SCLK, pins::MOSI, pins::SD_CS})
       gpio_hold_dis(gpio_num_t(p));
-    for (int p : {0, 1, 2, 5}) {
+    for (int p : {pins::KEY_A, pins::KEY_B, pins::KEY_C, pins::IMU_INT}) {
       rtc_gpio_hold_dis(gpio_num_t(p));
       rtc_gpio_deinit(gpio_num_t(p));
     }
@@ -1003,7 +1005,7 @@ void begin() {
   uint8_t mac[6]{};esp_read_mac(mac,ESP_MAC_WIFI_STA);
   snprintf(apSsid,sizeof apSsid,"Agentic-Notes-%02X%02X%02X",mac[3],mac[4],mac[5]);
   restoreWifi();wifiManager.poll(uptime());
-  http.on("/",HTTP_GET,[]{for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/setup.html")){http.send(200,"text/html; charset=utf-8",a.data);return;}http.send(404,"text/plain","UI package missing");});
+  http.on("/",HTTP_GET,[]{JsonDocument r;if(httpApps.handle("/","GET","",uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/setup.html")){http.send(200,"text/html; charset=utf-8",a.data);return;}http.send(404,"text/plain","UI package missing");});
   http.onNotFound([]{
     JsonDocument r;const char*method=http.method()==HTTP_GET?"GET":http.method()==HTTP_POST?"POST":http.method()==HTTP_PUT?"PUT":http.method()==HTTP_DELETE?"DELETE":"OTHER";
     if(httpApps.handle(http.uri().c_str(),method,http.arg("plain").c_str(),uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}
@@ -1028,7 +1030,6 @@ void begin() {
   core.clock(uptime());
   event("/sys/board", "boot", bootId);
   frameValid = false;
-  JsonDocument appArgs,appReply;appArgs["file"]=boardpack::STARTUP_UI;if(!uiHandler("app_load",appArgs.as<JsonObjectConst>(),appReply.to<JsonObject>())){appArgs["path"]=appReply["entry"];JsonDocument shown;uiHandler("open",appArgs.as<JsonObjectConst>(),shown.to<JsonObject>());}
   if (!lastRefreshRTC)
     lastRefreshRTC = esp_clk_rtc_time();
 }

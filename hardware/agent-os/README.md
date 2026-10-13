@@ -26,10 +26,13 @@ crystal and peripheral voltage assumptions remain native-port responsibilities.
 entry/modules and default policy snapshots are compiled read-only. User apps/assets
 can instead be replaced at runtime on writable providers. `/defaults.json` is a
 normal `Policies` restore snapshot, not an unchecked bypass; saved settings override
-package defaults. `startup.ui` selects an app manifest; optional `startup.script`
-selects a Lua entrypoint. Explicit `/sys/runtime configure` startup settings override
-the package script. Inline source is runtime-only; persistent startup requires a
-persistent provider. Package changes take effect in a new firmware deployment.
+package defaults. Optional `startup.script` references an ordinary Lua entrypoint.
+The E6 package's entrypoint loads its UI manifest and opens its entry through public
+resource calls. There is no independent native factory-UI boot step. Explicit
+`/sys/runtime configure` startup settings override that reference, including when
+auto-start is disabled. Inline source is runtime-only; persistent startup requires a
+persistent provider. Package changes take effect in a new firmware deployment;
+user application references and files change through runtime interfaces.
 
 For a different MCU/display/peripheral combination, add a native port directory
 containing `port.json`, its `entry` include and a partition file. Its entry implements
@@ -60,10 +63,14 @@ source tree/API is portable; a C6 binary cannot be flashed onto C3/S3 unchanged.
 Use the generated sketch under `build/agentic-os-sketch/AgenticOS` in Arduino IDE.
 The build command never flashes a device or copies a reference project's firmware.
 
-The common presentation manager owns foreground navigation and view revisions.
-Display adapters expose driver selection and completion, not application-specific
-priority rules. Background document updates do not navigate. Binary drawing also
-uses an explicit surface context. Input meanings and UI flow stay in user packages.
+The presentation service implements navigation state, view revisions and frame
+ordering together with the display adapter. This system coordination may be tightly
+integrated; the application chooses what to display, when to navigate and which
+supported presentation behavior to request. Background document updates do not
+navigate. Binary drawing also uses an explicit surface context. Page definitions,
+input meanings and UI flow stay in runtime-loadable user packages. The factory suite
+provides a starting experience through the same interfaces, with no built-in page
+names or button-to-action rules required by the native services.
 
 VM memory ceilings are configurable resource policy, not fixed RAM partitions.
 A package may request a ceiling; otherwise the system default applies. Admission

@@ -75,6 +75,8 @@ public:
     for(size_t i=0;i<count_;++i)if(!effective.containsKey(fields_[i].resource))resolve(fields_[i].resource,scope,effective[fields_[i].resource].to<JsonObject>());
   }
   const char *apply(JsonObjectConst a,JsonObject out,bool dry=false,Persist persist=nullptr){
+    for(auto field:a)if(!choice("scope,expected_revision,changes,persist",field.key().c_str()))return "unknown_policy_argument";
+    if(a.containsKey("persist")&&!a["persist"].is<bool>())return "persist_boolean_required";
     if(!a["expected_revision"].isNull()&&(!a["expected_revision"].is<uint32_t>()||a["expected_revision"].as<uint32_t>()!=revision_))return "revision_conflict";
     if(!a["scope"].isNull()&&!a["scope"].is<const char*>())return "scope_string_required";
     const char *scope=a["scope"]|"system";if(!validScope(scope))return "invalid_scope";
@@ -82,6 +84,8 @@ public:
     auto changes=a["changes"].as<JsonArrayConst>();if(changes.isNull()||!changes.size())return "changes_required";
     JsonDocument candidate;candidate.set(saved_);
     for(auto change:changes){if(!change.is<JsonObjectConst>())return "invalid_change";
+      for(auto field:change.as<JsonObjectConst>())if(!choice("resource,settings",field.key().c_str()))return "unknown_policy_change_field";
+      if(!change["resource"].is<const char*>())return "resource_string_required";
       const char *r=change["resource"]|"";auto values=change["settings"].as<JsonObjectConst>();if(!values.size())return "settings_required";
       for(auto p:values){auto s=find(r,p.key().c_str());if(!s)return "unknown_or_readonly_setting";
         if(s->systemOnly&&strcmp(scope,"system"))return "setting_requires_system_scope";

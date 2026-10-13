@@ -46,12 +46,12 @@ static void describeNetworkResult(JsonObject o){
 static void pollNetwork(){
  if(networkJob&&!networkJob->busy&&networkJob->reservation){core.resources().release(networkJob->reservation);networkJob->reservation=0;}
  if(networkJob&&networkJob->orphan&&!networkJob->busy){delete networkJob;networkJob=nullptr;networkNotified=false;return;}
- if(networkJob&&networkJob->stream&&uxQueueMessagesWaiting(networkJob->chunks)&&!networkJob->readableNotified){networkJob->readableNotified=true;JsonDocument d;d["job_id"]=networkJob->id;d["owner"]=networkJob->owner;emit("/net/http","readable",d.as<JsonObjectConst>());}
+ if(networkJob&&networkJob->stream&&uxQueueMessagesWaiting(networkJob->chunks)&&!networkJob->readableNotified){networkJob->readableNotified=true;JsonDocument d;d["job_id"]=networkJob->id;d["owner"]=networkJob->owner;emit("/net/http","readable",d.as<JsonObjectConst>(),networkJob->owner);}
  if(!networkJob||networkJob->busy||!networkJob->done||networkNotified)return;networkNotified=true;
  auto result=httpOutcome(networkJob->status,networkJob->error);
  auto&j=jobs[networkJob->id%8];if(j.id==networkJob->id){j.complete=true;j.ok=result.ok;copy(j.state,sizeof(j.state),result.ok?"completed":"failed");copy(j.error,sizeof(j.error),result.error);}
  JsonDocument d;auto o=d.to<JsonObject>();o["job_id"]=networkJob->id;o["owner"]=networkJob->owner;o["http_status"]=networkJob->status;o["bytes"]=networkJob->received;
- describeNetworkResult(o);emit("/net/http",result.ok?"completed":"failed",o);
+ describeNetworkResult(o);emit("/net/http",result.ok?"completed":"failed",o,networkJob->owner);
 }
 static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
  pollNetwork();

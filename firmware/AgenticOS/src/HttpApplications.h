@@ -16,12 +16,17 @@ public:
  void clear(){for(auto&r:routes_){delete r;r=nullptr;}for(auto&r:requests_){delete r;r=nullptr;}}
  void tick(uint64_t now){for(auto r:requests_)if(r&&!r->done&&now>=r->deadline){r->done=true;r->status=504;strcpy(r->body,"{\"error\":\"application_timeout\"}");}}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
+   const char*allowed=!strcmp(m,"route")?"path,method,body,content_type,status,timeout_ms,dynamic":!strcmp(m,"respond")?"id,body,content_type,status":!strcmp(m,"remove")?"path":!strcmp(m,"stop")?"":"id";
+   for(auto field:a)if(!Policies::choice(allowed,field.key().c_str()))return "unknown_http_route_argument";
+   for(auto key:{"path","method","body","content_type"})if(a.containsKey(key)&&(!a[key].is<const char*>()||strlen(a[key].as<const char*>())!=a[key].as<JsonString>().size()))return "http_route_string_required";
+   for(auto key:{"id","status","timeout_ms"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "http_route_integer_required";
+   if(a.containsKey("dynamic")&&!a["dynamic"].is<bool>())return "http_route_boolean_required";
    if(!strcmp(m,"stop")){if(core_.callerOwner())releaseOwner(core_.callerOwner());else clear();return nullptr;}
    if(!strcmp(m,"route")){
      if(!registered_)return "owner_hook_capacity";
      const char*path=a["path"]|"",*method=a["method"]|"GET",*body=a["body"]|"",*type=a["content_type"]|"application/json";
      uint32_t status=a["status"]|200u,timeout=a["timeout_ms"]|10000u;
-     if(strncmp(path,"/app/",5)||strlen(path)>=96||strchr(path,'?')||strlen(body)>2048||strlen(type)>=64||strpbrk(type,"\r\n")||!Policies::choice("GET,POST,PUT,DELETE",method)||status<200||status>599||timeout<100||timeout>60000)return "http_route_range";
+     if((strcmp(path,"/")&&strncmp(path,"/app/",5))||strlen(path)>=96||strchr(path,'?')||strlen(body)>2048||strlen(type)>=64||strpbrk(type,"\r\n")||!Policies::choice("GET,POST,PUT,DELETE",method)||status<200||status>599||timeout<100||timeout>60000)return "http_route_range";
      Route**slot=nullptr;for(auto&r:routes_)if(r&&!strcmp(r->path,path)&&!strcmp(r->method,method)){slot=&r;break;}if(!slot)for(auto&r:routes_)if(!r){slot=&r;break;}if(!slot)return "route_capacity";
      if(*slot&&core_.callerOwner()&&(*slot)->owner!=core_.callerOwner())return "route_owned_by_other";
      auto r=new(std::nothrow) Route;if(!r)return "memory_low";r->owner=core_.callerOwner();strcpy(r->path,path);strcpy(r->method,method);strcpy(r->body,body);strcpy(r->type,type);r->status=status;r->dynamic=a["dynamic"]|false;r->timeout=timeout;delete *slot;*slot=r;return nullptr;
@@ -40,7 +45,7 @@ public:
      response["content_type"]=r->type;response["status"]=r->status;response["body"]=r->body;if(!r->dynamic)return true;
      Request**slot=nullptr;for(auto&q:requests_)if(!q){slot=&q;break;}if(!slot){response["status"]=503;response["body"]="application queue full";return true;}
      auto q=new(std::nothrow) Request;if(!q){response["status"]=503;response["body"]="memory low";return true;}q->id=next_++;q->owner=r->owner;q->deadline=now+r->timeout;strcpy(q->path,path);strcpy(q->method,method);strcpy(q->body,body);*slot=q;
-     JsonDocument event;event["id"]=q->id;event["owner"]=q->owner;event["path"]=path;event["method"]=method;core_.emit("/net/http-server","request",event.as<JsonObjectConst>());
+     JsonDocument event;event["id"]=q->id;event["owner"]=q->owner;event["path"]=path;event["method"]=method;core_.emit("/net/http-server","request",event.as<JsonObjectConst>(),q->owner);
      char reply[96];snprintf(reply,sizeof reply,"{\"id\":%lu,\"state\":\"accepted\"}",(unsigned long)q->id);response["content_type"]="application/json";response["status"]=202;response["body"]=reply;return true;
    }return false;
  }

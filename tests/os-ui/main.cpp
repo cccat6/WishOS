@@ -5,6 +5,7 @@
 #include <lvgl.h>
 #include "Core.h"
 #include "PresentationState.h"
+#include "ScriptHost.h"
 #include "Vfs.h"
 #include "Defaults.h"
 #include "SystemFiles.h"
@@ -16,11 +17,12 @@
 uint32_t millis(){static uint32_t t=0;return ++t;}
 namespace notesos {
 static Core core;static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));static char appScope[48]="system";static Vfs vfs;static SystemFiles systemFiles;class CountedFiles:public MemoryFiles {public:bool failOnce=false;size_t largestRead=0,totalRead=0,readOps=0;CountedFiles():MemoryFiles("ram","/storage/ram","ram"){}const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{if(failOnce){failOnce=false;got=0;return "spi_busy";}++readOps;largestRead=std::max(largestRead,n);auto e=MemoryFiles::read(p,at,b,n,got);totalRead+=got;return e;}};
-static CountedFiles files;static void applyInputPolicy(){}
+static CountedFiles files;
 static bool resolveFile(const char*in,char*full,const char*&rel,FileProvider*&p){if(!normalizePath("/",in,full,256))return false;p=vfs.resolve(full,rel);return p;}
 #include "UiService.h"
 #include "E6UiSurface.h"
 static unsigned uiQueueCalls=0;static PresentationState::Stamp lastUiStamp;
+static unsigned micStarts=0;
 static const char*defaultUiDriver(){return "test.rgb565";}
 static const char*validateUiDriver(const char*){return nullptr;}
 static const char*queueUi(const char*,const char*,bool,JsonObject out,const char*,const UiView*,PresentationState::Stamp stamp){++uiQueueCalls;lastUiStamp=stamp;out["job_id"]=uiQueueCalls;out["status"]="queued";return nullptr;}
@@ -73,6 +75,30 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  const char*fontUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"label","style":{"font":"custom","fontSize":22},"labelProps":{"text":"Runtime font"}}]}]})";
  assert(!files.write("/font-ui.json",0,(const uint8_t*)fontUi,strlen(fontUi),true,wrote));assert(prepareUi("/storage/ram/font-ui.json"));assert(renderUiBand(40,stripe));assert(!strcmp(uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()),"font_in_use"));assert(prepareUi("/system/ui/home.json"));assert(!uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(vfs.canMutate("/storage/ram/font.ttf"));
  for(;;){JsonDocument state;presentationState.describe(state.to<JsonObject>());if(!state["views"].size())break;uint32_t id=state["views"][0]["id"];unsigned slot=presentationState.slot(id);assert(!presentationState.close(id,0));freeUiDocument(slot);}assert(core.resources().promised()==0);
+ // The real factory entrypoint uses the exact runtime/GUI loader used by a user
+ // replacement. No special native boot path or system-owned button bindings.
+ core.add({"/sys/ui","read,app_load,open,update,refresh,back", "",uiHandler});
+ core.add({"/dev/buttons","read","",[](const char*,JsonObjectConst,JsonObject)->const char*{return nullptr;}});
+ core.add({"/dev/mic","start,stop","",[](const char*m,JsonObjectConst,JsonObject)->const char*{if(!strcmp(m,"start"))++micStarts;return nullptr;}});
+ core.add({"/sys/rules","write","",[](const char*,JsonObjectConst a,JsonObject o){return core.setRule(a,o);}});
+ ScriptHost runtime(core,vfs);a.clear();a["file"]=boardpack::STARTUP_SCRIPT;
+ if(auto e=runtime.invoke("load",a.as<JsonObjectConst>(),r.to<JsonObject>())){std::cerr<<e<<" ";serializeJson(r,std::cerr);assert(false);}
+ assert(uiRuleCount==4&&uiAppOwner!=0&&presentationState.active());unsigned factoryOwner=uiAppOwner;
+ uint32_t cursor=core.sequence();a.clear();a["button"]="B";core.emit("/dev/buttons","press",a.as<JsonObjectConst>());core.dispatch(cursor);assert(micStarts==1);
+ // A bad replacement must preserve both working bindings and the current view.
+ const char*badApp=R"({"format":"notes-app/1","entry":"bad.json","bindings":[]})";assert(!files.write("/bad-app.json",0,(const uint8_t*)badApp,strlen(badApp),true,wrote));
+ a.clear();a["file"]="/storage/ram/bad-app.json";unsigned active=presentationState.active();
+ assert(core.invoke("/sys/ui","app_load",a.as<JsonObjectConst>(),r.to<JsonObject>(),factoryOwner));assert(uiRuleCount==4&&presentationState.active()==active);
+ a.clear();a["source"]=R"lua(function on_start()
+  assert(notes.call('/sys/rules','write',{source='/dev/buttons',event='press',where={button='A'},target='/dev/mic',method='start',cooldown_ms=0}).ok)
+  assert(notes.call('/sys/ui','open',{path='/storage/ram/updated.json'}).ok)
+ end)lua";
+ assert(!runtime.invoke("load",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(uiRuleCount==0&&uiAppOwner==0);
+ assert(!strcmp(uiCurrent,"/storage/ram/updated.json"));
+ a.clear();a["button"]="B";core.emit("/dev/buttons","press",a.as<JsonObjectConst>());core.dispatch(cursor);assert(micStarts==1);
+ a["button"]="A";core.emit("/dev/buttons","press",a.as<JsonObjectConst>());core.dispatch(cursor);assert(micStarts==2);
+ a.clear();assert(!runtime.invoke("stop",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(!presentationState.active());assert(core.resources().promised()==0);
+ core.listRules(r["rules"].to<JsonArray>());assert(r["rules"].size()==0);
  std::cout<<"Full-screen image bytes="<<bin.size()<<", largest provider read="<<files.largestRead<<", image reads="<<imageReadBytes<<", image read calls="<<imageReadOps<<"\n";
  std::cout<<"LVGL runtime-loaded UI, native stripe render, VFS hot replacement, refresh/back history passed\n";
 }

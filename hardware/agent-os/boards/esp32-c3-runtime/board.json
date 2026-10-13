@@ -9,11 +9,8 @@
   "buttons": [],
   "display": null,
   "assets": {
-    "/default-app.json": "assets/default-app.json",
     "/defaults.json": "assets/defaults.json",
     "/setup.html": "assets/setup.html"
   },
-  "startup": {
-    "ui": "/system/default-app.json"
-  }
+  "startup": {}
 }

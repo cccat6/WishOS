@@ -38,7 +38,7 @@ static NfsService nfsService(vfs,[]()->size_t{return core.resources().allocatabl
 static uint64_t uptime(){return esp_timer_get_time()/1000;}
 static bool networkActive();static bool applicationNetworkActive(){return sockets.active()||routes.active();}
 static void event(const char*p,const char*name,const char*value=nullptr){JsonDocument d;if(value)d["value"]=value;core.emit(p,name,d.as<JsonObjectConst>());}
-static void emit(const char*p,const char*name,JsonObjectConst d){core.emit(p,name,d);}
+static void emit(const char*p,const char*name,JsonObjectConst d,uint32_t targetOwner=0){core.emit(p,name,d,targetOwner);}
 static void hex(const uint8_t*p,size_t n,char*out){for(size_t i=0;i<n;++i)sprintf(out+i*2,"%02x",p[i]);out[n*2]=0;}
 struct Receipt{uint32_t id=0;bool complete=false,ok=false;char state[48]{},error[80]{};};static Receipt jobs[8];static uint32_t nextJob=1;
 static void rememberJob(uint32_t id){jobs[id%8]={};jobs[id%8].id=id;}
@@ -90,9 +90,9 @@ void begin(){
  {"/dev/usb","read","USB CDC",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["connected"]=bool(Serial);return nullptr;}}
  };for(auto d:devices)core.add(d);
  connections.restore(preferences.getString("connections","{}").c_str());Network.begin();uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);snprintf(apSsid,sizeof apSsid,"Agentic-Notes-%02X%02X%02X",mac[3],mac[4],mac[5]);restoreWifi();core.clock(uptime());wifiManager.poll(uptime());restoreRuntime();timeService.restore(preferences.getString("time_sync","{}").c_str());
- http.on("/",HTTP_GET,[]{for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/setup.html")){http.send(200,"text/html; charset=utf-8",a.data);return;}http.send(404,"text/plain","UI package missing");});
+ http.on("/",HTTP_GET,[]{JsonDocument r;if(routes.handle("/","GET","",uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/setup.html")){http.send(200,"text/html; charset=utf-8",a.data);return;}http.send(404,"text/plain","UI package missing");});
  http.on("/os/invoke",HTTP_POST,[]{JsonDocument request,reply;if(http.arg("plain").length()>4096||deserializeJson(request,http.arg("plain"))){http.send(400,"application/json","{\"ok\":false,\"error\":\"invalid_json\"}");return;}respond(request.as<JsonObjectConst>(),reply.to<JsonObject>());String data;serializeJson(reply,data);http.send(200,"application/json",data);});
- http.onNotFound([]{JsonDocument r;if(routes.handle(http.uri().c_str(),http.method()==HTTP_GET?"GET":"POST",http.arg("plain").c_str(),uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}http.sendHeader("Location","/",true);http.send(302,"text/plain","");});http.begin();event("/sys/board","boot");
+ http.onNotFound([]{JsonDocument r;if(routes.handle(http.uri().c_str(),http.method()==HTTP_GET?"GET":http.method()==HTTP_POST?"POST":http.method()==HTTP_PUT?"PUT":http.method()==HTTP_DELETE?"DELETE":"OTHER",http.arg("plain").c_str(),uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}http.sendHeader("Location","/",true);http.send(302,"text/plain","");});http.begin();event("/sys/board","boot");
 }
 void poll(){core.clock(uptime());boardWifi.service();wifiManager.poll(uptime());scriptHost.tick(uptime());workers.poll();timeService.poll(uptime(),WiFi.status()==WL_CONNECTED);pollNetwork();sockets.poll();routes.tick(uptime());remoteRequests.tick(uptime());nfsService.poll(millis());dns.processNextRequest();http.handleClient();
  static char line[4097];static size_t used=0;static bool overflow=false;

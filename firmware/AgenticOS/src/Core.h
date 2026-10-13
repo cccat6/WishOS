@@ -16,6 +16,7 @@ struct Device {
 struct Event {
   uint32_t sequence = 0;
   uint64_t time = 0;
+  uint32_t targetOwner = 0; // zero broadcasts; system observers can inspect all events
   char path[48]{}, name[40]{}, data[MAX_EVENT]{};
 };
 struct Rule {
@@ -57,13 +58,14 @@ public:
   ResourceBudget&resources(){return resources_;}
   const char *replaceRules(JsonArrayConst definitions,const uint32_t*owned,size_t ownedCount,JsonArray ids){
     if(definitions.size()>MAX_RULES)return "rule_limit";
+    for(auto definition:definitions)if(definition.as<JsonObjectConst>().containsKey("id"))return "replacement_rule_id_not_supported";
     Rule*backup=(Rule*)malloc(sizeof(rules_));if(!backup)return "memory_low";
     memcpy(backup,rules_,sizeof(rules_));uint32_t previousNext=nextRule_;
     // The UI service supplies its own trusted group IDs; app ownership must not
     // prevent replacement of the preceding system/default UI group.
     for(size_t i=0;i<ownedCount;++i)for(auto&r:rules_)if(r.used&&r.id==owned[i])r={};
     const char*error=nullptr;
-    for(auto rule:definitions){JsonDocument result;if((error=setRule(rule.as<JsonObjectConst>(),result.to<JsonObject>())))break;ids.add(result["id"]);}
+    for(auto rule:definitions){JsonDocument result;if((error=setRule(rule.as<JsonObjectConst>(),result.to<JsonObject>())))break;if(!ids.add(result["id"])){error="memory_low";break;}}
     if(error){memcpy(rules_,backup,sizeof(rules_));nextRule_=previousNext;ids.clear();}
     free(backup);return error;
   }
@@ -132,13 +134,14 @@ public:
   const char*describe(const char*path,JsonObject out)const {
     auto d=find(path);if(!d)return "not_found";out["path"]=d->path;out["version"]=1;out["methods"]=d->methods;out["guide"]=d->guide;if(d->describe)d->describe(out);return nullptr;
   }
-  bool emit(const char *path, const char *name, JsonObjectConst data) {
+  bool emit(const char *path, const char *name, JsonObjectConst data, uint32_t targetOwner=0) {
     if (!path || !name || strlen(path) >= 48 || strlen(name) >= 40 ||
         measureJson(data) >= MAX_EVENT)
       return false;
     auto &e = events_[seq_ % MAX_EVENTS];
     e.sequence = ++seq_;
     e.time = now_;
+    e.targetOwner = targetOwner;
     copy(e.path, sizeof(e.path), path);
     copy(e.name, sizeof(e.name), name);
     serializeJson(data, e.data, sizeof(e.data));
@@ -166,6 +169,7 @@ public:
       x["at_ms"] = e.time;
       x["path"] = e.path;
       x["event"] = e.name;
+      if(e.targetOwner)x["target_owner"]=e.targetOwner;
       JsonDocument d;
       deserializeJson(d, e.data);
       x["data"] = d.as<JsonObjectConst>();
@@ -262,9 +266,13 @@ public:
   uint32_t policyDrops()const{return policyDrops_;}
   unsigned deferredCount()const{return deferredCount_;}
   void dispatchOne(const Event&e){
+    // Rule loading/removal is a legitimate action. New rules start with the next
+    // event; removed rules must not run later in this dispatch.
+    uint32_t candidates[MAX_RULES];unsigned count=0;
+    for(auto&r:rules_)if(r.used&&r.enabled)candidates[count++]=r.id;
     if(observe_&&observe_(e))return;
-      for (auto &r : rules_)
-        if (r.used && r.enabled && !strcmp(e.path, r.source) && !strcmp(e.name, r.event)) {
+    for(unsigned i=0;i<count;++i)for(auto&r:rules_)if(r.id==candidates[i])
+        if (r.used && r.enabled && (!e.targetOwner||!r.owner||r.owner==e.targetOwner) && !strcmp(e.path, r.source) && !strcmp(e.name, r.event)) {
           JsonDocument data, condition;
           deserializeJson(data, e.data);
           deserializeJson(condition, r.where);
@@ -381,7 +389,7 @@ public:
         auto o = d.to<JsonObject>();
         o["id"] = t.id;o["owner"]=t.owner;
         o["scheduled_ms"] = t.due;
-        emit("/sys/timers", "fired", o);
+        emit("/sys/timers", "fired", o,t.owner);
         if (t.period)
           t.due += ((now_ - t.due) / t.period + 1) * t.period;
         else
