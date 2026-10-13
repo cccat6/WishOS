@@ -6,7 +6,7 @@ namespace notesos {
 // Isolated compute jobs. Only the main loop accesses the resource registry and VFS.
 class Workers {
 public:
- struct Backend {unsigned cores=1;bool(*launch)(void(*)(void*),void*,unsigned)=nullptr;void(*yield)(void*)=nullptr;bool(*admit)(size_t)=nullptr;};
+ struct Backend {unsigned cores=1;bool(*launch)(void(*)(void*),void*,unsigned)=nullptr;void(*yield)(void*)=nullptr;bool(*admit)(size_t)=nullptr;size_t nativeMemoryBytes=0;};
 private:
  struct Job{uint32_t id=0,owner=0;bool orphan=false;unsigned core=0,budget=0;LuaRuntime*vm=nullptr;char*source=nullptr;size_t size=0;JsonDocument input,result;std::atomic<bool>cancel{false},started{false},done{false};bool ok=false,notified=false;const char*failure=nullptr;void(*yield)(void*)=nullptr;~Job(){delete vm;free(source);}};
  Core&core_;Vfs&vfs_;Backend backend_;bool registered_=false;Job*jobs_[2]{};uint32_t next_=1;
@@ -30,8 +30,6 @@ public:
      if((a.containsKey("memory_bytes")&&!a["memory_bytes"].is<unsigned>())||(a.containsKey("instruction_budget")&&!a["instruction_budget"].is<unsigned>())||budget<16384||budget>core_.resources().limit()||steps<1000||steps>10000000)return "worker_budget_range";
      if(measureJson(a["input"])>4096)return "worker_input_limit";
      Job**slot=nullptr;for(auto&j:jobs_)if(!j){slot=&j;break;}if(!slot)return "worker_capacity";
-     size_t reservation=budget+24576;
-     if(backend_.admit&&!backend_.admit(reservation))return "worker_memory_budget";
      if(!next_)return "worker_id_exhausted";
      auto j=new(std::nothrow)Job;if(!j)return "memory_low";
      if(a["file"].is<const char*>()){
@@ -43,6 +41,9 @@ public:
        vfs_.release(lease);if(e){delete j;return e;}
      }else{const char*s=a["source"]|"";j->size=strlen(s);if(!j->size||j->size>8192){delete j;return "script_size";}j->source=strdup(s);if(!j->source){delete j;return "memory_low";}}
      j->vm=new(std::nothrow)LuaRuntime(core_,budget,steps);if(!j->vm){delete j;return "memory_low";}if(!j->vm->admitted()){delete j;return "system_memory_budget";}if(!j->input.set(a["input"])){delete j;return "memory_low";}j->id=next_++;j->owner=core_.callerOwner();j->core=affinity;j->budget=budget;j->yield=backend_.yield;
+     // VM admission has already charged its selected heap. Only native task
+     // overhead is checked here, after source/input allocations are materialized.
+     if(backend_.admit&&!backend_.admit(backend_.nativeMemoryBytes)){delete j;return "worker_memory_budget";}
      if(!backend_.launch(execute,j,affinity)){j->done=true;delete j;return "worker_launch_failed";}*slot=j;out["id"]=j->id;out["status"]="accepted";out["core"]=affinity;return nullptr;
    }
    if(!strcmp(m,"read")&&!a.containsKey("id")){out["active"]=active();out["cores"]=backend_.cores;out["capacity"]=2;out["scheduling"]="background_preemptible";out["hardware_access"]="main_application_resource_calls";auto jobs=out["jobs"].to<JsonArray>();for(auto j:jobs_)if(j&&(!core_.callerOwner()||j->owner==core_.callerOwner())){auto r=jobs.add<JsonObject>();r["id"]=j->id;r["core"]=j->core;r["state"]=j->done.load()?"finished":j->started.load()?"running":"queued";}return nullptr;}

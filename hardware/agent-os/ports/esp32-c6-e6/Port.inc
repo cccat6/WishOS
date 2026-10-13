@@ -1,9 +1,12 @@
+#include "PackedFont.h"
+#include <lvgl_private.h>
 #include "../Hardware.h"
 #include "../ButtonGestures.h"
 #include "../MotionInput.h"
 #include "../TimeSync.h"
 #include <esp_sntp.h>
 #include "../Core.h"
+#include "../EspMemory.h"
 #include "../RpcEnvelope.h"
 #include "../PresentationState.h"
 #include "../Conditions.h"
@@ -16,6 +19,7 @@
 #include "../PowerSense.h"
 #include "../PowerMonitor.h"
 #include "../E6Driver.h"
+#include "../E6Profiles.h"
 #include "../Defaults.h"
 #include "../DriverRequests.h"
 #include "../WifiManager.h"
@@ -68,7 +72,7 @@
 #include <mbedtls/sha256.h>
 #include <sys/time.h>
 namespace notesos {
-static Core core;static RemoteRequests remoteRequests(core);static SocketService tcpService(core);static DatagramService udpService(core);static HttpApplications httpApps(core);static Conditions conditions(core);static char appScope[48]="system";
+static Core core;static const char*resourceStartupError=nullptr;static RemoteRequests remoteRequests(core);static SocketService tcpService(core);static DatagramService udpService(core);static HttpApplications httpApps(core);static Conditions conditions(core);static char appScope[48]="system";
 static WebServer http(80);static DNSServer dns;
 static SdFs SD;
 static BoardSdSpi boardSdSpi(SPI);
@@ -76,13 +80,17 @@ static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));
 static bool policyRestoreOk=true;
 #include "../DriverDescriptions.h"
 static Preferences preferences;static ConnectionProfiles connections;
-static Vfs vfs;static esp32_nfs::SocketTransport nfsTransport;static NfsService nfsService(vfs,[]()->size_t{return core.resources().allocatableHeap();});static SystemFiles systemFiles;
-static MemoryFiles ramFiles("ram","/storage/ram","ram");
-static void* allocatePSRAM(size_t n){return heap_caps_malloc(n,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);}
-static MemoryFiles psramFiles("psram","/storage/psram","psram",false,allocatePSRAM,free);
+static Vfs vfs;static esp32_nfs::SocketTransport nfsTransport;static NfsService nfsService(vfs,core.resources());static SystemFiles systemFiles;
+static void* allocateRAM(size_t n){return core.resources().allocate(n,ResourceBudget::Region::Internal);}
+static void freeMemoryFile(void*p){core.resources().freeAllocation(p);}
+static MemoryFiles ramFiles("ram","/storage/ram","ram",true,allocateRAM,freeMemoryFile);
+static void* allocatePSRAM(size_t n){return core.resources().allocate(n,ResourceBudget::Region::External);}
+static MemoryFiles psramFiles("psram","/storage/psram","psram",false,allocatePSRAM,freeMemoryFile);
 static bool panelReady();static void panelReset(bool);
 static bool panelCommand(uint8_t,const uint8_t*,size_t);static bool panelData(const uint8_t*,size_t);
 static E6Driver panel({panelReady,panelReset,panelCommand,panelData});
+static E6ColorDriver colorPanel({panelReady,panelReset,panelCommand,panelData});
+static E6MonoCache monoCache(core.resources());
 static bool spiStarted=false;
 static SemaphoreHandle_t spiLease;
 static QueueHandle_t eventQueue, audioQueue, spoolQueue;
@@ -124,7 +132,7 @@ static uint32_t streamId = 0, nextStream = 1, streamDeadline = 0, lastClear = 0;
 static bool frameValid = false;
 static uint8_t frameProfile = 0xff;
 static void applyPanelClockIfIdle(){
-  if(!displayActive&&!streaming&&!panel.active())
+  if(!displayActive&&!streaming&&panel.safeToIdle()&&colorPanel.safeToIdle())
     panelSpiHz=policies.get<uint32_t>("/sys/bus","display_spi_hz",16000000);
 }
 static mbedtls_sha256_context digest;
@@ -251,7 +259,7 @@ static const char *railOff() {
     return "resource_busy";
   if (!takeSPI())
     return "spi_busy";
-  if(panel.active()||panel.faulted()||!panelReady()){giveSPI();return "display_not_safe_to_idle";}
+  if(!panel.safeToIdle()||!colorPanel.safeToIdle()){giveSPI();return "display_not_safe_to_idle";}
   if (cardProbed) {
     SD.end();
   }
@@ -468,6 +476,9 @@ static const char *imuHandler(const char*m,JsonObjectConst a,JsonObject out){
 }
 static const char *wakeHandler(const char *m, JsonObjectConst a, JsonObject out) {
   if (!strcmp(m, "write")) {
+    for(auto field:a)if(!Policies::choice("buttons_mask,timer_ms,imu,display_busy",field.key().c_str()))return "unknown_wake_setting";
+    for(auto key:{"buttons_mask","timer_ms"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "wake_integer_required";
+    for(auto key:{"imu","display_busy"})if(a.containsKey(key)&&!a[key].is<bool>())return "wake_boolean_required";
     unsigned keys = a["buttons_mask"] | wake.buttons;
     uint32_t timer = a["timer_ms"] | wake.timerMs;
     if (keys > 7 || timer > 604800000)
@@ -696,7 +707,7 @@ static const char *powerHandler(const char *m, JsonObjectConst a, JsonObject out
   }
   if (!strcmp(m, "peripherals_off"))
     return railOff();
-  if (audioRunning || audioSpooling || displayActive || streaming || networkActive() || pendingPower[0] || shutdownRequested)
+  if (audioRunning || audioSpooling || displayActive || streaming || networkActive() || workers.active() || pendingPower[0] || shutdownRequested)
     return "resource_busy";
   if (!strcmp(m, "write")) {
     const char *mode = a["mode"] | "";
@@ -731,7 +742,7 @@ static const char *powerHandler(const char *m, JsonObjectConst a, JsonObject out
     memcpy(payload->bytes, white, payload->size);
     nm::Scene scratch;
     nm::validate(*payload, scratch);
-    const char *e = queueDisplay(payload, 6, true, out);
+    const char *e = queueDisplay(payload, E6Profile::StockUI, true, out);
     if (!e)
       shutdownRequested = true;
     return e;
@@ -784,7 +795,7 @@ static void sendHTTP() {
 static void commitPower() {
   if (!pendingPower[0] || int32_t(millis() - powerAt) < 0)
     return;
-  if (audioRunning || audioSpooling || displayActive || streaming || networkActive()) {
+  if (audioRunning || audioSpooling || displayActive || streaming || networkActive() || workers.active()) {
     pendingPower[0] = 0;shutdownRequested=false;
     event("/sys/power", "aborted", "activity_started");
     return;
@@ -878,7 +889,7 @@ void begin() {
     if(wsClient&&wsOwner==owner)stopWebSocket();
     if(networkJob&&networkJob->owner==owner){networkJob->orphan=true;networkJob->cancel=true;}
   });
-  core.resources().heapProbe([]()->size_t{return ESP.getFreeHeap();});
+  resourceStartupError=configureEspMemory(core.resources());
   core.setInvocationGate(invocationGate);
   core.setEventGate(inputGate);core.setEventObserver(scriptEvent);
   vfs.add(ramFiles);if(psramFiles.available())vfs.add(psramFiles);vfs.add(sdFiles);vfs.add(systemFiles);
@@ -979,7 +990,7 @@ void begin() {
        "white refresh precedes true shutdown; SD rail shared with CHIPEN", powerHandler,powerDescription},
       {"/services/time","read,describe,configure,sync","asynchronous NTP clock synchronization",timeHandler},
       {"/sys/clock", "read,write", "CPU clock and wall time", clockHandler,clockDescription},
-      {"/sys/wake", "read,write", "three buttons GPIO0/1/2; IMU5; timer", wakeHandler},
+      {"/sys/wake", "read,write", "configured button inputs, IMU interrupt and timer", wakeHandler},
       {"/dev/battery", "read,write", "board power measurements", batteryHandler,batteryDescription},
       {"/sys/conditions", "read,write,remove", "shared property conditions and transition events", conditionsHandler,conditionDescription},
       {"/dev/buttons", "read,describe,configure", "configurable button gestures", buttonHandler,buttonsDescription},
@@ -1123,7 +1134,7 @@ void poll() {
     const char*e=nullptr;uint32_t current=presentationState.active();a["force"]=true;
     if(uiDocument(current))e=uiHandler("refresh",a.as<JsonObjectConst>(),r.to<JsonObject>());
     else if(current){a["view_id"]=current;e=displayHandler("clear",a.as<JsonObjectConst>(),r.to<JsonObject>());}
-    else{auto p=new(std::nothrow)nm::Payload;if(!p)e="memory_low";else{const char*blank="{\"format\":\"scene-v1\",\"background\":1,\"commands\":[]}";p->size=strlen(blank);memcpy(p->bytes,blank,p->size);e=queueDisplay(p,6,false,r.to<JsonObject>());if(!e&&pendingCount){pendingDisplays[pendingCount-1].maintenance=true;pendingDisplays[pendingCount-1].force=true;}}}
+    else{auto p=new(std::nothrow)nm::Payload;if(!p)e="memory_low";else{const char*blank="{\"format\":\"scene-v1\",\"background\":1,\"commands\":[]}";p->size=strlen(blank);memcpy(p->bytes,blank,p->size);e=queueDisplay(p,E6Profile::StockUI,false,r.to<JsonObject>());if(!e&&pendingCount){pendingDisplays[pendingCount-1].maintenance=true;pendingDisplays[pendingCount-1].force=true;}}}
     if (!e)
       event("/dev/display", "maintenance_clear");
   }

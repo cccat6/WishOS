@@ -24,6 +24,7 @@ struct PowerReading {
 struct PresenceChange {bool changed=false,initial=false;int value=-1;};
 class PowerMonitor {
   const bool shared_;
+  const float divider_;
   PowerSenseConfig cfg_;
   PowerReading state_;
   int candidate_=-1,confirmed_=-1;
@@ -41,7 +42,7 @@ class PowerMonitor {
     return values[count_/2];
   }
 public:
-  explicit PowerMonitor(bool shared):shared_(shared){}
+  explicit PowerMonitor(bool shared,float divider=2.0f):shared_(shared),divider_(divider){}
   bool shared()const{return shared_;}
   const PowerSenseConfig&config()const{return cfg_;}
   void reset(){state_.sampled=false;state_.valid=false;state_.externalPower=-1;state_.reason="not_sampled";candidate_=-1;recovering_=true;stable_=false;count_=next_=stableCount_=0;}
@@ -69,7 +70,7 @@ public:
         }else state_.externalPower=-1;
       }
     }else state_.externalPower=-1;
-    auto raw=decodePowerSample(adcMv,shared_,gain);
+    auto raw=decodePowerSample(adcMv,shared_,gain,divider_);
     if(!raw.batteryValid||(shared_&&state_.externalPower!=0)){
       invalidate(now,shared_&&adcMv<=100?"external_power_battery_unavailable":raw.batteryValid?"power_transition":raw.reason);
       return change;
@@ -87,7 +88,7 @@ public:
       }
       recovering_=false;
     }
-    state_.valid=true;state_.batteryMv=uint32_t(median()*2.0f*gain+0.5f);
+    state_.valid=true;state_.batteryMv=uint32_t(median()*divider_*gain+0.5f);
     state_.lastValidMv=state_.batteryMv;state_.lastValidAtMs=now;state_.reason="measured_filtered";
     return change;
   }

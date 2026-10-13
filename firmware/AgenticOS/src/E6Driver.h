@@ -22,6 +22,7 @@ public:
   bool receiving()const{return phase_==Phase::Receiving;}
   bool active()const{return phase_!=Phase::Idle&&phase_!=Phase::Completed&&phase_!=Phase::Fault;}
   bool faulted()const{return phase_==Phase::Fault;}
+  bool safeToIdle()const{return !active()&&!faulted()&&io_.ready();}
   uint32_t bytes()const{return bytes_;}uint64_t elapsed(uint64_t now)const{return now-began_;}
   bool start(bool accurate,uint64_t now,uint32_t timeout){
     if(active()||faulted()||!io_.ready())return false;

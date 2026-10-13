@@ -1,5 +1,6 @@
 #pragma once
 #include "NfsProvider.h"
+#include "ResourceBudget.h"
 #include <new>
 namespace notesos {
 struct NfsOptions {
@@ -37,10 +38,11 @@ class NfsService {
    NfsOptions options;esp32_nfs::Memory memory;esp32_nfs::PathVfs::Registry registry;NfsProviderStorage storage;NfsProviderVfs fs;esp32_nfs::Server server;
    Session(const NfsOptions&o,FileProvider&p,Vfs&v,const esp32_nfs::Memory::Allocator&allocator):options(o),memory(o.memory,allocator),registry(memory),storage(p,v),fs(storage,p,registry),server(fs,nullptr,memory){}
  };
- Vfs&vfs_;size_t(*heapProbe_)()=nullptr;Session*session_=nullptr;static constexpr uint32_t OWNER=0x4e4653;
+ Vfs&vfs_;ResourceBudget&budget_;Session*session_=nullptr;static constexpr uint32_t OWNER=0x4e4653;
+ void destroy(Session*p){p->~Session();budget_.freeAllocation(p);}
  uint32_t invalidations_=0;bool stopping_=false;esp32_nfs::Status stopStatus_=esp32_nfs::Ok;
 public:
- explicit NfsService(Vfs&v,size_t(*heapProbe)()=nullptr):vfs_(v),heapProbe_(heapProbe){}
+ explicit NfsService(Vfs&v,ResourceBudget&budget):vfs_(v),budget_(budget){}
  ~NfsService(){stop();}
  bool active()const{return session_!=nullptr;}
  bool uses(const char*id)const{return session_&&!strcmp(id,session_->options.provider);}
@@ -50,14 +52,14 @@ public:
    if(!o.wire.readOnly&&!p->writable)return "read_only";
    // Never promise COMMIT persistence for RAM. Volatile providers are exported read-only.
    if(!o.wire.readOnly&&!p->durableWrites())return "read_write_requires_durable_provider";
-   esp32_nfs::Memory::Allocator allocator;allocator.context=this;allocator.allocate=[](void*,size_t n){return malloc(n);};allocator.release=[](void*,void*p){free(p);};allocator.available=[](void*ctx)->size_t{auto self=(NfsService*)ctx;return self->heapProbe_?self->heapProbe_():SIZE_MAX;};
-   auto next=new(std::nothrow) Session(o,*p,vfs_,allocator);if(!next)return "memory_low";
-   if(!vfs_.pin(*p,OWNER)){delete next;return "service_lease_capacity";}
+   esp32_nfs::Memory::Allocator allocator;allocator.context=&budget_;allocator.allocate=[](void*ctx,size_t n){return static_cast<ResourceBudget*>(ctx)->allocate(n);};allocator.release=[](void*ctx,void*p){static_cast<ResourceBudget*>(ctx)->freeAllocation(p);};allocator.available=[](void*ctx)->size_t{return static_cast<ResourceBudget*>(ctx)->allocatableHeap(ResourceBudget::Region::Auto);};
+   auto block=budget_.allocate(sizeof(Session));if(!block)return "memory_low";auto next=new(block) Session(o,*p,vfs_,allocator);
+   if(!vfs_.pin(*p,OWNER)){destroy(next);return "service_lease_capacity";}
    auto config=o.wire;config.exportPath=next->options.path;
-   if(!next->server.begin(t,config,epoch)){vfs_.unpin(OWNER);delete next;return "nfs_listen_failed";}
+   if(!next->server.begin(t,config,epoch)){vfs_.unpin(OWNER);destroy(next);return "nfs_listen_failed";}
    session_=next;invalidations_=0;stopping_=false;stopStatus_=esp32_nfs::Ok;return nullptr;
  }
- const char*stop(){if(session_){stopping_=true;stopStatus_=session_->server.stop();if(stopStatus_!=esp32_nfs::Ok)return "nfs_stop_pending";delete session_;session_=nullptr;}stopping_=false;vfs_.unpin(OWNER);return nullptr;}
+ const char*stop(){if(session_){stopping_=true;stopStatus_=session_->server.stop();if(stopStatus_!=esp32_nfs::Ok)return "nfs_stop_pending";destroy(session_);session_=nullptr;}stopping_=false;vfs_.unpin(OWNER);return nullptr;}
  const char*memory(JsonObjectConst args,JsonObject out){
    if(!session_||stopping_)return "nfs_not_running";
    for(auto field:args)if(strcmp(field.key().c_str(),"memory_max_bytes")&&strcmp(field.key().c_str(),"heap_reserve_bytes"))return "unknown_nfs_memory_setting";

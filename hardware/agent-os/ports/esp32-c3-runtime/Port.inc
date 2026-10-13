@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include "../BoardPackage.h"
 #include "../Core.h"
+#include "../EspMemory.h"
 #include "../RpcEnvelope.h"
 #include "../ScriptHost.h"
 #include "../Workers.h"
@@ -31,10 +32,12 @@
 #include <NetworkClientSecure.h>
 #include <atomic>
 namespace notesos {
-static Core core;static Vfs vfs;static Preferences preferences;static WebServer http(80);static DNSServer dns;
+static Core core;static const char*resourceStartupError=nullptr;static Vfs vfs;static Preferences preferences;static WebServer http(80);static DNSServer dns;
 static char apSsid[40],bootId[17];static bool mounted=false;static uint32_t cursor=0;
-static MemoryFiles ramFiles("ram","/storage/ram","ram");static SystemFiles systemFiles;static LittleFsProvider flashFiles(LittleFS,mounted);
-static NfsService nfsService(vfs,[]()->size_t{return core.resources().allocatableHeap();});static esp32_nfs::SocketTransport nfsTransport;static SocketService sockets(core);static HttpApplications routes(core);static RemoteRequests remoteRequests(core);static ConnectionProfiles connections;
+static void* allocateRAM(size_t n){return core.resources().allocate(n,ResourceBudget::Region::Internal);}
+static void freeMemoryFile(void*p){core.resources().freeAllocation(p);}
+static MemoryFiles ramFiles("ram","/storage/ram","ram",true,allocateRAM,freeMemoryFile);static SystemFiles systemFiles;static LittleFsProvider flashFiles(LittleFS,mounted);
+static NfsService nfsService(vfs,core.resources());static esp32_nfs::SocketTransport nfsTransport;static SocketService sockets(core);static HttpApplications routes(core);static RemoteRequests remoteRequests(core);static ConnectionProfiles connections;
 static uint64_t uptime(){return esp_timer_get_time()/1000;}
 static bool networkActive();static bool applicationNetworkActive(){return sockets.active()||routes.active();}
 static void event(const char*p,const char*name,const char*value=nullptr){JsonDocument d;if(value)d["value"]=value;core.emit(p,name,d.as<JsonObjectConst>());}
@@ -63,7 +66,7 @@ static const char*nfs(const char*m,JsonObjectConst a,JsonObject out){if(!strcmp(
 static void respond(JsonObjectConst request,JsonObject reply){invokeEnvelope(core,request,reply,bootId,uptime());}
 void begin(){
  Serial.setRxBufferSize(4096);Serial.begin(115200);preferences.begin("agent-os",false);snprintf(bootId,sizeof bootId,"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());
- vfs.add(ramFiles);vfs.add(systemFiles);vfs.add(flashFiles);core.resources().heapProbe([]()->size_t{return ESP.getFreeHeap();});core.setEventObserver(scriptEvent);
+ vfs.add(ramFiles);vfs.add(systemFiles);vfs.add(flashFiles);resourceStartupError=configureEspMemory(core.resources());core.setEventObserver(scriptEvent);
  core.onOwnerRelease(&nextJob,[](void*,uint32_t owner){if(networkJob&&networkJob->owner==owner){networkJob->cancel=true;networkJob->orphan=true;}});
  Device devices[]={
  {"/sys/capabilities","list,describe","resource discovery",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"describe"))return core.describe(a["path"]|"",o);unsigned start=a["cursor"]|0u,limit=a["limit"]|4u;if(!limit||limit>48)return "limit";core.list(o["devices"].to<JsonArray>(),start,limit,a["details"]|false);o["next_cursor"]=start+o["devices"].size();o["more"]=start+o["devices"].size()<core.deviceCount();return nullptr;}},

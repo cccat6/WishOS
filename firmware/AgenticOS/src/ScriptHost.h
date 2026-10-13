@@ -2,11 +2,11 @@
 #include "LuaRuntime.h"
 #include "Policy.h"
 namespace notesos {
-// Portable application host: only file providers, resource calls and a heap-admission hook.
+// Portable application host: file providers, resource calls and the shared allocation policy.
 class ScriptHost {
  Core&core_;Vfs&vfs_;LuaRuntime*vm_=nullptr;char file_[256]{};JsonDocument startup_,bootStartup_;
  uint32_t revision_=1;bool restoreValid_=true,persisted_=true,bootPending_=false;uint64_t bootDue_=0;
- char bootError_[80]{};bool(*admit_)(size_t)=nullptr;
+ char bootError_[80]{};
  static const char*source(void*ctx,const char*file,char*&text,size_t&size){
    auto&s=*(ScriptHost*)ctx;const char*relative;auto p=s.vfs_.resolve(file,relative);if(!p)return "unknown_script_mount";
    constexpr uint32_t lease=0xffffffe7u;if(!s.vfs_.lockRead(file,lease))return "file_lease_capacity";
@@ -30,7 +30,7 @@ class ScriptHost {
  uint32_t owner()const{JsonDocument d;if(vm_)vm_->describe(d.to<JsonObject>());return d["owner"]|0u;}
 public:
  using Persist=bool(*)(const char*,size_t);
- ScriptHost(Core&c,Vfs&v,bool(*admit)(size_t)=nullptr):core_(c),vfs_(v),admit_(admit){startup_["auto_start"]=false;startup_["file"]="";startup_["memory_bytes"]=nullptr;startup_["instruction_budget"]=20000;startup_["system_call_budget"]=32;startup_["delay_ms"]=1000;}
+ ScriptHost(Core&c,Vfs&v):core_(c),vfs_(v){startup_["auto_start"]=false;startup_["file"]="";startup_["memory_bytes"]=nullptr;startup_["instruction_budget"]=20000;startup_["system_call_budget"]=32;startup_["delay_ms"]=1000;}
  ~ScriptHost(){delete vm_;}
  bool restore(const char*text){JsonDocument d;if(deserializeJson(d,text)||validate(d.as<JsonObjectConst>())||validateProvider(d.as<JsonObjectConst>())){restoreValid_=false;return false;}swap(startup_,d);restoreValid_=true;persisted_=true;return true;}
  void scheduleBoot(uint64_t now){bootStartup_.set(startup_);bootPending_=!bootStartup_.overflowed()&&(startup_["auto_start"]|false);bootDue_=now+(startup_["delay_ms"]|1000u);}
@@ -56,14 +56,13 @@ public:
    unsigned budget=a["memory_bytes"]|uint32_t(core_.resources().defaultVmLimit()),steps=a["instruction_budget"]|20000u,calls=a["system_call_budget"]|32u;
    if((a.containsKey("system_call_budget")&&!a["system_call_budget"].is<uint32_t>())||calls<1||calls>256)return "runtime_budget_range";
    if((a.containsKey("memory_bytes")&&!a["memory_bytes"].isNull()&&!a["memory_bytes"].is<uint32_t>())||(a.containsKey("instruction_budget")&&!a["instruction_budget"].is<uint32_t>())||budget<16384||budget>core_.resources().limit()||steps<1000||steps>200000)return "runtime_budget_range";
-   if(admit_&&!admit_(budget))return "runtime_memory_budget";
    if(a.containsKey("file")&&a.containsKey("source"))return "one_script_source_required";
    char file[256]{};const char*path=a["file"]|"";if(!strcmp(m,"restart")&&!*path&&!a.containsKey("source"))path=file_;
    char*text=nullptr;size_t size=0;
    if(*path){if(!normalizePath("/",path,file,sizeof file))return "script_path";if(auto e=source(this,file,text,size)){free(text);return e;}}
    else{if(!a["source"].is<const char*>())return "script_source_required";auto value=a["source"].as<JsonString>();size=value.size();if(!size||size>8192||strlen(value.c_str())!=size)return "script_size";text=strdup(value.c_str());if(!text)return "memory_low";}
    auto candidate=new(std::nothrow)LuaRuntime(core_,budget,steps,calls);if(!candidate){free(text);return "memory_low";}candidate->fileContext(file,source,this);
-   bool loaded=candidate->load(text,size);free(text);if(loaded)loaded=candidate->prepare();if(!loaded){out["detail"]=candidate->error();delete candidate;return "script_load_failed";}
+   bool loaded=candidate->load(text,size);free(text);if(loaded)loaded=candidate->prepare();if(!loaded){out["detail"]=candidate->error();candidate->describe(out["candidate"].to<JsonObject>());delete candidate;return "script_load_failed";}
    // Preparation is atomic. on_start is side-effectful and cannot be rolled back.
    bootPending_=false;bootStartup_.clear();bootError_[0]=0;
    if(vm_){out["previous_cleanup_ok"]=vm_->stop();delete vm_;}vm_=candidate;copy(file_,sizeof file_,file);

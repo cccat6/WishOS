@@ -133,8 +133,19 @@ do not overwrite files of an active application one by one.
 
 Instance `memory_bytes` is a ceiling, not a preallocated RAM partition. Omission
 (or null for the main runtime) inherits `/sys/resources default_vm_memory_bytes`.
-The shared policy and physical heap reserve determine admission, replacing the
-previous fixed 128 KiB validation ceiling. Query effective limits before requesting
+Actual VM growth is charged against the shared policy and the selected physical
+heap reserve. Multiple high ceilings do not reserve their sum in advance. Query effective limits before requesting
 a larger instance. Resource exhaustion still fails explicitly and preserves other
 instances/services. Global resource policy is writable by system callers, not by
 a running application lowering its own safeguards.
+
+Memory discovery reports `heaps[]` with capacity, free bytes, largest block and
+reserve for each present region. `application_memory:auto` prefers PSRAM for new
+VMs; `internal`/`external` request a fixed region. Changing it applies to the next
+instance, without migrating a running VM. Internal native work cannot borrow
+PSRAM to satisfy an internal/DMA reserve. `managed_bytes` is actual VM/cache use
+plus native fixed reservations; `reserved_bytes` counts only those fixed
+reservations, and `unallocated_reserved_bytes` is their unspent portion. These
+counters do not include every SDK allocation; consult physical heap readings too.
+NFS retains its own configurable protocol budget within this shared allocation
+policy. RAM/PSRAM file quotas are separate ceilings, not preallocated partitions.

@@ -12,6 +12,8 @@ mkdir -p build/previews
 "$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_core_test.cpp -o build/os-core-test
 "$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_interaction_test.cpp -o build/os-interaction-test
 build/os-interaction-test
+"$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_e6_color_test.cpp -o build/os-e6-color-test
+build/os-e6-color-test
 build/os-core-test
 "$CXX" -isysroot "$SDK" -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/AgenticOS/src" tests/os_retention_test.cpp -o build/os-retention-test
 build/os-retention-test
@@ -52,7 +54,9 @@ build/os-conditions-test
 cmake -S tests/os-ui -B build/os-ui -G Ninja -DCMAKE_C_COMPILER="${CXX%++}" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_OSX_SYSROOT="$SDK" -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/os-ui -j 4
 build/os-ui/notes_ui_test
+build/os-ui/notes_suite_test
 build/os-ui/notes_lua_test
+build/os-ui/notes_memory_test
 build/os-ui/notes_app_test
 build/os-ui/notes_failure_test
 "$PYTHON" -m unittest discover -s tests -p 'test_board_packages.py' -v

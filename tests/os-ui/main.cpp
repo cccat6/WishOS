@@ -1,3 +1,5 @@
+#include "PackedFont.h"
+#include <lvgl_private.h>
 #ifdef NDEBUG
 #error Assertions must be enabled in this test
 #endif
@@ -5,6 +7,7 @@
 #include <lvgl.h>
 #include "Core.h"
 #include "PresentationState.h"
+#include "E6Profiles.h"
 #include "ScriptHost.h"
 #include "Vfs.h"
 #include "Defaults.h"
@@ -67,13 +70,25 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  assert(!files.write("/assets/screen.json",0,(const uint8_t*)external,strlen(external),true,wrote));
  const char*root=R"({"version":"0.1.1","assets":["assets/screen.json"]})";assert(!files.write("/external.json",0,(const uint8_t*)root,strlen(root),true,wrote));
  assert(prepareUi("/storage/ram/external.json"));assert(renderUiBand(0,stripe));
- // TinyTTF loads from the same seekable VFS; its file remains leased until released.
- std::string fontPath=std::string(getenv("HOME"))+"/Documents/Arduino/libraries/lvgl/examples/libs/tiny_ttf/Ubuntu-Medium.ttf";
- std::ifstream fontSource(fontPath,std::ios::binary);assert(fontSource);std::vector<uint8_t> fontData((std::istreambuf_iterator<char>(fontSource)),{});
- assert(!files.write("/font.ttf",0,fontData.data(),fontData.size(),true,wrote));
- a.clear();a["id"]="custom";a["file"]="/storage/ram/font.ttf";a["size"]=22;assert(!uiHandler("font_register",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(!vfs.canMutate("/storage/ram/font.ttf"));
+ // Indexed glyphs remain seekable and leased. Malformed user files fail at
+ // the format boundary rather than entering an unchecked outline parser.
+ std::vector<uint8_t> fontData(16+95*16+95*7);memcpy(fontData.data(),"NMF1",4);
+ auto put=[&](size_t at,uint32_t value,unsigned n){for(unsigned i=0;i<n;++i)fontData[at+i]=value>>(8*i);};
+ put(4,95,4);put(8,95*7,4);
+ for(unsigned i=0;i<95;++i){size_t at=16+i*16;put(at,32+i,4);fontData[at+4]=22;fontData[at+5]=5;fontData[at+6]=7;fontData[at+8]=2;fontData[at+9]=6;put(at+10,7,2);put(at+12,i*7,4);memset(fontData.data()+16+95*16+i*7,0xA8,7);}
+ assert(!files.write("/font.nmf",0,fontData.data(),fontData.size(),true,wrote));
+ a.clear();a["id"]="custom";a["file"]="/storage/ram/font.nmf";a["size"]=22;assert(!uiHandler("font_register",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(!vfs.canMutate("/storage/ram/font.nmf"));
  const char*fontUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"label","style":{"font":"custom","fontSize":22},"labelProps":{"text":"Runtime font"}}]}]})";
- assert(!files.write("/font-ui.json",0,(const uint8_t*)fontUi,strlen(fontUi),true,wrote));assert(prepareUi("/storage/ram/font-ui.json"));assert(renderUiBand(40,stripe));assert(!strcmp(uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()),"font_in_use"));assert(prepareUi("/system/ui/home.json"));assert(!uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(vfs.canMutate("/storage/ram/font.ttf"));
+ assert(!files.write("/font-ui.json",0,(const uint8_t*)fontUi,strlen(fontUi),true,wrote));assert(prepareUi("/storage/ram/font-ui.json"));assert(renderUiBand(40,stripe));assert(!strcmp(uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()),"font_in_use"));assert(prepareUi("/system/ui/home.json"));assert(!uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(vfs.canMutate("/storage/ram/font.nmf"));
+ // A valid PNG header with missing image data must fail rendering, not commit
+ // a blank icon as a successful frame.
+ const uint8_t brokenPng[]={137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137};
+ assert(!files.write("/broken.png",0,brokenPng,sizeof brokenPng,true,wrote));
+ const char*brokenUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"image","imageProps":{"src":"broken.png"}}]}]})";
+ assert(!files.write("/broken-ui.json",0,(const uint8_t*)brokenUi,strlen(brokenUi),true,wrote));assert(prepareUi("/storage/ram/broken-ui.json"));assert(!renderUiBand(0,stripe));assert(!strcmp(uiError,"image_decode_failed"));assert(prepareUi("/system/ui/home.json"));
+ // Registration does not trust glyph offsets in a runtime-provided font.
+ put(16+('?' -32)*16+12,0xffffffff,4);assert(!files.write("/bad-font.nmf",0,fontData.data(),fontData.size(),true,wrote));a.clear();a["id"]="invalid";a["file"]="/storage/ram/bad-font.nmf";a["size"]=22;assert(!strcmp(uiHandler("font_register",a.as<JsonObjectConst>(),r.to<JsonObject>()),"font_glyph_range"));assert(vfs.canMutate("/storage/ram/bad-font.nmf"));
+ JsonDocument resources;resources["memory_limit_bytes"]=uint32_t(core.resources().promised()+1);assert(!core.resources().configure(resources.as<JsonObjectConst>()));assert(!prepareUi("/system/ui/home.json"));assert(!strcmp(uiError,"ui_memory_budget"));resources["memory_limit_bytes"]=nullptr;assert(!core.resources().configure(resources.as<JsonObjectConst>()));assert(prepareUi("/system/ui/home.json"));
  for(;;){JsonDocument state;presentationState.describe(state.to<JsonObject>());if(!state["views"].size())break;uint32_t id=state["views"][0]["id"];unsigned slot=presentationState.slot(id);assert(!presentationState.close(id,0));freeUiDocument(slot);}assert(core.resources().promised()==0);
  // The real factory entrypoint uses the exact runtime/GUI loader used by a user
  // replacement. No special native boot path or system-owned button bindings.
@@ -81,14 +96,16 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  core.add({"/dev/buttons","read","",[](const char*,JsonObjectConst,JsonObject)->const char*{return nullptr;}});
  core.add({"/dev/mic","start,stop","",[](const char*m,JsonObjectConst,JsonObject)->const char*{if(!strcmp(m,"start"))++micStarts;return nullptr;}});
  core.add({"/sys/rules","write","",[](const char*,JsonObjectConst a,JsonObject o){return core.setRule(a,o);}});
- ScriptHost runtime(core,vfs);a.clear();a["file"]=boardpack::STARTUP_SCRIPT;
+ const char*factoryManifest=R"({"format":"notes-app/1","entry":"updated.json","bindings":[{"source":"/dev/buttons","event":"press","where":{"button":"B"},"target":"/dev/mic","method":"start","cooldown_ms":0}]})";
+ assert(!files.write("/factory-app.json",0,(const uint8_t*)factoryManifest,strlen(factoryManifest),true,wrote));
+ ScriptHost runtime(core,vfs);a.clear();a["source"]="function on_start() local a=notes.call('/sys/ui','app_load',{file='/storage/ram/factory-app.json'}); assert(a.ok,a.error); local r=notes.call('/sys/ui','open',{path=a.result.entry}); assert(r.ok,r.error) end";
  if(auto e=runtime.invoke("load",a.as<JsonObjectConst>(),r.to<JsonObject>())){std::cerr<<e<<" ";serializeJson(r,std::cerr);assert(false);}
- assert(uiRuleCount==4&&uiAppOwner!=0&&presentationState.active());unsigned factoryOwner=uiAppOwner;
+ assert(uiRuleCount==1&&uiAppOwner!=0&&presentationState.active());unsigned factoryOwner=uiAppOwner;
  uint32_t cursor=core.sequence();a.clear();a["button"]="B";core.emit("/dev/buttons","press",a.as<JsonObjectConst>());core.dispatch(cursor);assert(micStarts==1);
  // A bad replacement must preserve both working bindings and the current view.
  const char*badApp=R"({"format":"notes-app/1","entry":"bad.json","bindings":[]})";assert(!files.write("/bad-app.json",0,(const uint8_t*)badApp,strlen(badApp),true,wrote));
  a.clear();a["file"]="/storage/ram/bad-app.json";unsigned active=presentationState.active();
- assert(core.invoke("/sys/ui","app_load",a.as<JsonObjectConst>(),r.to<JsonObject>(),factoryOwner));assert(uiRuleCount==4&&presentationState.active()==active);
+ assert(core.invoke("/sys/ui","app_load",a.as<JsonObjectConst>(),r.to<JsonObject>(),factoryOwner));assert(uiRuleCount==1&&presentationState.active()==active);
  a.clear();a["source"]=R"lua(function on_start()
   assert(notes.call('/sys/rules','write',{source='/dev/buttons',event='press',where={button='A'},target='/dev/mic',method='start',cooldown_ms=0}).ok)
   assert(notes.call('/sys/ui','open',{path='/storage/ram/updated.json'}).ok)

@@ -1,6 +1,6 @@
 // The board driver conditions its raw ADC internally. Capabilities are declared
 // separately; all higher-level conditions use the shared system evaluator.
-static PowerMonitor powerMonitor(pins::VBUS_CLAMPS_BATTERY_ADC);
+static PowerMonitor powerMonitor(pins::VBUS_CLAMPS_BATTERY_ADC,pins::BATTERY_DIVIDER);
 static uint32_t powerPolicyRevision=0,powerEventMs=1000;
 static uint64_t powerSampleAt=0,powerPublishAt=0,shutdownAttemptAt=0;
 static bool powerSampled=false,powerPublished=false;

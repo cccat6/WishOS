@@ -22,11 +22,14 @@ Electrical correctness still requires schematic review; passing this check is no
 PCB validation. GPIO8/9 strap loading, USB hardware pins, shared power polarity,
 crystal and peripheral voltage assumptions remain native-port responsibilities.
 
-`assets` maps VFS paths below `/system` to package text assets. UI documents, Lua
+`assets` maps VFS paths below `/system` to package text or binary assets. UI documents, Lua
 entry/modules and default policy snapshots are compiled read-only. User apps/assets
 can instead be replaced at runtime on writable providers. `/defaults.json` is a
 normal `Policies` restore snapshot, not an unchecked bypass; saved settings override
-package defaults. Optional `startup.script` references an ordinary Lua entrypoint.
+package defaults. Optional `startup.script` references an ordinary Lua entrypoint;
+`startup.memory_bytes` is its optional VM ceiling, not a preallocated partition.
+The E6 suite requests 65536 bytes; other applications retain the system default.
+Its measured 64-bit host startup peak is about 56 KiB; device use differs.
 The E6 package's entrypoint loads its UI manifest and opens its entry through public
 resource calls. There is no independent native factory-UI boot step. Explicit
 `/sys/runtime configure` startup settings override that reference, including when
@@ -75,3 +78,36 @@ names or button-to-action rules required by the native services.
 VM memory ceilings are configurable resource policy, not fixed RAM partitions.
 A package may request a ceiling; otherwise the system default applies. Admission
 uses physical headroom, system reserve and shared commitments.
+
+## Resource placement and factory suite
+
+`resources` supplies native startup defaults: `memory_limit_bytes` (null = actual
+registered heap capacities), `heap_reserve_bytes`, `external_heap_reserve_bytes`,
+`application_memory` (`auto`, `internal`, `external`) and `default_vm_memory_bytes`.
+The ESP adapter registers separate internal and PSRAM heaps with matching allocation
+callbacks. Auto tries PSRAM for a new VM when available; that VM stays on its chosen
+heap. Fixed external placement fails if unavailable. RAM files explicitly use
+internal memory; PSRAM files use external memory. NFS and lossless display caches
+allocate on demand through the same resource manager. Native task/DMA requirements
+remain internal. SDK-owned allocations are reflected in physical heap readings;
+they are not all individually tracked by the OS.
+
+The current E6 package targets the manufactured board with the 5 V-controlled
+battery ADC clamp enabled. The driver conditions the switching/recovery interval;
+applications consume `external_power` and valid battery readings through the common
+capability/event interface. External power does not mean charge completion.
+
+`assets/suite/config.lua` selects pages, display profiles, button roles, timer,
+rotation and the optional voice route. `assets/suite/main.lua` implements those
+choices through public resource calls. `assets/ui/` has portrait/landscape pages;
+small indexed icons are streamed from the VFS. Copy the suite to a writable provider
+and change the startup reference to replace it without rebuilding. `tools/generate_basic_ui.py`
+and `tools/compile_os_font.py` reproduce the packaged assets. See the agent's
+[display guide](../../skills/agentic-notes-hardware/references/e6-display.md).
+
+Host asset compiler dependencies are pinned in `requirements-os-assets.txt`.
+The packaged native font was compiled from Noto Sans SC Regular, source SHA256
+`2fa4a4c87f663273cc6e4c854ab7e145671c2e645a9326f61a01cbf8e767eb82`;
+the source is provided via `--font` and the SIL OFL is included next to the compiled
+subset. Ordinary firmware builds use the checked-in subset and do not need Python
+font dependencies or any private research workspace.

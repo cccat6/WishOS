@@ -209,7 +209,9 @@ static const char* statsHandler(const char*,JsonObjectConst,JsonObject o){
 }
 
 static int inputGate(const Event&e){
-  auto phase=panel.phase();if(panelReady()&&(phase==E6Driver::Phase::Idle||phase==E6Driver::Phase::Completed||phase==E6Driver::Phase::Receiving))return 0;JsonDocument d;policies.resolve("/sys/input",appScope,d.to<JsonObject>());
+  // Input policy follows the presentation lifecycle, not one waveform phase.
+  // A terminal fault must not prevent the user from invoking recovery controls.
+  if(!colorPanel.active()&&(!panel.active()||panel.receiving()))return 0;JsonDocument d;policies.resolve("/sys/input",appScope,d.to<JsonObject>());
   if(!Policies::choice(d["gated_sources"]|"",e.path))return 0;
   const char*mode=d["during_display_busy"]|"dispatch";
   return !strcmp(mode,"queue")?1:!strcmp(mode,"drop")?2:0;

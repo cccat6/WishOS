@@ -34,7 +34,7 @@ class PackageTests(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'geometry'):pack.load(root)
  def test_factory_is_only_a_runtime_reference(self):
   _,board,_,_,assets=pack.load(pack.DEFAULT)
-  self.assertEqual(set(board['startup']),{'script'})
+  self.assertLessEqual(set(board['startup']),{'script','memory_bytes'})
   self.assertIn(board['startup']['script'][7:],assets)
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root)
@@ -42,7 +42,15 @@ class PackageTests(unittest.TestCase):
    b['startup']={'script':'/system/custom.lua'};self.write(root,b)
    pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text()
    self.assertIn('STARTUP_SCRIPT[]="/system/custom.lua"',text);self.assertNotIn('STARTUP_UI',text)
+   b['startup']['memory_bytes']=48000;self.write(root,b);pack.generate(root,root/'generated');self.assertIn('STARTUP_MEMORY_BYTES=48000',(root/'generated/BoardPackage.h').read_text())
+   b['startup']['memory_bytes']='48000';self.write(root,b)
+   with self.assertRaisesRegex(ValueError,'memory ceiling'):pack.load(root)
    b['startup']={};self.write(root,b);pack.load(root)
+ def test_binary_assets_preserve_nul_and_size(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);b=self.fixture(root);b['assets']['/icons/test.bin']='test.bin';raw=b'\x00\xff\x00data';(root/'test.bin').write_bytes(raw);self.write(root,b)
+   *_,assets=pack.load(root);self.assertEqual(assets['/icons/test.bin'],raw)
+   pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text();self.assertIn('\\x00\\xff\\x00\\x64\\x61\\x74\\x61',text)
  def test_different_port_does_not_require_e6_pins_or_three_buttons(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root);port=root/'port';port.mkdir();(port/'Port.inc').write_text('// test port, not firmware\n')

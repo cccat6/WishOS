@@ -52,7 +52,7 @@ int main(){
  assert(!files.mkdir("/书籍"));assert(!files.write("/书籍/阅读记录.txt",0,text,4,false,n));storage.reconcile();uint64_t chineseDir,chineseFile;
  assert(mapped.lookup(mapped.root(),"书籍",chineseDir)==nf::Ok);assert(mapped.lookup(chineseDir,"阅读记录.txt",chineseFile)==nf::Ok);n=4;uint8_t readback[4];assert(mapped.read(chineseFile,0,readback,n)==nf::Ok&&!memcmp(readback,text,4));
  assert(mapped.rename(chineseDir,"阅读记录.txt",chineseDir,"阅读进度.txt")==nf::Ok);nf::Attr info;assert(mapped.getattr(chineseFile,info)==nf::Ok);
- Transport t;NfsService service(vfs);NfsOptions options;options.wire.bytesPerSecond=0;uint32_t now=1;
+ Transport t;ResourceBudget budget;NfsService service(vfs,budget);NfsOptions options;options.wire.bytesPerSecond=0;uint32_t now=1;
  assert(!service.start(options,t,123));
  JsonDocument limits,observed;limits["memory_max_bytes"]=131072;limits["heap_reserve_bytes"]=32768;assert(!service.memory(limits.as<JsonObjectConst>(),observed.to<JsonObject>()));assert(observed["active"]["memory_max_bytes"]==131072);assert(service.active()&&vfs.pinned(files));
  assert(service.start(options,t,124));
@@ -81,6 +81,6 @@ int main(){
  std::vector<uint8_t>large(16384);for(size_t i=0;i<large.size();++i)large[i]=uint8_t(i);
  writeArgs=args([&](nf::XdrOut&x){x.opaque(file.data(),file.size());x.u64(0);x.u32(large.size());x.u32(2);x.opaque(large.data(),large.size());});
  result=transact(service,t,call(72,100003,7,writeArgs),now);x=reply(result,72);assert(x.u32()==nf::Ok);
- readArgs=args([&](nf::XdrOut&x){x.opaque(file.data(),file.size());x.u64(0);x.u32(large.size());});result=transact(service,t,call(73,100003,6,readArgs),now);x=reply(result,73);assert(x.u32()==nf::Ok&&x.boolean());x.fixed(84);assert(x.u32()==large.size()&&x.boolean());p=x.opaque(len,32768);assert(len==large.size()&&!memcmp(p,large.data(),len));assert(!service.stop());
+ readArgs=args([&](nf::XdrOut&x){x.opaque(file.data(),file.size());x.u64(0);x.u32(large.size());});result=transact(service,t,call(73,100003,6,readArgs),now);x=reply(result,73);assert(x.u32()==nf::Ok&&x.boolean());x.fixed(84);assert(x.u32()==large.size()&&x.boolean());p=x.opaque(len,32768);assert(len==large.size()&&!memcmp(p,large.data(),len));assert(!service.stop());assert(budget.promised()==0);
  std::cout<<"NFS framed RPC mount/read/write, OS leases, external invalidation, volatile semantics and lifecycle passed\n";
 }

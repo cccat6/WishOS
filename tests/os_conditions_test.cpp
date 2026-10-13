@@ -36,7 +36,7 @@ static void genericTests(){
 }
 namespace board {
 using std::isfinite;
-namespace pins {constexpr bool VBUS_CLAMPS_BATTERY_ADC=true;}
+namespace pins {constexpr bool VBUS_CLAMPS_BATTERY_ADC=true;constexpr float BATTERY_DIVIDER=2.0f;}
 static Core core;static Conditions conditions(core);static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));
 static uint64_t clockMs=0;static uint32_t adc=1950;static float batteryGain=1.0f;static uint32_t cursor=0;static int actions=0;
 struct E{std::string name,id;};static std::vector<E> transitions;

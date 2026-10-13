@@ -17,6 +17,7 @@ int main(){
  assert(!decodePowerSample(0,false).batteryValid&&decodePowerSample(0,false).externalPower==-1);
  assert(!decodePowerSample(0,true).batteryValid&&decodePowerSample(0,true).externalPower==1);
  assert(decodePowerSample(1600,true).batteryMv==3200&&decodePowerSample(1600,true).externalPower==0);
+ assert(decodePowerSample(1200,true,1.0f,3.0f).batteryMv==3600);
  Policies p(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));JsonDocument out;
  auto a=j(R"({"expected_revision":1,"changes":[{"resource":"/dev/mic","settings":{"max_duration_ms":null}}]})");
  assert(!p.apply(a.as<JsonObjectConst>(),out.to<JsonObject>(),true));assert(p.revision()==1);

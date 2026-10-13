@@ -35,10 +35,10 @@ private:
   static LuaRuntime& self(lua_State*L){return **(LuaRuntime**)lua_getextraspace(L);}
   static void*allocate(void*context,void*ptr,size_t,size_t n){
     auto&s=*(LuaRuntime*)context;Block*old=ptr?((Block*)ptr-1):nullptr;size_t previous=old?old->size:0;
-    if(!n){if(old){s.used_-=previous;s.core_.resources().used(s.reservation_,s.used_);if(s.resize_)s.resize_(s.allocatorContext_,old,0);else free(old);}return nullptr;}
+    if(!n){if(old){s.used_-=previous;if(s.resize_){s.resize_(s.allocatorContext_,old,0);s.core_.resources().used(s.reservation_,s.used_);}else s.core_.resources().resize(s.reservation_,old,0,previous);}return nullptr;}
     if(n>SIZE_MAX-sizeof(Block))return nullptr;size_t bytes=n+sizeof(Block);
     if(bytes>s.budget_-s.used_+previous)return nullptr;
-    auto next=(Block*)(s.resize_?s.resize_(s.allocatorContext_,old,bytes):realloc(old,bytes));if(!next)return nullptr;next->size=bytes;s.used_=s.used_-previous+bytes;s.core_.resources().used(s.reservation_,s.used_);if(s.used_>s.peak_)s.peak_=s.used_;return next+1;
+    auto next=(Block*)(s.resize_?s.resize_(s.allocatorContext_,old,bytes):s.core_.resources().resize(s.reservation_,old,bytes,previous));if(!next)return nullptr;next->size=bytes;s.used_=s.used_-previous+bytes;if(s.resize_)s.core_.resources().used(s.reservation_,s.used_);if(s.used_>s.peak_)s.peak_=s.used_;return next+1;
   }
   static void hook(lua_State*L,lua_Debug*){auto&s=self(L);s.steps_+=lua_gethookcount(L);if(s.cancelled_&&s.cancelled_(s.executionContext_))luaL_error(L,"cancelled");if(s.yield_)s.yield_(s.executionContext_);if(s.steps_>=s.stepLimit_){lua_sethook(L,hook,LUA_MASKCOUNT,1);lua_yield(L,0);}}
   static int continuation(lua_State*L,int,lua_KContext results){auto&s=self(L);if(s.operation_==4){s.jsonBudget_=0;if(!fromLua(L,-1,s.computeOutput_))return luaL_error(L,"compute_result_limit");}return int(results);}
@@ -128,7 +128,7 @@ private:
     lua_gc(state_,LUA_GCCOLLECT);executing_=false;return status==LUA_OK&&!fault_;
   }
 public:
-  LuaRuntime(Core&core,size_t budget=0,uint32_t steps=20000,uint32_t calls=32):core_(core),budget_(budget?budget:core.resources().defaultVmLimit()),stepLimit_(steps),callLimit_(calls),owner_(core.acquireOwner()){reservation_=core_.resources().acquire(budget_,owner_);if(!reservation_)copy(error_,sizeof error_,"system_memory_budget");}
+  LuaRuntime(Core&core,size_t budget=0,uint32_t steps=20000,uint32_t calls=32):core_(core),budget_(budget?budget:core.resources().defaultVmLimit()),stepLimit_(steps),callLimit_(calls),owner_(core.acquireOwner()){reservation_=core_.resources().acquireApplication(budget_,owner_);if(!reservation_)copy(error_,sizeof error_,"system_memory_budget");}
   ~LuaRuntime(){releaseOwned();loading_=true;cleanup();if(state_)lua_close(state_);core_.resources().release(reservation_);}
   void fileContext(const char*file,Reader reader,void*context){reader_=reader;readerContext_=context;copy(base_,sizeof base_,file);auto end=strrchr(base_,'/');if(end==base_)end[1]=0;else if(end)*end=0;else strcpy(base_,"/");}
   bool stop(){if(stopped_)return !fault_;stopped_=true;bool ok=fault_?false:execute(3);releaseOwned();return ok;}
@@ -149,6 +149,6 @@ public:
     bool match=false;for(unsigned i=0;i<subscriptionCount_;++i)if(!strcmp(e.path,subscriptions_[i]))match=true;if(!match)return false;event_=&e;execute(2);event_=nullptr;return consumed_;}
   bool admitted()const{return reservation_!=0;}
   bool executing()const{return executing_;}const char*error()const{return error_;}
-  void describe(JsonObject o)const{o["engine"]="lua-5.4.8";o["native_call_depth_limit"]=LUAI_MAXCCALLS;o["owner"]=owner_;o["modules_loaded"]=moduleCount_;o["subscription_limit"]=16;o["base_path"]=base_;o["stopped"]=stopped_;o["memory_used"]=used_;o["memory_peak"]=peak_;o["memory_budget"]=budget_;o["instruction_budget"]=stepLimit_;o["system_call_budget"]=callLimit_;o["last_system_calls"]=calls_;o["last_instructions"]=steps_;o["fault"]=fault_;o["error"]=error_;auto subscriptions=o["subscriptions"].to<JsonArray>();for(unsigned i=0;i<subscriptionCount_;++i)subscriptions.add(subscriptions_[i]);}
+  void describe(JsonObject o)const{o["engine"]="lua-5.4.8";o["native_call_depth_limit"]=LUAI_MAXCCALLS;o["owner"]=owner_;o["modules_loaded"]=moduleCount_;o["subscription_limit"]=16;o["base_path"]=base_;o["stopped"]=stopped_;o["memory_used"]=used_;o["memory_peak"]=peak_;o["memory_budget"]=budget_;o["memory_region"]=core_.resources().allocationRegion(reservation_);o["instruction_budget"]=stepLimit_;o["system_call_budget"]=callLimit_;o["last_system_calls"]=calls_;o["last_instructions"]=steps_;o["fault"]=fault_;o["error"]=error_;auto subscriptions=o["subscriptions"].to<JsonArray>();for(unsigned i=0;i<subscriptionCount_;++i)subscriptions.add(subscriptions_[i]);}
 };
 }
