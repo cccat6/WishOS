@@ -1,0 +1,17 @@
+{
+  "version": "0.1.1",
+  "assets": [{
+    "type": "viewScreen", "id": "dashboard",
+    "style": {"bgColor":"#ffffff", "padding":"24dp"},
+    "layout": {"type":"flex", "flexFlow":"column", "gap":"20dp"},
+    "children": [
+      {"type":"image", "imageProps":{"src":"icon.bin"}},
+      {"type":"label", "labelProps":{"text":"Agentic Notes"}, "style":{"fontSize":"40sp","textColor":"#0000ff"}},
+      {"type":"container", "style":{"bgColor":"#ffff00","padding":"20dp","radius":"12dp"}, "layout":{"type":"flex","flexFlow":"column","gap":"12dp"}, "children":[
+        {"type":"label", "labelProps":{"text":"Ready"}, "style":{"fontSize":"32sp"}},
+        {"type":"label", "labelProps":{"text":"Your AI can replace this layout, its styles and its behavior."}, "style":{"fontSize":"20sp"}}
+      ]},
+      {"type":"label", "labelProps":{"text":"Hold B to speak. C refreshes. A returns."}, "style":{"fontSize":"20sp"}}
+    ]
+  }]
+}

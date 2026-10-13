@@ -1,0 +1,9 @@
+# Unified C6 connectivity image, 4 MiB Flash; initial full flash uses this table.
+# Name, Type, SubType, Offset, Size
+nvs,data,nvs,0x9000,0x5000
+otadata,data,ota,0xe000,0x2000
+app0,app,ota_0,0x10000,0x3D0000
+spiffs,data,spiffs,0x3E0000,0xB000
+zb_storage,data,fat,0x3EB000,0x4000
+zb_fct,data,fat,0x3EF000,0x1000
+coredump,data,coredump,0x3F0000,0x10000

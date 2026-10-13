@@ -1,0 +1,13 @@
+import {readFileSync} from 'node:fs';
+import {Resvg} from '@resvg/resvg-js';
+const [source,widthText,heightText]=process.argv.slice(2);
+if(!source)throw Error('SVG source required');
+const width=Number(widthText),height=Number(heightText);
+const svg=readFileSync(source);
+const opts={font:{loadSystemFonts:true}};
+if(width>0)opts.fitTo={mode:'width',value:width};else if(height>0)opts.fitTo={mode:'height',value:height};
+const renderer=new Resvg(svg,opts);
+if(renderer.width*renderer.height>16000000)throw Error('Host SVG pixel budget exceeded');
+const result=renderer.render();
+const header=Buffer.alloc(8);header.writeUInt32LE(result.width,0);header.writeUInt32LE(result.height,4);
+process.stdout.write(header);process.stdout.write(result.pixels);

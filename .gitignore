@@ -1,0 +1,15 @@
+build/
+__pycache__/
+*.pyc
+.venv/
+.env
+secrets*.json
+node_modules/
+hub/dist/
+hub/data/
+hub/config.local.json
+.env.local
+
+# Separate repositories and local hardware experiments
+/hub/
+/libraries/

@@ -1,0 +1,47 @@
+{
+  "format": "notes-port/1",
+  "id": "esp32-c3-runtime",
+  "entry": "Port.inc",
+  "fqbn": "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=custom,FlashMode=dio",
+  "flags": [
+    "-DSPI_DRIVER_SELECT=3",
+    "-DUSE_SD_CRC=1"
+  ],
+  "radio_mux": false,
+  "application_bytes": 2097152,
+  "partition_file": "partitions.csv",
+  "mcu": "ESP32-C3",
+  "required_pins": [],
+  "available_gpios": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "pin_constraints": {},
+  "display": null,
+  "hardware_fields": [],
+  "button_count": 0,
+  "exclude_sources": [
+    "Content.cpp",
+    "display"
+  ]
+}

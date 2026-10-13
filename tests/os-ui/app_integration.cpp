@@ -1,0 +1,81 @@
+#include "ScriptHost.h"
+#include "SystemFiles.h"
+#include "Workers.h"
+#include "HttpApplications.h"
+#include "RemoteRequests.h"
+#include <cassert>
+#include <thread>
+#include <vector>
+#include <chrono>
+#include <iostream>
+using namespace notesos;
+static Core*kernel;static ScriptHost*host;static Workers*pool;static HttpApplications*web;static RemoteRequests*remote;
+static unsigned effects=0;static std::vector<std::thread>threads;
+static JsonDocument parse(const char*s){JsonDocument d;assert(!deserializeJson(d,s));return d;}
+static const char*timers(const char*m,JsonObjectConst a,JsonObject o){if(!strcmp(m,"write"))return kernel->timer(a,o);if(!strcmp(m,"remove"))return kernel->removeTimer(a["id"]|0u)?nullptr:"not_found";kernel->listTimers(o["timers"].to<JsonArray>());return nullptr;}
+static const char*effect(const char*,JsonObjectConst a,JsonObject o){++effects;o["echo"]=a;return nullptr;}
+static void put(MemoryFiles&f,const char*path,const char*text){size_t n;assert(!f.write(path,0,(const uint8_t*)text,strlen(text),true,n));}
+static bool failPersist(const char*,size_t){return false;}
+int main(){
+ Core c;kernel=&c;Vfs v;MemoryFiles ram("ram","/storage/ram","ram");SystemFiles system;v.add(ram);v.add(system);ScriptHost h(c,v);host=&h;
+ Workers workers(c,v,{2,[](void(*fn)(void*),void*p,unsigned core){assert(core<2);threads.emplace_back([=]{fn(p);});return true;},[](void*){std::this_thread::yield();},nullptr});pool=&workers;
+ HttpApplications apps(c);web=&apps;RemoteRequests requests(c);remote=&requests;
+ c.add({"/sys/runtime","read,load,stop,configure", "",[](const char*m,JsonObjectConst a,JsonObject o){return host->invoke(m,a,o);}});
+ c.add({"/sys/workers","read,submit,cancel,release","",[](const char*m,JsonObjectConst a,JsonObject o){return pool->invoke(m,a,o);}});
+ c.add({"/net/http-server","read,route,respond,release","",[](const char*m,JsonObjectConst a,JsonObject o){return web->invoke(m,a,o);}});
+ c.add({"/services/remote","read,submit,complete,release","",[](const char*m,JsonObjectConst a,JsonObject o){return remote->invoke(m,a,o,kernel->now(),"test");}});
+ c.add({"/sys/timers","write,read,remove","",timers});c.add({"/effect","write","",effect});
+ c.setEventObserver([](const Event&e){return host->event(e);});
+ assert(!ram.mkdir("/app"));assert(!ram.mkdir("/app/lib"));
+ put(ram,"/app/lib/value.lua","return {amount=7}");
+ put(ram,"/app/lib/helper.lua","local v=notes.require('value.lua'); return {value=function() return v.amount end}");
+ put(ram,"/app/main.lua",R"lua(
+local helper=notes.require('lib/helper.lua')
+assert(helper==notes.require('lib/helper.lua'))
+assert(notes.resolve('ui/home.json')=='/storage/ram/app/ui/home.json')
+assert(notes.encode(notes.array({}))=='[]')
+assert(notes.decode('{"a":null}').a==notes.null)
+assert(notes.encode(notes.decode('[]'))=='[]')
+local bytes='\0\255hello\0';assert(notes.unhex(notes.hex(bytes))==bytes);assert(notes.unbase64(notes.base64(bytes))==bytes)
+assert(notes.decode(notes.encode({bytes=bytes})).bytes==bytes)
+assert(string.gmatch==nil and string.gsub==nil)
+function on_start()
+ local r=notes.call('/effect','write',{clear=notes.null,items=notes.array({})});assert(r.ok and r.result.echo.clear==notes.null and #r.result.echo.items==0)
+ notes.subscribe('/sys/timers');local t=notes.call('/sys/timers','write',{delay_ms=10,period_ms=10});assert(t.ok);timer=t.result.id
+end
+function on_event(e) if e.source=='/sys/timers' and e.data.id==timer then notes.call('/effect','write',{value=helper.value()});return true end end
+function on_stop() notes.call('/effect','write',{stopped=true}) end
+)lua");
+ JsonDocument out;auto a=parse(R"({"file":"/storage/ram/app/main.lua","memory_bytes":49152})");auto e=h.invoke("load",a.as<JsonObjectConst>(),out.to<JsonObject>());if(e){std::cerr<<e<<":"<<(out["detail"]|"")<<":"<<(out["error"]|"")<<"\n";}assert(!e&&effects==1);
+ uint32_t cursor=c.sequence();c.clock(10);c.tick();c.dispatch(cursor);assert(effects==2);
+ // Failed replacement preparation preserves the live app and its owned timer.
+ auto bad=parse(R"({"source":"this is not lua"})");assert(h.invoke("load",bad.as<JsonObjectConst>(),out.to<JsonObject>()));c.clock(20);c.tick();c.dispatch(cursor);assert(effects==3);
+ JsonDocument empty;assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(effects==4);c.clock(30);c.tick();c.dispatch(cursor);assert(effects==4);c.listTimers(out["timers"].to<JsonArray>());assert(out["timers"].size()==0);
+ // Replacing one app cannot accidentally retain or collide with the previous timer IDs.
+ assert(!h.invoke("load",a.as<JsonObjectConst>(),out.to<JsonObject>()));assert(!h.invoke("load",a.as<JsonObjectConst>(),out.to<JsonObject>()));c.listTimers(out["timers"].to<JsonArray>());assert(out["timers"].size()==1);
+ assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));
+ // Startup validation and persistence are atomic; RAM cannot be a reboot dependency.
+ auto startup=parse(R"({"startup":{"auto_start":true,"file":"/storage/ram/app/main.lua"}})");assert(h.invoke("configure",startup.as<JsonObjectConst>(),out.to<JsonObject>()));
+ startup=parse(R"({"startup":{"auto_start":false,"file":"/system/main.lua"},"persist":true})");assert(h.invoke("configure",startup.as<JsonObjectConst>(),out.to<JsonObject>(),failPersist));h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["configuration_revision"]==1);
+ // Dynamic HTTP route -> event -> Lua read/response, without invoking a remote Agent.
+ auto httpScript=parse(R"({"source":"function on_start() notes.subscribe('/net/http-server'); assert(notes.call('/net/http-server','route',{path='/app/test',dynamic=true}).ok) end function on_event(e) if e.source=='/net/http-server' then local r=notes.call('/net/http-server','read',{id=e.data.id}); assert(r.ok); notes.call('/net/http-server','respond',{id=e.data.id,body=r.result.body..'!'}); return true end end"})");
+ assert(!h.invoke("load",httpScript.as<JsonObjectConst>(),out.to<JsonObject>()));cursor=c.sequence();assert(apps.handle("/app/test","GET","hello",31,out.to<JsonObject>()));c.dispatch(cursor);auto q=parse(R"({"id":1})");assert(!apps.invoke("read",q.as<JsonObjectConst>(),out.to<JsonObject>()));assert(out["body"]=="hello!"&&out["done"]==true);
+ // A running compute worker cannot call a driver; normal main-loop timers continue.
+ auto work=parse(R"({"source":"function compute(x) local sum=0 for i=1,x.n do sum=sum+i end return {sum=sum,clear=notes.null} end","input":{"n":10000},"core":1,"instruction_budget":1000000})");
+ assert(!workers.invoke("submit",work.as<JsonObjectConst>(),out.to<JsonObject>()));auto id=out["id"].as<unsigned>();assert(out["core"]==1);
+ auto timer=parse(R"({"id":123,"delay_ms":1,"period_ms":10})");assert(!c.timer(timer.as<JsonObjectConst>(),out.to<JsonObject>()));for(unsigned n=0;n<100;++n){c.clock(32+n);c.tick();workers.poll();std::this_thread::yield();}for(auto&t:threads)t.join();threads.clear();workers.poll();q["id"]=id;assert(!workers.invoke("read",q.as<JsonObjectConst>(),out.to<JsonObject>()));assert(out["ok"]==true&&out["result"]["sum"]==50005000);assert(!workers.invoke("release",q.as<JsonObjectConst>(),out.to<JsonObject>()));
+ unsigned before=effects;work=parse(R"({"source":"function compute(x) return notes.call('/effect','write',{}) end","input":{}})");assert(!workers.invoke("submit",work.as<JsonObjectConst>(),out.to<JsonObject>()));q["id"]=out["id"];for(auto&t:threads)t.join();threads.clear();assert(!workers.invoke("read",q.as<JsonObjectConst>(),out.to<JsonObject>()));assert(out["ok"]==false&&strstr(out["error"].as<const char*>(),"worker_system_calls"));assert(effects==before);workers.invoke("release",q.as<JsonObjectConst>(),out.to<JsonObject>());
+ work=parse(R"({"source":"function compute(x) while true do end end","instruction_budget":3000})");assert(!workers.invoke("submit",work.as<JsonObjectConst>(),out.to<JsonObject>()));q["id"]=out["id"];for(auto&t:threads)t.join();threads.clear();workers.invoke("read",q.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["ok"]==false);workers.invoke("release",q.as<JsonObjectConst>(),out.to<JsonObject>());
+ // Cancellation is cooperative; unavailable affinity never consumes a slot.
+ work=parse(R"({"source":"function compute(x) while true do end end","core":2})");assert(workers.invoke("submit",work.as<JsonObjectConst>(),out.to<JsonObject>()));
+ work["core"]=0;work["instruction_budget"]=10000000;assert(!workers.invoke("submit",work.as<JsonObjectConst>(),out.to<JsonObject>()));q["id"]=out["id"];workers.invoke("cancel",q.as<JsonObjectConst>(),out.to<JsonObject>());for(auto&t:threads)t.join();threads.clear();workers.invoke("read",q.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["ok"]==false&&out["cancel_requested"]==true);workers.invoke("release",q.as<JsonObjectConst>(),out.to<JsonObject>());
+ // A fault after timer creation releases the timer rather than leaving an orphaned trigger.
+ auto fault=parse(R"({"source":"function on_start() notes.call('/sys/timers','write',{delay_ms=10}); error('stop') end"})");assert(h.invoke("load",fault.as<JsonObjectConst>(),out.to<JsonObject>()));c.listTimers(out["timers"].to<JsonArray>());assert(out["timers"].size()==1&&out["timers"][0]["id"]==123);
+ assert(!h.restore(R"({"auto_start":true,"file":"/storage/ram/app/main.lua","memory_bytes":32768,"instruction_budget":20000,"delay_ms":0})"));
+ // Missing startup code is a reported boot failure, not a failure of the system event loop.
+ assert(h.restore(R"({"auto_start":true,"file":"/system/missing.lua","memory_bytes":32768,"instruction_budget":20000,"delay_ms":0})"));h.scheduleBoot(200);h.tick(200);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["boot_pending"]==false&&out["boot_error"]=="not_found");
+ // An online next-boot edit does not silently retarget a previously scheduled boot snapshot.
+ assert(h.restore(R"({"auto_start":true,"file":"/system/default-app.json","memory_bytes":32768,"instruction_budget":20000,"delay_ms":10})"));h.scheduleBoot(300);
+ auto nextBoot=parse(R"({"startup":{"file":"/system/missing.lua"}})");assert(!h.invoke("configure",nextBoot.as<JsonObjectConst>(),out.to<JsonObject>()));h.tick(310);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["boot_error"]=="script_load_failed");
+ std::cout<<"Runtime modules, JSON/binary fidelity, owned timers, startup validation, HTTP event applications and isolated workers passed\n";
+}

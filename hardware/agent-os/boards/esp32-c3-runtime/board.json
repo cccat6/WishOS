@@ -1,0 +1,19 @@
+{
+  "format": "notes-board/1",
+  "id": "esp32-c3-runtime",
+  "name": "ESP32-C3 runtime development board",
+  "port": "../../ports/esp32-c3-runtime",
+  "mcu": "ESP32-C3",
+  "pins": {},
+  "hardware": {},
+  "buttons": [],
+  "display": null,
+  "assets": {
+    "/default-app.json": "assets/default-app.json",
+    "/defaults.json": "assets/defaults.json",
+    "/setup.html": "assets/setup.html"
+  },
+  "startup": {
+    "ui": "/system/default-app.json"
+  }
+}

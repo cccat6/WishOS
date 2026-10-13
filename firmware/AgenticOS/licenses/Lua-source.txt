@@ -1,0 +1,5 @@
+Lua 5.4.8 from https://www.lua.org/ftp/lua-5.4.8.tar.gz
+SHA256 4f18ddae154e793e46eeab727c59ef1c0c0c2b744e7b94219710d76f530629ae
+License and copyright: see src/lua/lua.h. Standalone compiler/interpreter and host OS libraries are not included.
+
+Local portability patch: luaconf.h supplies GCC long-long limit macros when ESP-IDF newlib hides the C99 macros from C++ translation units. Numeric ABI remains 64-bit integer / double.
