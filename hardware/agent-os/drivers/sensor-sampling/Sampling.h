@@ -7,6 +7,7 @@ public:
  virtual ~SampleBackend()=default;
  virtual void describe(JsonObject)const=0;
  virtual const char*configure(JsonObjectConst,uint64_t)=0;
+ virtual void configuration(JsonObject)const{}
  virtual const char*begin(uint64_t)=0;
  virtual SampleStep poll(uint64_t)=0;
  virtual const char*cancel()=0;
@@ -35,8 +36,8 @@ public:
  }
  const char*invoke(const char*method,JsonObjectConst a,JsonObject out){
   if(!strcmp(method,"describe")){describe(out);return nullptr;}
-  if(!strcmp(method,"read")){out["valid"]=valid_;out["pending"]=pending_;out["cleanup_pending"]=cleanup_;out["last_error"]=error_?error_:"";if(valid_){backend_.values(out);out["sampled_at_ms"]=sampled_;out["_meta"]["sampled_at_ms"]=sampled_;}return nullptr;}
-  if(!strcmp(method,"configure")){if(pending_||cleanup_)return "sensor_busy";if(auto e=backend_.configure(a,core_.now()))return e;valid_=false;return nullptr;}
+  if(!strcmp(method,"read")){out["valid"]=valid_;out["pending"]=pending_;out["cleanup_pending"]=cleanup_;out["last_error"]=error_?error_:"";backend_.configuration(out["configuration"].to<JsonObject>());if(valid_){backend_.values(out);out["sampled_at_ms"]=sampled_;out["_meta"]["sampled_at_ms"]=sampled_;}return nullptr;}
+  if(!strcmp(method,"configure")){if(pending_||cleanup_)return "sensor_busy";if(auto e=backend_.configure(a,core_.now()))return e;valid_=false;backend_.configuration(out["configuration"].to<JsonObject>());return nullptr;}
   if(!strcmp(method,"cancel")){
    for(auto f:a)if(strcmp(f.key().c_str(),"operation_id"))return "unknown_sample_argument";
    if(pending_&&core_.callerOwner()&&core_.callerOwner()!=owner_)return "operation_owned_by_other";

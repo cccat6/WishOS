@@ -18,6 +18,9 @@ Implemented adapters:
 The `Sampling` helper exposes `describe`, `read`, `configure`, `measure`, `cancel`.
 `describe` and `read` perform no bus access. `read` returns the last valid sample
 and its timestamp; a later failed conversion does not rewrite that sample.
+`measure` acquires a sensor result: it triggers a conversion on GXHTC3 and reads
+available output from continuously configured IMU/magnetometer/touch controllers.
+The acquisition timestamp and any hardware timestamp are distinct.
 `notes.request(path, "measure", {}, callback)` receives correlated `completed` or
 `failed` events. Ordinary runtime timers/rules choose sampling schedules and
 threshold actions. An application does not need to know I2C addresses or registers.
@@ -35,7 +38,9 @@ configuration selects `Rev09` or `RevA`; no MCU-model inference or silent rate
 rounding occurs. Normal measurements never enable self-test. Application heading,
 sensor fusion, gesture interpretation, UI and environmental dashboards stay in
 runtime applications. Configuring a continuous IMU/magnetometer measurement mode
-is distinct from requesting a snapshot; disabling IMU axes is explicit configuration.
+is distinct from requesting a snapshot. `enabled=false` explicitly places the
+IMU or magnetometer in its inactive mode while retaining its selected ranges/rate;
+re-enabling and obtaining a valid new sample remain separate operations.
 
 Sources used for register behavior:
 
