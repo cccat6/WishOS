@@ -3,23 +3,6 @@
 #include <math.h>
 #include <initializer_list>
 namespace notesos {
-struct WifiChange{bool power=false,save=false;int8_t quarterDbm=0;int saveMode=0;};
-inline const char*validateWifiChange(JsonObjectConst a,WifiChange&c){
-  for(auto field:a)if(strcmp(field.key().c_str(),"tx_power_dbm")&&strcmp(field.key().c_str(),"power_save"))return "unknown_driver_setting";
-  if(a.containsKey("tx_power_dbm")){
-    if(!a["tx_power_dbm"].is<double>())return "wifi_power_type";
-    double v=a["tx_power_dbm"].as<double>();if(!isfinite(v)||v<2||v>20)return "wifi_power_range";
-    if(v*4!=floor(v*4))return "wifi_power_not_representable";
-    c.power=true;c.quarterDbm=int8_t(v*4);
-  }
-  if(a.containsKey("power_save")){
-    if(!a["power_save"].is<const char*>())return "invalid_power_save";
-    const char*s=a["power_save"];c.save=true;
-    if(!strcmp(s,"off"))c.saveMode=0;else if(!strcmp(s,"minimum"))c.saveMode=1;
-    else if(!strcmp(s,"maximum"))c.saveMode=2;else return "invalid_power_save";
-  }
-  return nullptr;
-}
 struct ClockChange{bool cpu=false,wall=false;uint32_t cpuMhz=0;int64_t unixSeconds=0;};
 inline const char*validateClockChange(JsonObjectConst a,ClockChange&c,std::initializer_list<uint32_t> allowed={}){
   for(auto field:a)if(strcmp(field.key().c_str(),"cpu_mhz")&&strcmp(field.key().c_str(),"unix_s"))return "unknown_driver_setting";

@@ -1,7 +1,7 @@
 #pragma once
 #include "Policy.h"
 #include <ctype.h>
-#include "DriverRequests.h"
+#include <math.h>
 namespace notesos {
 struct WifiProfile {
  char id[25]{},ssid[33]{},password[65]{};
@@ -10,24 +10,23 @@ struct WifiProfile {
 struct WifiConfig {
  static constexpr unsigned Capacity=8;
  struct Range{const char*key;unsigned low,high;};
- inline static constexpr Range Ranges[]={{"scan_interval_ms",1000,86400000},{"retry_backoff_ms",100,86400000},{"connect_timeout_ms",1000,120000},{"min_dwell_ms",0,86400000},{"candidate_confirmations",1,10},{"rssi_hysteresis_db",0,50},{"ap_channel",1,13},{"ap_max_clients",1,4}};
+ inline static constexpr Range Ranges[]={{"scan_interval_ms",1000,86400000},{"retry_backoff_ms",100,86400000},{"connect_timeout_ms",1000,120000},{"min_dwell_ms",0,86400000},{"candidate_confirmations",1,10},{"rssi_hysteresis_db",0,50}};
  static void schema(JsonObject out){
    out["scope"]="system";out["profile_limit"]=Capacity;out["configuration_method"]="configure";
    auto fields=out["settings"].to<JsonObject>();
    for(auto key:{"enabled","auto_connect","roam_same_priority","roam_with_sessions","ap_enabled"})fields[key]["type"]="boolean";
    for(auto r:Ranges){auto f=fields[r.key].to<JsonObject>();f["type"]="integer";f["minimum"]=r.low;f["maximum"]=r.high;}
    fields["selection"]["choices"]="auto,manual";fields["manual_profile"]["type"]="profile_id";fields["switch_policy"]["choices"]="on_disconnect,prefer_priority";
-   fields["power_save"]["choices"]="off,minimum,maximum";fields["tx_power_dbm"]["minimum"]=2;fields["tx_power_dbm"]["maximum"]=20;fields["tx_power_dbm"]["multipleOf"]=0.25;
    for(auto key:{"ap_ssid","ap_password"})fields[key]["type"]="string";
    out["manual_holds"]="until_resume,until_disconnect,timed";out["manual_hold_default"]="until_disconnect";out["ssid_max_bytes"]=32;out["profile_priority_min"]=-1000;out["profile_priority_max"]=1000;out["profile_update"]="omitted_password_preserved_empty_password_is_open";
  }
 
  WifiProfile profiles[Capacity];unsigned count=0;
  bool enabled=true,autoConnect=true,preferPriority=false,roamSamePriority=false,roamWithSessions=false;
- bool apEnabled=true;char apSsid[33]{},apPassword[64]{};uint8_t apChannel=1,apClients=4;
+ bool apEnabled=true;char apSsid[33]{},apPassword[64]{};uint8_t apChannel=1,apClients=1;
  char selection[8]="auto",manualProfile[25]{};
  uint32_t scanMs=60000,retryMs=30000,connectMs=15000,dwellMs=60000;uint8_t confirmations=2,margin=8;
- double powerDbm=20;char powerSave[8]="minimum";
+ double powerDbm=0;char powerSave[8]="off";
  const WifiProfile*find(const char*id)const{for(unsigned i=0;i<count;++i)if(!strcmp(profiles[i].id,id))return &profiles[i];return nullptr;}
  static bool idValid(const char*s){if(!*s||strlen(s)>24)return false;for(;*s;++s)if(!isalnum((unsigned char)*s)&&*s!='_'&&*s!='-')return false;return true;}
  static bool passwordValid(const char*s){size_t n=strlen(s);if(!n)return true;if(n>=8&&n<=63)return true;if(n!=64)return false;for(;*s;++s)if(!isxdigit((unsigned char)*s))return false;return true;}
@@ -59,7 +58,11 @@ struct WifiConfig {
    for(auto r:Ranges)if(!range(r.key,r.low,r.high))return "wifi_setting_range";
    if(!Policies::choice("auto,manual",s["selection"]|"")||!Policies::choice("on_disconnect,prefer_priority",s["switch_policy"]|""))return "wifi_selection";
    if(!s["manual_profile"].is<const char*>()||strlen(s["manual_profile"])>24||!s["ap_ssid"].is<const char*>()||strlen(s["ap_ssid"])>32||!s["ap_password"].is<const char*>()||strlen(s["ap_password"])>63||!passwordValid(s["ap_password"]))return "wifi_ap_or_profile_limit";
-   JsonDocument tuning;tuning["tx_power_dbm"]=s["tx_power_dbm"];tuning["power_save"]=s["power_save"];WifiChange change;if(auto e=validateWifiChange(tuning.as<JsonObjectConst>(),change))return e;
+   // Validate representation here. Hardware ranges and supported modes are
+   // checked by the installed backend, before persistence or any radio changes.
+   if(!s["tx_power_dbm"].is<double>()||!isfinite(s["tx_power_dbm"].as<double>()))return "wifi_power_type";
+   if(!s["power_save"].is<const char*>()||strlen(s["power_save"])>=sizeof c.powerSave)return "invalid_power_save";
+   if(!range("ap_channel",1,UINT8_MAX)||!range("ap_max_clients",1,UINT8_MAX))return "wifi_setting_range";
    c.enabled=s["enabled"];c.autoConnect=s["auto_connect"];c.preferPriority=!strcmp(s["switch_policy"],"prefer_priority");c.roamSamePriority=s["roam_same_priority"];c.roamWithSessions=s["roam_with_sessions"];
    strcpy(c.selection,s["selection"]);strcpy(c.manualProfile,s["manual_profile"]);strcpy(c.apSsid,s["ap_ssid"]);strcpy(c.apPassword,s["ap_password"]);c.apEnabled=s["ap_enabled"];c.apChannel=s["ap_channel"];c.apClients=s["ap_max_clients"];
    c.scanMs=s["scan_interval_ms"];c.retryMs=s["retry_backoff_ms"];c.connectMs=s["connect_timeout_ms"];c.dwellMs=s["min_dwell_ms"];c.confirmations=s["candidate_confirmations"];c.margin=s["rssi_hysteresis_db"];c.powerDbm=s["tx_power_dbm"];strcpy(c.powerSave,s["power_save"]);

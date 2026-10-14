@@ -6,6 +6,9 @@ namespace notesos {
 class WifiBackend {
 public:
  virtual ~WifiBackend()=default;
+ virtual void defaults(WifiConfig&)const=0;
+ virtual const char*validate(const WifiConfig&)const=0;
+ virtual void describeConfiguration(JsonObject fields)const=0;
  virtual const char*apply(const WifiConfig&)=0;
  virtual bool connected()const=0;
  virtual const char*ssid()=0;
@@ -60,11 +63,12 @@ class WifiManager {
  }
 public:
  using Persist=bool(*)(const char*,size_t);
- WifiManager(WifiBackend&h,Core&c):hw_(h),core_(c){}
+ WifiManager(WifiBackend&h,Core&c):hw_(h),core_(c){hw_.defaults(config_);}
+ void describe(JsonObject out)const{WifiConfig::schema(out);hw_.describeConfiguration(out["settings"].as<JsonObject>());}
  bool scanning()const{return scanning_;}
  const WifiConfig&config()const{return config_;}uint32_t revision()const{return revision_;}
  bool restore(const char*text){JsonDocument d;if(deserializeJson(d,text)){restoreOk_=false;return false;}auto candidate=new(std::nothrow) WifiConfig;
-   if(!candidate){restoreOk_=false;return false;}auto e=WifiConfig::parse(d.as<JsonObjectConst>(),*candidate);if(!e){config_=*candidate;configuredSelection();dirty_=true;}delete candidate;restoreOk_=!e;return !e;
+   if(!candidate){restoreOk_=false;return false;}auto e=WifiConfig::parse(d.as<JsonObjectConst>(),*candidate);if(!e)e=hw_.validate(*candidate);if(!e){config_=*candidate;configuredSelection();dirty_=true;}delete candidate;restoreOk_=!e;return !e;
  }
  const char*configure(JsonObjectConst a,JsonObject out,Persist persist=nullptr){
    for(auto f:a)if(!Policies::choice("settings,profiles,persist,expected_revision,allow_disruption",f.key().c_str()))return "unknown_wifi_field";
@@ -77,7 +81,7 @@ public:
    for(auto p:a["settings"].as<JsonObjectConst>())next["settings"][p.key()]=p.value();
    if(a.containsKey("profiles"))next["profiles"]=a["profiles"];
    auto candidate=new(std::nothrow) WifiConfig;if(!candidate)return "memory_low";
-   if(auto e=WifiConfig::parse(next.as<JsonObjectConst>(),*candidate)){delete candidate;return e;}
+   auto error=WifiConfig::parse(next.as<JsonObjectConst>(),*candidate);if(!error)error=hw_.validate(*candidate);if(error){delete candidate;return error;}
    if(measureJson(next)>4096){delete candidate;return "wifi_config_limit";}
    if(a["persist"]|false){if(!persist){delete candidate;return "persistence_unavailable";}char*bytes=(char*)malloc(measureJson(next)+1);if(!bytes){delete candidate;return "memory_low";}
      size_t n=serializeJson(next,bytes,measureJson(next)+1);bool ok=persist(bytes,n);free(bytes);if(!ok){delete candidate;return "persistence_failed";}}

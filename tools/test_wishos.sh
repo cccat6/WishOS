@@ -74,6 +74,7 @@ cmake -S tests/os-ui -B build/os-ui -G Ninja -DCMAKE_C_COMPILER="${CXX%++}" -DCM
 cmake --build build/os-ui -j 4
 build/os-ui/notes_ui_test
 build/os-ui/notes_suite_test
+for surface in 128x64 320x240 239x321; do build/os-ui/notes_portable_ui_$surface; done
 build/os-ui/notes_lua_test
 build/os-ui/notes_callback_test
 build/os-ui/notes_audio_test

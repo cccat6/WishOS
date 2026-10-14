@@ -30,6 +30,15 @@ try:
  board=rpc('/sys/board')['result'];assert board['mcu']=='ESP32-C3';report['board']=board
  report['initial_stats']=rpc('/sys/stats')['result'];report['checks'].append('identity_and_runtime_boot')
  report['initial_resources']=rpc('/sys/resources')['result']
+ # Driver RF limits are discoverable; rejecting a complete settings update
+ # must preserve unrelated selection policy and the current revision.
+ schema=rpc('/dev/wifi','describe')['result']
+ before=rpc('/dev/wifi')['result']
+ rejected=rpc('/dev/wifi','configure',{'settings':{'auto_connect':not before['configured']['settings']['auto_connect'],'tx_power_dbm':schema['settings']['tx_power_dbm']['maximum']+1}},ok=False)
+ assert not rejected['ok']
+ after=rpc('/dev/wifi')['result']
+ assert before['revision']==after['revision'] and before['configured']==after['configured']
+ report['checks'].append('wifi_adapter_schema_and_atomic_rejection')
  if a.wifi_config:
   rpc("/dev/wifi","configure",{"settings":{"ap_enabled":False,"tx_power_dbm":8.5,"power_save":"off","connect_timeout_ms":30000}})
   config=json.loads(a.wifi_config.read_text());rpc('/dev/wifi','connect',{'ssid':config['ssid'],'password':config['password'],'persist':False,'hold':'until_resume'})

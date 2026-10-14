@@ -8,12 +8,13 @@
 #include <lvgl.h>
 #include "Core.h"
 #include "PresentationState.h"
+#include "DisplayScheduler.h"
 #include "drivers/e6/E6Profiles.h"
 #include "ScriptHost.h"
 #include "Vfs.h"
 #include "compositions/agentic-notes-e6/Defaults.h"
 #include "SystemFiles.h"
-#include "display/Content.h"
+#include "drivers/e6/scene/Content.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -31,7 +32,7 @@ static unsigned uiQueueCalls=0;static bool deferUi=false;static ScriptHost*callb
 static unsigned micStarts=0;
 static const char*defaultUiDriver(){return "test.rgb565";}
 static const char*validateUiDriver(const char*){return nullptr;}
-static const char*queueUi(const char*,const char*,bool,JsonObject out,const char*,const UiView*,PresentationState::Stamp stamp){if(deferUi)return "display_busy";++uiQueueCalls;lastUiStamp=stamp;out["job_id"]=uiQueueCalls;out["status"]="queued";return nullptr;}
+static DisplayAdmission queueUi(const char*,const char*,bool,JsonObject out,const char*,const UiView*,PresentationState::Stamp stamp){if(deferUi)return DisplayAdmission::deferred("display_busy");++uiQueueCalls;lastUiStamp=stamp;out["job_id"]=uiQueueCalls;out["status"]="queued";return {};}
 }
 int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  // Native compositions may install additional image decoders before the UI starts.

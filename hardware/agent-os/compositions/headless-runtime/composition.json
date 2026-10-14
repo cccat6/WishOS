@@ -11,7 +11,6 @@
   "display": null,
   "button_count": 0,
   "exclude_sources": [
-    "Content.cpp",
     "display",
     "UiMemory.cpp"
   ],

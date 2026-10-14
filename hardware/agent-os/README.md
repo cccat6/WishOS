@@ -157,6 +157,13 @@ at the top of that header. They report transport, controller or frame-latch comp
 rather than guessing from elapsed time. Driver callbacks set flags or queue native
 notifications; the service loop delivers application events.
 
+Admission distinguishes accepted work, temporary queue backpressure and rejection.
+The UI retries only backpressure; policy rejection or a failed native device ends
+the corresponding application request with a failure callback. Adapter `readiness()`
+distinguishes a temporarily unavailable device from one requiring recovery. A fault
+settles queued requests without starting another hardware transfer. It never makes
+an in-progress DMA transfer or EPD refresh interruptible.
+
 The E6 engine, fixed profiles and palettes reside in
 `hardware/agent-os/drivers/e6/`. The C6 package binds those engines to GPIO/SPI,
 file/scene/UI sources and power in `compositions/agentic-notes-e6/E6Display.inc` and
@@ -166,6 +173,9 @@ uses that state without referencing an E6 phase or GPIO.
 The LVGL renderer reads geometry from the selected board package and emits RGB565
 regions; each native sink performs its own packing/rotation/transport. It is not
 required to use E6's column bands or keep a full frame in RAM.
+Portable text rendering lives in `firmware/WishOS/src/display/NativeText.*` and
+has no E6 dependency. The six-color scene codec, native column layout and legacy
+scene drawing live in the selected E6 driver under `drivers/e6/scene/`.
 
 To port another screen, implement/compose its native engine and binding in a new
 port, describe its actual profiles/formats/completion conditions, and select that

@@ -15,6 +15,12 @@ profile, but not a disabled one. Hidden profiles can be attempted without appear
 in a scan; failed attempts receive the same backoff. A working connection is never
 replaced merely to guess that a hidden SSID may be present.
 
+RF power ranges/steps, AP channel choices and client limits come from the installed
+wireless adapter. Do not copy ESP32 values into a portable application. The manager
+uses that adapter's defaults, schema and validation for both online edits and restored
+settings; a configuration accepted by another device can be rejected before any
+radio changes. SSID priority and manual selection behavior remain common system logic.
+
 `profile_set` merges fields by ID. Omitted password preserves the existing password;
 empty password explicitly means an open network. `profile_remove` forgets a profile.
 These methods save by default; pass `persist:false` for a temporary edit. SSID length

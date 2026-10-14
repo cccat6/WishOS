@@ -1,8 +1,9 @@
 # Native driver contributions
 
 Put a reusable controller/protocol implementation in `drivers/<id>/`, with a
-`driver.json` manifest. Pins, board power topology and interactions belong to the
-MCU platform/device/runtime package respectively. The kernel knows resource methods and
+`driver.json` manifest. Pins and power topology belong to the specific device
+configuration; silicon restrictions belong to the MCU platform, and interactions
+belong to runtime applications. The kernel knows resource methods and
 completion contracts, not a closed list of sensor or display model names.
 
 ```json
@@ -37,6 +38,9 @@ The native device composition binds the implementation to buses and pins, initia
 electrically correct order, and registers its actual capabilities in `Core`:
 
 - Describe supported parameters, read/write restrictions, units and settings scope.
+  Shared policy schemas support signed `integer` and fractional `number` ranges;
+  the adapter defines the valid range. Online updates and restored settings use
+  the same validation, without clamping or assuming all values are positive.
 - Validate a complete change before applying it; use the same validation on restore.
 - Advertise asynchronous operations with identities, terminal receipts and cleanup.
 - Use the bus arbiter for all I/O, including probes/status/recovery; release it while

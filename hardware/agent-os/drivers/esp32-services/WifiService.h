@@ -5,6 +5,9 @@ class BoardWifi:public WifiBackend {
  bool apStarted_=false;char apName_[33]{},apPass_[64]{};uint8_t apChannel_=0,apClients_=0;
  String observedSsid_;WifiProfile queued_;bool joinQueued_=false;
 public:
+ void defaults(WifiConfig&c)const override{EspWifiCapabilities::defaults(c);}
+ const char*validate(const WifiConfig&c)const override{return EspWifiCapabilities::validate(c);}
+ void describeConfiguration(JsonObject fields)const override{EspWifiCapabilities::describe(fields);}
  const char*apply(const WifiConfig&c)override{
    WiFi.persistent(false);WiFi.setAutoReconnect(false);
    if(!c.enabled){disconnect(true);return nullptr;}
@@ -56,7 +59,7 @@ static const char*profileChange(const char*m,JsonObjectConst a,JsonObject out){
  return wifiManager.configure(change.as<JsonObjectConst>(),out,persistWifi);
 }
 static const char*wifiHandler(const char*m,JsonObjectConst a,JsonObject out){
- if(!strcmp(m,"describe")){WifiConfig::schema(out);return nullptr;}
+ if(!strcmp(m,"describe")){wifiManager.describe(out);return nullptr;}
  if(!strcmp(m,"configure")||!strcmp(m,"write")){
    if(!strcmp(m,"configure"))return wifiManager.configure(a,out,persistWifi);
    // Existing write(power/save) calls remain valid; configure owns broader policy.

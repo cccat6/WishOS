@@ -34,6 +34,11 @@ public:
   const char *id,*mount,*medium;bool persistent,removable,writable;
   FileProvider(const char*i,const char*m,const char*t,bool p,bool r,bool w):id(i),mount(m),medium(t),persistent(p),removable(r),writable(w){}
   virtual ~FileProvider()=default;
+  // One namespace conversion for all provider users, including root mounts.
+  // It is purely lexical and cannot prepare, mount or access the medium.
+  bool absolutePath(const char*relative,char*out,size_t capacity)const{
+    return relative&&relative[0]=='/'&&normalizePath(mount,relative+1,out,capacity,mount);
+  }
   virtual const char*operations()const{return "stat,read,list";}
   virtual uint64_t changeRevision()const{return 0;}
   virtual bool caseInsensitive()const{return false;}
@@ -84,8 +89,8 @@ public:
   bool add(FileProvider &p){if(count_==8)return false;for(size_t i=0;i<count_;++i)if(!strcmp(providers_[i]->mount,p.mount)||!strcmp(providers_[i]->id,p.id))return false;providers_[count_++]=&p;return true;}
   FileProvider* resolve(const char* path,const char*&relative)const{
     FileProvider*best=nullptr;size_t longest=0;
-    for(size_t i=0;i<count_;++i){auto p=providers_[i];size_t n=strlen(p->mount);if(n>=longest&&!strncmp(path,p->mount,n)&&(path[n]=='/'||!path[n])){best=p;longest=n;}}
-    relative=best?(path[longest]?path+longest:"/"):nullptr;return best;
+    for(size_t i=0;i<count_;++i){auto p=providers_[i];size_t n=strlen(p->mount);if(n>=longest&&pathWithin(p->mount,path)){best=p;longest=n;}}
+    relative=best?(!strcmp(best->mount,"/")?path:path[longest]?path+longest:"/"):nullptr;return best;
   }
   FileProvider* get(const char*id)const{for(size_t i=0;i<count_;++i)if(!strcmp(providers_[i]->id,id))return providers_[i];return nullptr;}
   void describe(JsonArray out)const{for(size_t i=0;i<count_;++i){auto p=providers_[i];auto x=out.add<JsonObject>();x["id"]=p->id;x["mount"]=p->mount;x["medium"]=p->medium;x["persistent"]=p->persistent;x["removable"]=p->removable;x["writable"]=p->writable;x["durable_writes"]=p->durableWrites();x["case_insensitive"]=p->caseInsensitive();x["available"]=p->available();x["operations"]=p->operations();p->describe(x);}}

@@ -21,5 +21,17 @@ int main(){
  assert(!call("read",R"({"file":"/storage/ram/renamed","offset":"4294967300"})"));assert(result["hex"]=="");
  assert(call("read",R"({"file":"/storage/ram/renamed","path":"/storage/ram/other"})"));
  assert(!call("remove",R"({"file":"/storage/ram/renamed"})"));
+ // A device may mount its default provider at root; nested mounts still win.
+ MemoryFiles root("root","/","ram");assert(vfs.add(root));const char*relative=nullptr;
+ assert(vfs.resolve("/",relative)==&root&&!strcmp(relative,"/"));
+ assert(vfs.resolve("/book",relative)==&root&&!strcmp(relative,"/book"));
+ assert(vfs.resolve("/storage/ram/new",relative)==&memory&&!strcmp(relative,"/new"));
+ assert(vfs.resolve("/storage/rambling",relative)==&root&&!strcmp(relative,"/storage/rambling"));
+ char absolute[256];assert(root.absolutePath("/book",absolute,sizeof absolute)&&!strcmp(absolute,"/book"));
+ assert(memory.absolutePath("/book",absolute,sizeof absolute)&&!strcmp(absolute,"/storage/ram/book"));
+ assert(!memory.absolutePath("/../outside",absolute,sizeof absolute));
+ assert(!call("write",R"({"file":"/book","text":"root data"})"));
+ assert(vfs.lockRead("/book",19));assert(!strcmp(call("remove",R"({"file":"/book"})"),"file_in_use"));
+ vfs.release(19);assert(!call("read",R"({"file":"/book"})"));assert(result["hex"]=="726f6f742064617461");
  std::cout<<"Shared file API preserves binary text, validation-before-effects, leases, exclusive create, resize, flush, rename and 64-bit EOF offsets\n";
 }

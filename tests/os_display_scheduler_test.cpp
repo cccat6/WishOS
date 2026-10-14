@@ -10,7 +10,7 @@ struct TestAdapter {
  unsigned starts=0,polls=0,leases=0,disposed=0,suspends=0;
  bool defer=false,reject=false,ready=true,done=false,failComplete=false,nativeReadsSource=false,scanoutRunning=false;
  explicit TestAdapter(Type t,PresentationState&v):type(t),views(v){}
- bool available()const{return ready;}
+ DisplayBegin readiness()const{return failComplete?DisplayBegin::failed("native_transfer_failed"):!ready?DisplayBegin::deferred():DisplayBegin{};}
  DisplayBegin begin(Frame&,uint64_t){++starts;++leases;if(defer)return DisplayBegin::deferred();if(reject)return DisplayBegin::failed("source_unavailable");nativeReadsSource=type==Dma;return {};}
  DisplayOutcome poll(Frame&,uint64_t){
   ++polls;if(type!=Immediate&&!done)return {};
@@ -34,12 +34,12 @@ int main(){
  for(auto type:{TestAdapter::Immediate,TestAdapter::Dma,TestAdapter::Epd,TestAdapter::Scanout}){
   PresentationState views;uint32_t view;assert(!views.create(47,true,false,view));assert(!views.activate(view,false,47));
   Adapter adapter(type,views);DisplayScheduler<Frame,Adapter>q(views,adapter);using Policy=decltype(q)::Policy;
-  assert(!q.enqueue(frame(views,view,1,800,480),Policy::Latest,2));assert(adapter.starts==0);q.tick(100);
+  assert(!q.enqueue(frame(views,view,1,800,480),Policy::Latest,2).error);assert(adapter.starts==0);q.tick(100);
   if(type==TestAdapter::Immediate){assert(!q.active()&&adapter.receipts.size()==1);assert(adapter.receipts.back()["total_ms"]==0);}
   else{
    assert(q.active()&&adapter.leases==1&&adapter.receipts.empty());
-   assert(!views.revise(view,47,0));assert(!q.enqueue(frame(views,view,2),Policy::Latest,2));
-   assert(!views.revise(view,47,0));assert(!q.enqueue(frame(views,view,3),Policy::Latest,2));
+   assert(!views.revise(view,47,0));assert(!q.enqueue(frame(views,view,2),Policy::Latest,2).error);
+   assert(!views.revise(view,47,0));assert(!q.enqueue(frame(views,view,3),Policy::Latest,2).error);
    assert(q.pending()==1&&adapter.receipts.size()==1&&adapter.receipts[0]["job_id"]==2&&adapter.receipts[0]["state"]=="superseded");
    // A new page cannot interrupt outstanding DMA, an EPD cycle or scanout latch.
    q.tick(110);assert(q.active()&&adapter.starts==1&&adapter.leases==1);
@@ -54,23 +54,25 @@ int main(){
  // Driver preparation can temporarily yield a bus without losing its request.
  PresentationState views;uint32_t view,other;assert(!views.create(9,true,false,view));assert(!views.create(9,true,false,other));assert(!views.activate(view,false,9));
  Adapter adapter(TestAdapter::Dma,views);DisplayScheduler<Frame,Adapter,2>q(views,adapter);using Policy=decltype(q)::Policy;
- adapter.defer=true;assert(!q.enqueue(frame(views,view,1),Policy::Fifo,2));q.tick(0);assert(!q.active()&&q.pending()==1&&adapter.leases==0&&adapter.suspends==1&&adapter.receipts.empty());
+ adapter.defer=true;assert(!q.enqueue(frame(views,view,1),Policy::Fifo,2).error);q.tick(0);assert(!q.active()&&q.pending()==1&&adapter.leases==0&&adapter.suspends==1&&adapter.receipts.empty());
  adapter.defer=false;adapter.reject=true;q.tick(1);assert(!q.active()&&q.pending()==0&&adapter.leases==0&&adapter.receipts.back()["error"]=="source_unavailable");assert(views.presented().view==0);
- adapter.reject=false;assert(!q.enqueue(frame(views,view,2),Policy::Fifo,2));assert(!q.enqueue(frame(views,view,3),Policy::Fifo,2));
- auto n=adapter.receipts.size();assert(q.enqueue(frame(views,view,4),Policy::Latest,0));assert(q.enqueue(frame(views,view,4),Policy::Fifo,2));assert(q.enqueue(frame(views,view,4),Policy::Reject,2));assert(q.pending()==2&&adapter.receipts.size()==n);
+ adapter.reject=false;assert(!q.enqueue(frame(views,view,2),Policy::Fifo,2).error);assert(!q.enqueue(frame(views,view,3),Policy::Fifo,2).error);
+ auto n=adapter.receipts.size();assert(q.enqueue(frame(views,view,4),Policy::Latest,0).error);assert(q.enqueue(frame(views,view,4),Policy::Fifo,2).error);assert(q.enqueue(frame(views,view,4),Policy::Reject,2).error);assert(q.pending()==2&&adapter.receipts.size()==n);
+ assert(q.enqueue(frame(views,view,4),Policy::Fifo,2).kind==DisplayAdmission::Kind::Deferred);assert(q.enqueue(frame(views,view,4),Policy::Reject,2).kind==DisplayAdmission::Kind::Rejected);
  // FIFO can retain accepted revisions, but navigation invalidates queued pages.
  assert(!views.activate(other,false,9));q.tick(2);assert(q.pending()==0&&adapter.starts==2&&adapter.receipts.size()==n+2);
  assert(adapter.receipts.back()["state"]=="superseded"&&adapter.leases==0);
- // A terminal transfer failure releases its source once, blocks further native
- // work while the adapter is unavailable, and preserves the last presented view.
- assert(!q.enqueue(frame(views,other,5),Policy::Fifo,2));q.tick(10);assert(q.active()&&adapter.nativeReadsSource);
- assert(!q.enqueue(frame(views,other,6),Policy::Fifo,2));adapter.failComplete=true;adapter.done=true;q.tick(20);
+ // A terminal transfer failure releases its source once, fails queued requests without further native
+ // work until the adapter is recovered, and preserves the last presented view.
+ assert(!q.enqueue(frame(views,other,5),Policy::Fifo,2).error);q.tick(10);assert(q.active()&&adapter.nativeReadsSource);
+ assert(!q.enqueue(frame(views,other,6),Policy::Fifo,2).error);adapter.failComplete=true;adapter.done=true;q.tick(20);
  assert(!q.active()&&adapter.leases==0&&q.pending()==1&&views.presented().view==0);auto failed=adapter.receipts.size();
- q.tick(21);assert(adapter.receipts.size()==failed&&q.pending()==1);adapter.failComplete=false;adapter.ready=true;q.tick(22);assert(q.pending()==0&&!q.active()&&views.presented().view==other);
+ q.tick(21);assert(adapter.receipts.size()==failed+1&&q.pending()==0&&adapter.receipts.back()["job_id"]==6&&adapter.receipts.back()["error"]=="native_transfer_failed");
+ adapter.failComplete=false;adapter.ready=true;assert(!q.enqueue(frame(views,other,60),Policy::Fifo,2).error);q.tick(22);assert(q.pending()==0&&!q.active()&&views.presented().view==other);
  // Queued cancellation releases exactly that request, preserves FIFO order,
  // and never cancels an active DMA/EPD transaction.
- adapter.done=false;assert(!q.enqueue(frame(views,other,7),Policy::Fifo,2));q.tick(23);assert(q.active());
- assert(!q.enqueue(frame(views,other,8),Policy::Fifo,2));assert(!q.enqueue(frame(views,other,9),Policy::Fifo,2));
+ adapter.done=false;assert(!q.enqueue(frame(views,other,7),Policy::Fifo,2).error);q.tick(23);assert(q.active());
+ assert(!q.enqueue(frame(views,other,8),Policy::Fifo,2).error);assert(!q.enqueue(frame(views,other,9),Policy::Fifo,2).error);
  assert(!q.cancelQueued(7)&&q.active()&&adapter.nativeReadsSource);assert(q.cancelQueued(8)&&q.pending()==1);
  assert(adapter.receipts.back()["job_id"]==8&&adapter.receipts.back()["state"]=="cancelled");assert(!q.cancelQueued(8));
  adapter.done=true;q.tick(24);q.tick(25);assert(!q.active()&&q.pending()==0&&adapter.receipts.back()["job_id"]==9&&adapter.leases==0);

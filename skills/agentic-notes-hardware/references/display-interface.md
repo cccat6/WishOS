@@ -56,6 +56,14 @@ Newer requests cannot interrupt committed hardware work. E6 waits for BUSY; othe
 screens do not inherit that electrical requirement. Input handling during an active
 presentation remains application/system policy, independently of hardware safety.
 
+UI admission distinguishes temporary queue backpressure from rejection. Backpressure
+remains pending; a reject-policy refusal or permanent adapter failure produces the
+request's `failed` callback instead of retrying forever. An accepted UI update may
+return `status: presentation_rejected` with `admission_error`: the view model was
+updated, but no frame was submitted. Explicit refresh or a later update can retry
+after the application addresses the cause. Readiness faults also finish previously
+queued display jobs without issuing further hardware commands.
+
 Current hardware integration is E6. Immediate, DMA, BUSY and continuous-scanout
 completion models are validated using host adapters; this is not a claim that
 specific LCD/OLED/LED controllers have already been implemented or physically tested.

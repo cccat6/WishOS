@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <utility>
 #include <type_traits>
+#include <math.h>
 namespace notesos {
 // Firmware capacity is a build limit. Values and scope overlays are runtime policy.
 struct Setting {
@@ -40,9 +41,10 @@ public:
     if(v.isNull())return s.nullable?nullptr:"null_not_supported";
     if(!strcmp(s.type,"boolean"))return v.is<bool>()?nullptr:"boolean_required";
     if(!strcmp(s.type,"integer")){
-      if(!v.is<uint32_t>()||v.as<double>()<s.minimum||v.as<double>()>s.maximum)return "integer_out_of_range";
-      if(s.choices&&*s.choices){char text[16];snprintf(text,sizeof(text),"%lu",(unsigned long)v.as<uint32_t>());if(!choice(s.choices,text))return "unsupported_value";}return nullptr;
+      if(!v.is<int64_t>()||v.as<double>()<s.minimum||v.as<double>()>s.maximum)return "integer_out_of_range";
+      if(s.choices&&*s.choices){char text[24];snprintf(text,sizeof(text),"%lld",(long long)v.as<int64_t>());if(!choice(s.choices,text))return "unsupported_value";}return nullptr;
     }
+    if(!strcmp(s.type,"number"))return v.is<double>()&&isfinite(v.as<double>())&&v.as<double>()>=s.minimum&&v.as<double>()<=s.maximum?nullptr:"number_out_of_range";
     if(!strcmp(s.type,"string"))return v.is<const char*>()&&strlen(v.as<const char*>())<=s.maximum?nullptr:"string_limit";
     if(!strcmp(s.type,"enum"))return v.is<const char*>()&&choice(s.choices,v.as<const char*>())?nullptr:"unsupported_value";
     return "unsupported_setting_type";
@@ -62,7 +64,7 @@ public:
   void describe(JsonArray out) const {
     for(size_t i=0;i<count_;++i){auto o=out.add<JsonObject>();const auto &s=fields_[i];o["resource"]=s.resource;o["key"]=s.key;o["type"]=s.type;o["nullable"]=s.nullable;
       JsonDocument v;deserializeJson(v,s.initial);o["default"]=v.as<JsonVariantConst>();
-      if(!strcmp(s.type,"integer")){o["minimum"]=s.minimum;o["maximum"]=s.maximum;}
+      if(!strcmp(s.type,"integer")||!strcmp(s.type,"number")){o["minimum"]=s.minimum;o["maximum"]=s.maximum;}
       if(s.choices&&*s.choices)o["choices"]=s.choices;
       o["apply_time"]=s.applyTime;o["scope"]=s.systemOnly?"system":"system_or_application";
     }

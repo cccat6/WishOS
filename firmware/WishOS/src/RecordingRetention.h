@@ -10,7 +10,7 @@ struct RecordingPolicy {
 class RecordingRetention {
  struct Entry{char path[192]{};uint64_t bytes=0,order=0;};Entry*entries_=nullptr;size_t count_=0,capacity_=0;uint64_t order_=0;bool full_=false;
  FileProvider&files_;Vfs&vfs_;RecordingPolicy policy_;uint32_t removed_=0;
- const char*remove(size_t index){auto&e=entries_[index];char full[256],path[256];for(auto suffix:{"",".idx",".json"}){snprintf(path,sizeof path,"%s%s",e.path,suffix);snprintf(full,sizeof full,"%s%s",files_.mount,path);if(!vfs_.canMutate(full,files_.caseInsensitive())||files_.busyPath(path))return "recording_in_use";}
+ const char*remove(size_t index){auto&e=entries_[index];char full[256],path[256];for(auto suffix:{"",".idx",".json"}){snprintf(path,sizeof path,"%s%s",e.path,suffix);if(!files_.absolutePath(path,full,sizeof full))return "invalid_recording_path";if(!vfs_.canMutate(full,files_.caseInsensitive())||files_.busyPath(path))return "recording_in_use";}
    for(auto suffix:{".json",".idx",""}){snprintf(path,sizeof path,"%s%s",e.path,suffix);auto error=files_.remove(path);if(error&&strcmp(error,"not_found"))return error;}
    for(size_t n=index+1;n<count_;++n)entries_[n-1]=entries_[n];--count_;entries_[count_]={};++removed_;return nullptr;
  }

@@ -27,7 +27,7 @@ class NfsProviderStorage:public esp32_nfs::PathStorage {
    if(provider_.caseInsensitive()&&strchr(p,'~'))return "unsupported_operation"; // FAT short aliases must not bypass path leases.
    if(mutation&&!provider_.writable)return "read_only";
    if(provider_.busyPath(p))return "file_in_use";
-   if(mutation){char full[256];if(snprintf(full,sizeof(full),"%s%s",provider_.mount,!strcmp(p,"/")?"":p)>=int(sizeof(full)))return "invalid_path";
+   if(mutation){char full[256];if(!provider_.absolutePath(p,full,sizeof full))return "invalid_path";
      if(!vfs_.canMutate(full,provider_.caseInsensitive()))return "file_in_use";}
    return nullptr;
  }

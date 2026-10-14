@@ -1,3 +1,4 @@
+#include "drivers/esp32-services/EspWifiCapabilities.h"
 #include "compositions/agentic-notes-e6/Defaults.h"
 #include "CachePath.h"
 #include "DriverRequests.h"
@@ -14,6 +15,26 @@ struct ObservedFiles:MemoryFiles {
  const char*mkdir(const char*p)override{++writes;return MemoryFiles::mkdir(p);}
 };
 int main(){
+ // A new sensor can declare signed offsets and fractional thresholds without a
+ // kernel edit. Online changes and restored snapshots use the identical schema.
+ const Setting sensorSettings[]={
+  {"/sensors/custom","offset","integer","0","",-180,180},
+  {"/sensors/custom","threshold","number","0.5","",-1.5,2.5},
+  {"/sensors/custom","direction","integer","0","-1,0,1",-1,1}
+ };
+ Policies sensor(sensorSettings,3);JsonDocument sensorOut;
+ auto update=json(R"({"changes":[{"resource":"/sensors/custom","settings":{"offset":-12,"threshold":0.125,"direction":-1}}]})");
+ assert(!sensor.apply(update.as<JsonObjectConst>(),sensorOut.to<JsonObject>()));
+ assert(sensor.get<int>("/sensors/custom","offset",0)==-12&&sensor.get<double>("/sensors/custom","threshold",0)==0.125);
+ auto rev=sensor.revision();update["changes"][0]["settings"]["threshold"]=3.0;
+ assert(sensor.apply(update.as<JsonObjectConst>(),sensorOut.to<JsonObject>())&&sensor.revision()==rev);
+ assert(sensor.get<int>("/sensors/custom","offset",0)==-12);
+ assert(!sensor.restore(R"({"system":{"/sensors/custom":{"offset":-180.5}}})"));
+ assert(!sensor.restore(R"({"system":{"/sensors/custom":{"threshold":"0.25"}}})"));
+ assert(!sensor.restore(R"({"system":{"/sensors/custom":{"threshold":true}}})"));
+ assert(sensor.restore(R"({"system":{"/sensors/custom":{"offset":-90,"threshold":-0.5,"direction":1}}})"));
+ assert(sensor.get<double>("/sensors/custom","threshold",0)==-0.5);
+ sensor.describe(sensorOut.to<JsonArray>());assert(sensorOut[1]["minimum"]==-1.5&&sensorOut[1]["maximum"]==2.5);
  Policies p(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));p.setValidator(platform);
  JsonDocument out;auto original=p.revision();
  assert(!p.restore(R"({"app:reader":{"/sys/storage":{"ram_quota_bytes":3000}}})"));

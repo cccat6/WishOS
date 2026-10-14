@@ -6,8 +6,8 @@ inline const char*resolveCachePath(FileProvider&p,const char*key,JsonObject out)
   if(!key||!*key||strlen(key)>96)return "invalid_cache_key";
   for(auto s=key;*s;++s)if(!isalnum((unsigned char)*s)&&*s!='-'&&*s!='_'&&*s!='.')return "invalid_cache_key";
   if(!strcmp(key,".")||!strcmp(key,".."))return "invalid_cache_key";
-  char full[256];int n=snprintf(full,sizeof(full),"%s/cache/%s",p.mount,key);
-  if(n<0||size_t(n)>=sizeof(full))return "path_limit";
+  char full[256],relative[128];snprintf(relative,sizeof relative,"/cache/%s",key);
+  if(!p.absolutePath(relative,full,sizeof full))return "path_limit";
   out["file"]=full;out["provider"]=p.id;out["persistent"]=p.persistent;
   out["available"]=p.available();out["writable"]=p.writable;out["reserved"]=false;
   return nullptr;

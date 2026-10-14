@@ -1,3 +1,4 @@
+#include "drivers/esp32-services/EspWifiCapabilities.h"
 #include "../FileService.h"
 #include "../WireBytes.h"
 #include "../Hardware.h"

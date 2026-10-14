@@ -4,6 +4,7 @@
 #include "HttpApplications.h"
 #include "RemoteRequests.h"
 #include "Conditions.h"
+#include "Policy.h"
 #include <cassert>
 #include <thread>
 #include <vector>
@@ -11,7 +12,7 @@
 #include <iostream>
 using namespace notesos;
 static Core*kernel;static ScriptHost*host;static Workers*pool;static HttpApplications*web;static RemoteRequests*remote;
-static Conditions*watchers;
+static Conditions*watchers;static Policies*configuration;
 static unsigned effects=0;static std::vector<std::thread>threads;
 static JsonDocument parse(const char*s){JsonDocument d;assert(!deserializeJson(d,s));return d;}
 static const char*timers(const char*m,JsonObjectConst a,JsonObject o){if(!strcmp(m,"write"))return kernel->timer(a,o);if(!strcmp(m,"remove"))return kernel->removeTimer(a["id"]|0u)?nullptr:"not_found";kernel->listTimers(o["timers"].to<JsonArray>());return nullptr;}
@@ -120,5 +121,12 @@ function on_stop() notes.call('/effect','write',{stopped=true}) end
  // A configured preparation call can stop the current runtime. Its cleanup must
  // not invalidate the still-executing boot snapshot or skip following steps.
  assert(h.restore(R"({"auto_start":true,"file":"/system/missing.lua","memory_bytes":null,"instruction_budget":20000,"delay_ms":0,"prepare":[{"path":"/sys/runtime","method":"stop","args":{}},{"path":"/effect","method":"write","args":{}}]})"));h.scheduleBoot(2000);priorEffects=effects;h.tick(2000);assert(effects==priorEffects+1);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["boot_error"]=="not_found");
+ // Driver-specific negative and fractional values traverse the same runtime
+ // call API, rather than depending on native-only configuration setters.
+ const Setting fields[]={{"/custom/sensor","offset","integer","0","",-90,90},{"/custom/sensor","threshold","number","0.5","",0,1}};
+ Policies configured(fields,2);configuration=&configured;
+ c.add({"/sys/policy","read,write","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"read")){configuration->read("system",o);return nullptr;}return configuration->apply(a,o);},nullptr,"read"});
+ auto configuredApp=parse(R"({"source":"function on_start() local r=notes.call('/sys/policy','write',{changes={{resource='/custom/sensor',settings={offset=-15,threshold=0.125}}}});assert(r.ok,r.error); local current=notes.call('/sys/policy','read',{}); assert(current.ok and current.result.effective['/custom/sensor'].offset==-15 and current.result.effective['/custom/sensor'].threshold==0.125) end"})");
+ assert(!h.invoke("load",configuredApp.as<JsonObjectConst>(),out.to<JsonObject>()));assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(c.resources().promised()==0);
  std::cout<<"Runtime modules, JSON/binary fidelity, owned timers, startup validation, HTTP event applications and isolated workers passed\n";
 }

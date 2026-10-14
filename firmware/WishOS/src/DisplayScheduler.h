@@ -5,7 +5,7 @@ namespace notesos {
 // Compiled adapter contract. Request extends DisplayRequest with its source and
 // profile data. All methods run in the service loop, never from an ISR:
 // begin/poll do bounded work and return; they never wait through a refresh.
-// available(), begin(Request&, now), poll(Request&, now), suspend(Request&),
+// readiness(), begin(Request&, now), poll(Request&, now), suspend(Request&),
 // completed(Request&, outcome, elapsed), dispose(Request&).
 // begin() may defer only before hardware work starts; suspend releases temporary
 // preparation leases. Terminal poll results require source buffers to be released
@@ -41,6 +41,15 @@ struct DisplayBegin {
  enum class Kind:uint8_t {Started,Deferred,Failed};Kind kind=Kind::Started;const char*error="none";
  static DisplayBegin deferred(){return {Kind::Deferred,"none"};}
  static DisplayBegin failed(const char*e){return {Kind::Failed,e};}
+};
+// Queue backpressure can be retried; a policy rejection or native fault must
+// finish the request. Drivers report that distinction rather than the UI guessing
+// from error strings. No physical work has started at this boundary.
+struct DisplayAdmission {
+ enum class Kind:uint8_t {Accepted,Deferred,Rejected};
+ Kind kind=Kind::Accepted;const char*error=nullptr;
+ static DisplayAdmission deferred(const char*e){return {Kind::Deferred,e};}
+ static DisplayAdmission rejected(const char*e){return {Kind::Rejected,e};}
 };
 struct DisplayComponent {
  const char*id;const char*technology;const char*transport;unsigned width,height;
@@ -78,12 +87,12 @@ public:
   if(!job.stamp.view)return job.system;auto now=views_.stamp(job.stamp.view);
   return now.activation&&now.activation==job.stamp.activation&&(!job.latestOnly||now.revision==job.stamp.revision);
  }
- const char*enqueue(const Request&job,Policy policy,unsigned limit){
-  if(!limit||limit>Capacity)return "display_queue_limit";
-  if(policy==Policy::Reject&&(active_||count_))return "display_busy";
-  if(policy!=Policy::Latest&&count_>=limit)return "display_queue_full";
+ DisplayAdmission enqueue(const Request&job,Policy policy,unsigned limit){
+  if(!limit||limit>Capacity)return DisplayAdmission::rejected("display_queue_limit");
+  if(policy==Policy::Reject&&(active_||count_))return DisplayAdmission::rejected("display_busy");
+  if(policy!=Policy::Latest&&count_>=limit)return DisplayAdmission::deferred("display_queue_full");
   if(policy==Policy::Latest)while(count_)discardFront(DisplayOutcome::superseded("newer_presentation"));
-  pending_[count_]=job;pending_[count_].latestOnly=policy==Policy::Latest;++count_;return nullptr;
+  pending_[count_]=job;pending_[count_].latestOnly=policy==Policy::Latest;++count_;return {};
  }
  bool cancelQueued(uint32_t id){
   for(unsigned i=0;i<count_;++i)if(pending_[i].id==id){
@@ -93,7 +102,10 @@ public:
  }
  void tick(uint64_t now){
   while(count_&&!relevant(pending_[0]))discardFront(DisplayOutcome::superseded("view_changed"));
-  if(!active_&&count_&&adapter_.available()){
+  if(!active_&&count_){
+   auto ready=adapter_.readiness();
+   if(ready.kind==DisplayBegin::Kind::Deferred)return;
+   if(ready.kind==DisplayBegin::Kind::Failed){discardFront(DisplayOutcome::failed(ready.error));return;}
    current_=pending_[0];auto start=adapter_.begin(current_,now);
    if(start.kind==DisplayBegin::Kind::Deferred){adapter_.suspend(current_);current_={};return;}
    for(unsigned i=1;i<count_;++i)pending_[i-1]=pending_[i];pending_[--count_]={};active_=true;began_=now;

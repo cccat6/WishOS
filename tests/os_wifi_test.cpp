@@ -1,13 +1,18 @@
+#include "drivers/esp32-services/EspWifiCapabilities.h"
 #include "WifiManager.h"
 #include <map>
 #include <string>
 #include <vector>
 #include <cassert>
 #include <iostream>
+#include <cmath>
 using namespace notesos;
 struct Fake:WifiBackend {
  bool link=false,allowed=true,radio=false,reject=false;std::string current;int signalNow=-55,scan=-2;
  unsigned scans=0,applies=0;std::map<std::string,int>visible;std::vector<std::string>attempts;
+ void defaults(WifiConfig&c)const override{EspWifiCapabilities::defaults(c);}
+ const char*validate(const WifiConfig&c)const override{return EspWifiCapabilities::validate(c);}
+ void describeConfiguration(JsonObject o)const override{EspWifiCapabilities::describe(o);}
  const char*apply(const WifiConfig&c)override{++applies;radio=c.enabled;return nullptr;}
  bool connected()const override{return link;}const char*ssid()override{return current.c_str();}int rssi()const override{return signalNow;}
  bool switchAllowed(bool force)const override{return force||allowed;}
@@ -21,6 +26,21 @@ static JsonDocument json(const char*s){JsonDocument d;assert(!deserializeJson(d,
 static bool persistFail(const char*,size_t){return false;}
 static void setup(WifiManager&m,Core&c,const char*extra="{}"){JsonDocument d,out;auto p=d["profiles"].to<JsonArray>();auto a=p.add<JsonObject>();a["id"]="low";a["ssid"]="Low";a["priority"]=1;auto b=p.add<JsonObject>();b["id"]="high";b["ssid"]="High";b["priority"]=10;auto s=json(extra);d["settings"]=s.as<JsonObjectConst>();c.clock(0);assert(!m.configure(d.as<JsonObjectConst>(),out.to<JsonObject>()));}
 int main(){
+ // Another adapter can have different RF/AP capabilities while reusing the
+ // identical profile selection and manual intent mechanisms.
+ struct Alternate:Fake {
+  void defaults(WifiConfig&c)const override{c.powerDbm=-5;c.apChannel=36;c.apClients=8;strcpy(c.powerSave,"off");}
+  const char*validate(const WifiConfig&c)const override{return c.powerDbm>=-10&&c.powerDbm<=30&&c.apChannel==36&&c.apClients<=8&&!strcmp(c.powerSave,"off")?nullptr:"adapter_setting";}
+  void describeConfiguration(JsonObject o)const override{o["tx_power_dbm"]["minimum"]=-10;o["tx_power_dbm"]["maximum"]=30;o["ap_channel"]["choices"].to<JsonArray>().add(36);o["ap_max_clients"]["maximum"]=8;}
+ };
+ {Core kernel;Alternate native;WifiManager manager(native,kernel);JsonDocument reply;
+  auto request=json(R"({"settings":{"tx_power_dbm":-3.1}})");assert(!manager.configure(request.as<JsonObjectConst>(),reply.to<JsonObject>()));
+  manager.describe(reply.to<JsonObject>());assert(reply["settings"]["tx_power_dbm"]["minimum"]==-10&&reply["settings"]["ap_max_clients"]["maximum"]==8);
+  JsonDocument saved;manager.config().write(saved.to<JsonObject>(),true);std::string bytes;serializeJson(saved,bytes);
+  Alternate other;WifiManager restored(other,kernel);assert(restored.restore(bytes.c_str())&&std::abs(restored.config().powerDbm+3.1)<1e-6);
+  request["settings"]["ap_channel"]=1;auto revision=manager.revision();assert(manager.configure(request.as<JsonObjectConst>(),reply.to<JsonObject>())&&manager.revision()==revision&&native.applies==0);
+  Fake esp;WifiManager espManager(esp,kernel);assert(!espManager.restore(bytes.c_str())&&espManager.config().powerDbm==20&&esp.applies==0);
+ }
  Core c;Fake h;WifiManager m(h,c);auto tick=[&](uint64_t t){c.clock(t);m.poll(t);};JsonDocument out;
  setup(m,c,R"({"scan_interval_ms":1000,"connect_timeout_ms":1000,"retry_backoff_ms":3000,"min_dwell_ms":0})");
  h.visible={{"Low",-40},{"High",-70}};tick(250);assert(h.scans==1);h.done();tick(251);assert(h.attempts.back()=="High");

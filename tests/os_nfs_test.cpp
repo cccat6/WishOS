@@ -35,6 +35,14 @@ static std::vector<uint8_t> transact(NfsService&s,Transport&t,const std::vector<
 }
 static nf::XdrIn reply(const std::vector<uint8_t>&b,uint32_t xid){nf::XdrIn x(b.data(),b.size());assert(x.u32()==xid);assert(x.u32()==1);assert(x.u32()==0);assert(x.u32()==0);assert(x.u32()==0);assert(x.u32()==0);return x;}
 int main(){
+ // Root-mounted providers use the same canonical paths and leases as local
+ // file calls; NFS must not turn /book into //book and bypass its reader.
+ {MemoryFiles rootFiles("root","/","test");Vfs roots;assert(roots.add(rootFiles));
+  const uint8_t value[]={1,2};size_t wrote=0;assert(!rootFiles.write("/book",0,value,2,false,wrote));
+  NfsProviderStorage rootStorage(rootFiles,roots);assert(roots.lockRead("/book",51));
+  wrote=2;assert(rootStorage.write("/book",0,value,wrote)==nf::Jukebox);
+  roots.release(51);wrote=2;assert(rootStorage.write("/book",0,value,wrote)==nf::Ok);
+ }
  DurableTestFiles files;size_t n;uint8_t text[]={1,2,3,4};assert(!files.write("/hello",0,text,4,false,n));
  Vfs vfs;assert(vfs.add(files));NfsProviderStorage storage(files,vfs);NfsProviderVfs mapped(storage,files);
  uint64_t id;assert(mapped.lookup(mapped.root(),"hello",id)==nf::Ok);
