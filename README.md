@@ -1,4 +1,4 @@
-# AgenticOS
+# WishOS
 
 An embedded application runtime above FreeRTOS, with native resource drivers,
 loadable Lua applications, JSON UI, a shared VFS, events and resource budgets.
@@ -24,12 +24,12 @@ controls. Current implementation coverage and limits are listed in
 `docs/agent-os-runtime.md`; this boundary does not imply every application lifecycle
 or update path is already implemented.
 
-This local Git repository tracks the public system only. The `hub/` directory is
+This repository contains WishOS and separately selected driver/application packages. It remains private during internal testing. The `hub/` directory is
 an independent Git repository containing the MCP server, Harness adapters and host
 rendering pipeline. E6 waveform research and local credentials/data are not part
 of either public repository.
 
-- System: `firmware/AgenticOS/`
+- System: `firmware/WishOS/`
 - Native drivers and SDK adapters: `hardware/agent-os/drivers/`
 - MCU platform capabilities: `hardware/agent-os/platforms/`
 - Device composition and wiring: `hardware/agent-os/compositions/`, `hardware/agent-os/boards/`
@@ -39,12 +39,12 @@ of either public repository.
 - Implemented interfaces and limits: `docs/agent-os-runtime.md`
 - Current requirements, audit gaps and completion gates: [system plan](docs/agent-os-plan.md)
 
-Build using `tools/build_agentic_os.sh`; select a board with `NOTES_OS_BOARD`.
+Build using `tools/build_wishos.sh`; select a board with `WISHOS_BOARD`.
 The default board is `e6-nova-c6`. `esp32-c3-runtime` is a headless development port
 for testing the same Core/Lua/Workers/Wi-Fi/VFS/NFS code. Missing display/audio devices
 are not falsely advertised. Build output never flashes automatically.
 
-`tools/test_agentic_os.sh` runs host tests, including fault injection and real
+`tools/test_wishos.sh` runs host tests, including fault injection and real
 filesystem images. Set `ARDUINO_LIBRARIES` to the pinned Arduino dependency directory.
 For host image compilation, install Pillow and run `npm ci --prefix tools`.
 The current target toolchain is Arduino ESP32 3.3.11; the NFS dependency is pinned
@@ -68,3 +68,7 @@ Hardware testing must identify the chosen USB serial device before flashing. Do 
 operate another active experiment's board. Temporary development boards do not need
 Flash backups; test-created files are cleaned up explicitly. A successful host test
 or build is not evidence of physical display/audio behavior.
+
+## License
+
+WishOS original code is licensed under [MIT](LICENSE). Third-party components retain their existing notices. Device drivers are adapters used by WishOS, not definitions of the operating system.

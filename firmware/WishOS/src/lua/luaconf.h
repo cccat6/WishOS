@@ -8,7 +8,7 @@
 #ifndef luaconf_h
 #define luaconf_h
 
-/* AgenticOS: bound native parser/call recursion for embedded task stacks. */
+/* WishOS: bound native parser/call recursion for embedded task stacks. */
 #ifndef LUAI_MAXCCALLS
 #define LUAI_MAXCCALLS 32
 #endif

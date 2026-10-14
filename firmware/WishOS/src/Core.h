@@ -52,6 +52,7 @@ class Core {
   Timer timers_[MAX_TIMERS]{};
   uint32_t seq_ = 0, nextRule_ = 1, ruleOverruns_ = 0;
   uint64_t now_ = 0;
+  uint64_t(*clockSource_)()=nullptr;
   uint32_t invocationOwner_=0,nextOwner_=1,nextTimerId_=1;
   struct OwnerHook{void*context=nullptr;void(*release)(void*,uint32_t)=nullptr;};OwnerHook ownerHooks_[16]{};
   int (*gate_)(const Event&)=nullptr;
@@ -79,8 +80,9 @@ public:
   void clock(uint64_t now) {
     std::lock_guard<std::recursive_mutex>lock(eventMutex_);now_ = now;
   }
+  void clockSource(uint64_t(*source)()){std::lock_guard<std::recursive_mutex>lock(eventMutex_);clockSource_=source;}
   uint64_t now() const {
-    std::lock_guard<std::recursive_mutex>lock(eventMutex_);return now_;
+    std::lock_guard<std::recursive_mutex>lock(eventMutex_);return clockSource_?clockSource_():now_;
   }
   bool add(Device d) {
     if (!d.path || !d.handle || count_ == MAX_DEVICES || find(d.path))
@@ -335,9 +337,9 @@ public:
           }
           if (!matches)
             continue;
-          if (r.ran && now_ - r.last < r.cooldown)
+          if (r.ran && now() - r.last < r.cooldown)
             continue;
-          r.last = now_;
+          r.last = now();
           r.ran = true;
           if (r.once)
             r.enabled = false;
@@ -394,7 +396,7 @@ public:
     if (!t)
       return "timer_limit";
     if(t->used&&invocationOwner_&&t->owner!=invocationOwner_)return "timer_owned_by_other";
-    *t = {true, id, period, invocationOwner_, now_ + delay};
+    *t = {true, id, period, invocationOwner_, now() + delay};
     out["id"] = id;
     out["due_ms"] = t->due;
     return nullptr;
@@ -419,14 +421,14 @@ public:
   }
   void tick() {
     for (auto &t : timers_)
-      if (t.used && now_ >= t.due) {
+      if (t.used && now() >= t.due) {
         JsonDocument d;
         auto o = d.to<JsonObject>();
         o["id"] = t.id;o["owner"]=t.owner;
         o["scheduled_ms"] = t.due;
         emit("/sys/timers", "fired", o,t.owner);
         if (t.period)
-          t.due += ((now_ - t.due) / t.period + 1) * t.period;
+          t.due += ((now() - t.due) / t.period + 1) * t.period;
         else
           t.used = false;
       }

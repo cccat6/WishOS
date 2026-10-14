@@ -1,0 +1,7 @@
+{
+  "format": "notes-driver/1",
+  "id": "pca9557",
+  "requires": [
+    "i2c"
+  ]
+}

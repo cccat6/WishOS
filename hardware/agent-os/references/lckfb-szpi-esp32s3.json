@@ -7,7 +7,8 @@
     "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/introduction.html",
     "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/audio-input-es7210.html",
     "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/lcd-display.html",
-    "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/camera.html"
+    "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/camera.html",
+    "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/"
   ],
   "processor": {
     "family": "ESP32-S3",
@@ -22,7 +23,8 @@
     "transport": "SPI",
     "completion": "DMA_transfer",
     "backlight": "separate_native_control",
-    "touch": true
+    "touch": true,
+    "touch_controller": "FT6336"
   },
   "audio": {
     "input_codec": "ES7210",
@@ -79,5 +81,23 @@
     "PSRAM and internal/DMA memory use separate admission",
     "USB OTG profiles are advertised by the native adapter, not assumed from USB CDC",
     "No automatic SD formatting or on-device book indexing"
-  ]
+  ],
+  "optional_driver_components": [
+    "qmi8658",
+    "ft6336",
+    "pca9557",
+    "esp-wire-i2c"
+  ],
+  "sibling_reference": {
+    "id": "lckfb-szpi-esp32c3",
+    "source": "https://wiki.lckfb.com/zh-hans/szpi-esp32c3/beginner/peripheral-routines.html",
+    "additional_sensors": [
+      "GXHTC3 temperature and humidity",
+      "QMC5883L magnetometer"
+    ],
+    "optional_driver_components": [
+      "gxhtc3",
+      "qmc5883l"
+    ]
+  }
 }

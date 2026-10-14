@@ -1,0 +1,10 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp-wire-i2c",
+  "platforms": [
+    "esp32"
+  ],
+  "requires": [
+    "i2c"
+  ]
+}

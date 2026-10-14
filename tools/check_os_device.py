@@ -67,7 +67,7 @@ try:
   assert a.format_storage,mount;rpc('/sys/storage','format')
  base='/storage/flash/test-'+uuid.uuid4().hex[:12];rpc('/fs','mkdir',{'file':base})
  try:
-  filename=base+'/中文测试.txt';payload='AgenticOS 中文 UTF-8';rpc('/fs','write',{'file':filename,'text':payload,'truncate':True});read=rpc('/fs','read',{'file':filename})['result'];assert bytes.fromhex(read['hex']).decode()==payload
+  filename=base+'/中文测试.txt';payload='WishOS 中文 UTF-8';rpc('/fs','write',{'file':filename,'text':payload,'truncate':True});read=rpc('/fs','read',{'file':filename})['result'];assert bytes.fromhex(read['hex']).decode()==payload
   report['checks'].append('littlefs_utf8_write_read')
   source="""local timer
 function on_start()

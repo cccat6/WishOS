@@ -1,10 +1,13 @@
 # Hardware packages
 
-The repository has five source areas, selected together for one firmware target:
+The repository contains system code and optional adapter/application packages.
+The following source areas are selected together for a firmware target; their
+presence in one repository does not make drivers or factory applications part of
+the WishOS kernel:
 
 | Location | Responsibility |
 |---|---|
-| `firmware/AgenticOS/src/` | Shared runtime, registry, scheduling, presentation, VFS and resource policy |
+| `firmware/WishOS/src/` | Shared runtime, registry, scheduling, presentation, VFS and resource policy |
 | `hardware/agent-os/drivers/` | Reusable device/protocol engines and SDK adapters; native limits and dependencies |
 | `hardware/agent-os/platforms/` | MCU/SDK/toolchain capabilities; no assumed device peripheral set |
 | `hardware/agent-os/compositions/` + `boards/` | A particular device design: native composition/lifecycle, pins, topology, partitions and resource defaults |
@@ -17,12 +20,12 @@ change can be loaded through existing runtime interfaces without recompiling.
 Build the existing board:
 
 ```sh
-NOTES_OS_BOARD=e6-nova-c6 tools/build_agentic_os.sh
+WISHOS_BOARD=e6-nova-c6 tools/build_wishos.sh
 ```
 
 Copy that board directory to make a wiring/UI variant. Select its MCU `platform`, reuse its native `composition` when the topology matches,
 then edit `board.json` and select its `runtime` package, then select the directory
-with `NOTES_OS_BOARD=/path/to/my-board`. This changes the generated sketch only;
+with `WISHOS_BOARD=/path/to/my-board`. This changes the generated sketch only;
 it never edits core source. `python3 tools/prepare_board_package.py /path/to/my-board`
 validates the package before compiling. Pin conflicts, unavailable pins, required
 wake/ADC capabilities, missing startup assets and unsupported geometry fail early.
@@ -30,7 +33,8 @@ Electrical correctness still requires schematic review; passing this check is no
 PCB validation. GPIO8/9 strap loading, USB hardware pins, shared power polarity,
 crystal and peripheral voltage assumptions remain native-port responsibilities.
 
-`runtime` links to a directory with `package.json` (`notes-runtime-package/1`). Its
+The initial runtime package is an ordinary application reference, with no special
+execution layer or privileges. `runtime` links to a directory with `package.json` (`notes-runtime-package/1`). Its
 `assets` maps VFS paths below `/system` to package text or binary assets. UI documents, Lua
 entry/modules and default policy snapshots are compiled read-only. User apps/assets
 can instead be replaced at runtime on writable providers. `/defaults.json` is a
@@ -94,7 +98,7 @@ this is not an MMU sandbox against bugs in trusted C/C++ drivers or the SDK.
 `e6-nova-c6` is the product board package. `esp32-c3-runtime` is a headless development-board port using the same kernel, VM, worker, Wi-Fi, VFS and NFS implementations; it declares no absent display/audio devices. Other devices need a
 native port, independently compiled and validated on that hardware. A common OS
 source tree/API is portable; a C6 binary cannot be flashed onto C3/S3 unchanged.
-Use the generated sketch under `build/agentic-os/<board>/sketch/AgenticOS` in Arduino IDE.
+Use the generated sketch under `build/wishos/<board>/sketch/WishOS` in Arduino IDE.
 The build command never flashes a device or copies a reference project's firmware.
 
 The presentation service implements navigation state, view revisions and frame
@@ -195,7 +199,7 @@ use the open resource registry; their application workflows are not kernel modes
 
 ## One repository, selected-device builds
 
-`tools/agentic_os_catalog.py` discovers `boards/*/board.json`; no static CI device
+`tools/wishos_catalog.py` discovers `boards/*/board.json`; no static CI device
 list needs editing for a new board. The same graph drives the local builder and
 `.github/workflows/firmware.yml`:
 
@@ -212,10 +216,10 @@ is currently installed. Reviewed LVGL/SdFat changes apply to build-local copies;
 ESP32NFS and speech archives retain their separate pinned manifests.
 
 ```sh
-python3 tools/agentic_os_catalog.py --changed hardware/agent-os/boards/my-board/board.json
+python3 tools/wishos_catalog.py --changed hardware/agent-os/boards/my-board/board.json
 python3 tools/prepare_arduino.py --install-core
-python3 tools/build_agentic_os.py --board esp32-c3-runtime
-python3 tools/release_agentic_os.py build/agentic-os/esp32-c3-runtime/firmware --output build/release/esp32-c3-runtime.zip
+python3 tools/build_wishos.py --board esp32-c3-runtime
+python3 tools/release_wishos.py build/wishos/esp32-c3-runtime/firmware --output build/release/esp32-c3-runtime.zip
 ```
 
 Each artifact includes the board/MCU, selected drivers, source/dependency hashes,
@@ -224,3 +228,14 @@ separate archives; an optional dispatch version creates a **draft** release afte
 host checks and selected builds pass. It never flashes hardware. Compilation does
 not promote a reference board to validated support. Physical acceptance and source/
 data redistribution rights remain separate; see the E6 driver's provenance note.
+
+Optional sampled-device adapters and their integration contract are documented in
+[the sensor driver guide](drivers/sensor-sampling/README.md). Their instance names
+and physical composition are selected by each device, not inferred from C3/C6/S3.
+
+Hardware fields are declared by the selected composition in `hardware_schema`.
+Types, numeric ranges and enumerated choices belong to that schema; zero, negative
+offsets, strings and structured JSON are not rejected by an OS-wide positive-number
+rule. `HARDWARE_JSON` preserves structured values for native composition. Scalar
+constants are generated for convenience. Intentional signal aliases use explicit
+`shared_pin_groups`; undeclared pin collisions remain errors.

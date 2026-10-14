@@ -10,10 +10,10 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
-import agentic_os_catalog as catalog
+import wishos_catalog as catalog
 import prepare_board_package as boardpack
-import build_agentic_os as builder
-import release_agentic_os as release
+import build_wishos as builder
+import release_wishos as release
 
 class BuildTests(unittest.TestCase):
  def test_change_selection_follows_driver_and_runtime_ownership(self):
@@ -21,7 +21,7 @@ class BuildTests(unittest.TestCase):
   self.assertEqual(catalog.select(['hardware/agent-os/drivers/e6/E6Driver.h']),['e6-nova-c6'])
   self.assertEqual(catalog.select(['hardware/agent-os/runtime/headless-suite/assets/setup.html']),['esp32-c3-runtime'])
   self.assertEqual(catalog.select(['hardware/agent-os/runtime/lib/input.lua']),['e6-nova-c6','esp32-c3-runtime'])
-  self.assertEqual(catalog.select(['firmware/AgenticOS/src/Core.h']),['e6-nova-c6','esp32-c3-runtime'])
+  self.assertEqual(catalog.select(['firmware/WishOS/src/Core.h']),['e6-nova-c6','esp32-c3-runtime'])
   self.assertEqual(catalog.select(['docs/agent-os-plan.md']),[])
   self.assertEqual(catalog.select(['hardware/agent-os/references/esp-sparkbot.json']),[])
   self.assertEqual(catalog.select(['tools/dependencies/esp-sr.json']),['e6-nova-c6'])
@@ -67,7 +67,7 @@ class BuildTests(unittest.TestCase):
 
  def test_staging_discards_unselected_drivers_and_previous_default_ui(self):
   with tempfile.TemporaryDirectory() as temp:
-   stage=Path(temp)/'AgenticOS'
+   stage=Path(temp)/'WishOS'
    builder.stage_sources(boardpack.DEFAULT,stage)
    self.assertTrue((stage/'src/drivers/esp-wakenet/EspWakeNet.h').exists())
    self.assertIn('欢迎',(stage/'src/BoardPackage.h').read_text())
@@ -92,7 +92,7 @@ class BuildTests(unittest.TestCase):
 
  def test_firmware_archive_checks_hash_and_contains_only_selected_build(self):
   with tempfile.TemporaryDirectory() as temp:
-   root=Path(temp);names=['AgenticOS.ino.bin','AgenticOS.ino.bootloader.bin','AgenticOS.ino.partitions.bin','boot_app0.bin','partitions.csv','flash_args']
+   root=Path(temp);names=['WishOS.ino.bin','WishOS.ino.bootloader.bin','WishOS.ino.partitions.bin','boot_app0.bin','partitions.csv','flash_args']
    files={}
    for name in names:(root/name).write_bytes(name.encode());files[name]=hashlib.sha256(name.encode()).hexdigest()
    (root/'unrelated-secret.txt').write_text('must not be packed')

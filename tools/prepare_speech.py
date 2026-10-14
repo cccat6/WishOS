@@ -21,7 +21,7 @@ def prepare(target='esp32c6'):
         if hashlib.sha256(p.read_bytes()).hexdigest()!=f['sha256']:raise ValueError('FFT dependency changed: '+f['path'])
     key=hashlib.sha256(MANIFEST.read_bytes()+fft_manifest.read_bytes()+Path(__file__).read_bytes()).hexdigest()
     library=ROOT/'build/dependencies'/('NotesWakeNet-'+key[:12]);src=library/'src';src.mkdir(parents=True,exist_ok=True)
-    (library/'library.properties').write_text('name=NotesWakeNet\nversion=2.4.2\nauthor=Espressif\nmaintainer=AgenticOS\nsentence=Compiled WakeNet backend\nparagraph=Verified ESP-SR wake word implementation without application logic\ncategory=Data Processing\nurl=https://github.com/espressif/esp-sr\narchitectures=esp32\nprecompiled=true\n')
+    (library/'library.properties').write_text('name=NotesWakeNet\nversion=2.4.2\nauthor=Espressif\nmaintainer=WishOS\nsentence=Compiled WakeNet backend\nparagraph=Verified ESP-SR wake word implementation without application logic\ncategory=Data Processing\nurl=https://github.com/espressif/esp-sr\narchitectures=esp32\nprecompiled=true\n')
     for header in (raw/'include'/target).glob('*.h'):shutil.copy2(header,src/header.name)
     shutil.copy2(raw/'src/include/model_path.h',src/'model_path.h');shutil.copy2(raw/'LICENSE',library/'LICENSE')
     shutil.copy2(raw/'src/esp_sr_debug.c',src/'esp_sr_debug.c')

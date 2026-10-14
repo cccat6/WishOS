@@ -61,6 +61,7 @@ static const char*nfs(const char*m,JsonObjectConst a,JsonObject out){if(!strcmp(
  else if(!strcmp(m,"stop")){if(auto e=nfsService.stop())return e;}else if(!strcmp(m,"memory"))return nfsService.memory(a,out);else if(strcmp(m,"read"))return "unsupported_method";nfsService.read(out);return nullptr;}
 static void respond(JsonObjectConst request,JsonObject reply){invokeEnvelope(core,request,reply,bootId,uptime());}
 void begin(){
+ core.clockSource(uptime);
  Serial.setRxBufferSize(4096);Serial.begin(115200);preferences.begin("agent-os",false);snprintf(bootId,sizeof bootId,"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());
  vfs.add(ramFiles);vfs.add(systemFiles);vfs.add(flashFiles);resourceStartupError=configureEspMemory(core.resources());core.setEventObserver(scriptEvent);
  core.onOwnerRelease(&nextJob,[](void*,uint32_t owner){if(networkJob&&networkJob->owner==owner){networkJob->cancel=true;networkJob->orphan=true;}if(wsOwner==owner)stopWebSocket();});

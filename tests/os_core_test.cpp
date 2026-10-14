@@ -1,4 +1,4 @@
-#include "../firmware/AgenticOS/src/Core.h"
+#include "../firmware/WishOS/src/Core.h"
 #include <assert.h>
 #include <iostream>
 using namespace notesos;
@@ -22,7 +22,10 @@ static JsonDocument json(const char *s) {
   assert(!deserializeJson(d, s));
   return d;
 }
+static uint64_t nativeNow=0;
+static uint64_t nativeClock(){return nativeNow;}
 int main() {
+  Core timed;timed.clock(1);timed.clockSource(nativeClock);nativeNow=500;assert(timed.now()==500);timed.clock(2);assert(timed.now()==500);timed.clockSource(nullptr);assert(timed.now()==2);
   Core c;
   assert(c.add({"/button", "read", "", fake}));
   assert(c.add({"/output", "write", "", fake}));

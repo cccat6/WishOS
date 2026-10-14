@@ -58,4 +58,20 @@ class PackageTests(unittest.TestCase):
    (port/'composition.json').write_text(json.dumps({'format':'notes-composition/1','id':'test','platforms':['esp32-c6'],'entry':'Port.inc','display':{'width':240,'height':280},'required_pins':['KEY','TOUCH_SDA','TOUCH_SCL'],'available_gpios':[1,2,3],'button_count':1}))
    b.update(drivers=[],composition='port',pins={'KEY':1,'TOUCH_SDA':2,'TOUCH_SCL':3},hardware={},buttons=['KEY'],display={'width':240,'height':280});self.write(root,b)
    pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text();self.assertIn('buttons[]={KEY}',text);self.assertNotIn('KEY_C',text)
+ def test_hardware_values_follow_composition_schema_not_global_positive_range(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);b=self.fixture(root);port=root/'composition';port.mkdir();(port/'Port.inc').write_text('// fixture')
+   schema={'offset':{'type':'number','minimum':-10,'maximum':10},'disabled_level':{'type':'integer','enum':[0,1]},'clock_hz':{'type':'integer','maximum':80000000},'model':{'type':'string'},'addresses':{'type':'array'}}
+   (port/'composition.json').write_text(json.dumps({'format':'notes-composition/1','id':'fixture','platforms':['esp32-c6'],'entry':'Port.inc','required_pins':[],'hardware_schema':schema,'button_count':0,'display':None}))
+   b.update(composition='composition',drivers=[],pins={},buttons=[],display=None,hardware={'offset':-1.25,'disabled_level':0,'clock_hz':40000000,'model':'custom device','addresses':[24,25]});self.write(root,b)
+   pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text();self.assertIn('OFFSET=-1.25',text);self.assertIn('DISABLED_LEVEL=0',text);self.assertIn('CLOCK_HZ=40000000',text);self.assertIn('HARDWARE_JSON',text)
+   b['hardware']['clock_hz']=80000001;self.write(root,b)
+   with self.assertRaisesRegex(ValueError,'maximum'):pack.load(root)
+ def test_explicit_signal_aliases_are_device_constraints(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);b=self.fixture(root);port=root/'composition';port.mkdir();(port/'Port.inc').write_text('// fixture')
+   p={'format':'notes-composition/1','id':'fixture','platforms':['esp32-c6'],'entry':'Port.inc','required_pins':['SDA','SECOND_SDA'],'hardware_schema':{},'button_count':0,'display':None}
+   (port/'composition.json').write_text(json.dumps(p));b.update(composition='composition',drivers=[],pins={'SDA':6,'SECOND_SDA':6},buttons=[],display=None,hardware={});self.write(root,b)
+   with self.assertRaisesRegex(ValueError,'conflicting'):pack.load(root)
+   p['shared_pin_groups']=[['SDA','SECOND_SDA']];(port/'composition.json').write_text(json.dumps(p));pack.load(root)
 if __name__=='__main__':unittest.main()

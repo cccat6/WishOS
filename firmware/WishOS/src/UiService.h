@@ -19,16 +19,21 @@ static const char*uiReadError=nullptr;
 // LVGL stops drawing on decoder failure. Propagate that failure to the display
 // transaction instead of committing a frame with a silently missing image.
 struct UiDecoder {lv_image_decoder_t*decoder;lv_image_decoder_open_f_t open;lv_image_decoder_get_area_cb_t area;};
-static UiDecoder uiDecoders[3]; // bin, JPEG, PNG in the pinned LVGL composition
-static UiDecoder&uiDecoder(lv_image_decoder_t*d){for(auto&entry:uiDecoders)if(entry.decoder==d)return entry;abort();}
-static void observeUiDecoders(){unsigned index=0;for(auto d=lv_image_decoder_get_next(nullptr);d;d=lv_image_decoder_get_next(d)){
+static UiDecoder*uiDecoders=nullptr;static size_t uiDecoderCount=0;
+static UiDecoder&uiDecoder(lv_image_decoder_t*d){for(size_t i=0;i<uiDecoderCount;++i)if(uiDecoders[i].decoder==d)return uiDecoders[i];abort();}
+static void releaseUiDecoders(){core.resources().freeAllocation(uiDecoders);uiDecoders=nullptr;uiDecoderCount=0;}
+static bool observeUiDecoders(){
+ size_t count=0;for(auto d=lv_image_decoder_get_next(nullptr);d;d=lv_image_decoder_get_next(d))++count;
+ if(count){uiDecoders=static_cast<UiDecoder*>(core.resources().allocate(count*sizeof(UiDecoder)));if(!uiDecoders)return false;}
+ uiDecoderCount=count;size_t index=0;for(auto d=lv_image_decoder_get_next(nullptr);d;d=lv_image_decoder_get_next(d)){
  auto&entry=uiDecoders[index++];entry={d,d->open_cb,d->get_area_cb};
- lv_image_decoder_set_open_cb(d,[](lv_image_decoder_t*d,lv_image_decoder_dsc_t*s)->lv_result_t{auto r=uiDecoder(d).open(d,s);if(r!=LV_RESULT_OK&&!uiReadError)uiReadError="image_decode_failed";return r;});
+ if(entry.open)lv_image_decoder_set_open_cb(d,[](lv_image_decoder_t*d,lv_image_decoder_dsc_t*s)->lv_result_t{auto r=uiDecoder(d).open(d,s);if(r!=LV_RESULT_OK&&!uiReadError)uiReadError="image_decode_failed";return r;});
  if(entry.area)lv_image_decoder_set_get_area_cb(d,[](lv_image_decoder_t*d,lv_image_decoder_dsc_t*s,const lv_area_t*full,lv_area_t*part)->lv_result_t{
   bool finished=part->x1!=LV_COORD_MIN&&part->x2>=full->x2&&part->y2>=full->y2;auto r=uiDecoder(d).area(d,s,full,part);
   if(r!=LV_RESULT_OK&&!finished&&!uiReadError)uiReadError="image_decode_failed";return r;
  });
-}}
+ }return true;
+}
 static uint32_t uiLeaseOwner=0;static unsigned uiNodes=0;static uint32_t uiRules[16]{},uiAppOwner=0;static size_t uiRuleCount=0;static char uiAppFile[256]{},uiAppEntry[256]{};
 static lv_font_t localFonts[7]{};static constexpr uint8_t fontSizes[]={16,20,24,32,40,48,60};
 struct FontFile{char name[48]{},path[256]{};uint32_t size=0;lv_font_t*font=nullptr;lv_font_t face{};PackedFont reader;};static FontFile fontFiles[4];
@@ -36,8 +41,8 @@ struct LvFile{FileProvider*p;char relative[256];uint64_t at;};
 static const char*loadJsonFile(const char*path,JsonDocument&doc){
  char full[256];const char*rel;FileProvider*p;if(!resolveFile(path,full,rel,p))return "invalid_ui_path";
  FileInfo info;if(auto e=p->stat(rel,info))return e;if(info.directory||!info.size||info.size>16384)return "ui_document_limit";
- char*text=(char*)malloc(size_t(info.size)+1);if(!text)return "memory_low";size_t got=0;auto e=p->read(rel,0,(uint8_t*)text,info.size,got);
- if(!e&&got!=info.size)e="short_read";if(!e){text[got]=0;if(deserializeJson(doc,text,got,DeserializationOption::NestingLimit(16)))e="invalid_json";}free(text);return e;
+ char*text=static_cast<char*>(core.resources().allocate(size_t(info.size)+1));if(!text)return "ui_memory_budget";size_t got=0;auto e=p->read(rel,0,(uint8_t*)text,info.size,got);
+ if(!e&&got!=info.size)e="short_read";if(!e){text[got]=0;if(deserializeJson(doc,text,got,DeserializationOption::NestingLimit(16)))e="invalid_json";}core.resources().freeAllocation(text);return e;
 }
 static bool lvGlyph(const lv_font_t*f,lv_font_glyph_dsc_t*d,uint32_t cp,uint32_t){nm::FontMetrics m;uint8_t size=uintptr_t(f->dsc);if(!nm::nativeGlyphMetrics(cp,size,m))return false;d->adv_w=m.advance;d->box_w=m.w;d->box_h=m.h;d->ofs_x=m.x;d->ofs_y=f->line_height-f->base_line-m.y-m.h;d->format=LV_FONT_GLYPH_FORMAT_A8;d->gid.index=cp;d->stride=0;return true;}
 static const void*lvBitmap(lv_font_glyph_dsc_t*d,lv_draw_buf_t*buf){if(!buf)return nullptr;size_t stride=lv_draw_buf_width_to_stride(d->box_w,LV_COLOR_FORMAT_A8);return nm::nativeGlyphAlpha(d->gid.index,uintptr_t(d->resolved_font->dsc),buf->data,stride)?buf:nullptr;}
@@ -51,19 +56,19 @@ static void uiFlush(lv_display_t*d,const lv_area_t*a,uint8_t*p){
  if(uiSink)uiSink->write(uiSink->context,*a,reinterpret_cast<const uint16_t*>(p));
  lv_display_flush_ready(d);
 }
-static bool initUi(){if(uiDisplay)return true;if(!bindUiMemory(core.resources()))return false;clearUiMemoryFailure();lv_init();observeUiDecoders();lv_tick_set_cb([]()->uint32_t{return millis();});
+static bool initUi(){if(uiDisplay)return true;if(!bindUiMemory(core.resources()))return false;clearUiMemoryFailure();lv_init();if(!observeUiDecoders()){lv_deinit();return false;}lv_tick_set_cb([]()->uint32_t{return millis();});
  for(unsigned i=0;i<7;++i){auto&f=localFonts[i];f.get_glyph_dsc=lvGlyph;f.get_glyph_bitmap=lvBitmap;f.line_height=fontSizes[i]+8;f.base_line=4;f.dsc=(void*)(uintptr_t)fontSizes[i];}
  static lv_fs_drv_t fs;lv_fs_drv_init(&fs);fs.letter='V';
- fs.open_cb=[](lv_fs_drv_t*,const char*path,lv_fs_mode_t mode)->void*{if(mode&LV_FS_MODE_WR)return nullptr;char full[256];const char*rel;FileProvider*p;if(!resolveFile(path,full,rel,p)){uiReadError="asset_path";return nullptr;}FileInfo info;if(auto e=p->stat(rel,info)){uiReadError=e;return nullptr;}if(info.directory){uiReadError="is_directory";return nullptr;}auto f=new(std::nothrow)LvFile;if(!f)return nullptr;f->p=p;copy(f->relative,sizeof(f->relative),rel);f->at=0;return f;};
- fs.close_cb=[](lv_fs_drv_t*,void*f)->lv_fs_res_t{delete (LvFile*)f;return LV_FS_RES_OK;};
+ fs.open_cb=[](lv_fs_drv_t*,const char*path,lv_fs_mode_t mode)->void*{if(mode&LV_FS_MODE_WR)return nullptr;char full[256];const char*rel;FileProvider*p;if(!resolveFile(path,full,rel,p)){uiReadError="asset_path";return nullptr;}FileInfo info;if(auto e=p->stat(rel,info)){uiReadError=e;return nullptr;}if(info.directory){uiReadError="is_directory";return nullptr;}auto block=core.resources().allocate(sizeof(LvFile));if(!block){uiReadError="ui_memory_budget";return nullptr;}auto f=new(block)LvFile;f->p=p;copy(f->relative,sizeof(f->relative),rel);f->at=0;return f;};
+ fs.close_cb=[](lv_fs_drv_t*,void*f)->lv_fs_res_t{static_cast<LvFile*>(f)->~LvFile();core.resources().freeAllocation(f);return LV_FS_RES_OK;};
  fs.read_cb=[](lv_fs_drv_t*,void*x,void*out,uint32_t n,uint32_t*got)->lv_fs_res_t{auto f=(LvFile*)x;size_t z=0;memset(out,0,n);auto e=f->p->read(f->relative,f->at,(uint8_t*)out,n,z);*got=z;f->at+=z;if(e)uiReadError=e;return e?LV_FS_RES_FS_ERR:LV_FS_RES_OK;};
  fs.seek_cb=[](lv_fs_drv_t*,void*x,uint32_t at,lv_fs_whence_t whence)->lv_fs_res_t{auto f=(LvFile*)x;FileInfo info;if(whence==LV_FS_SEEK_SET)f->at=at;else if(whence==LV_FS_SEEK_CUR)f->at+=at;else{if(f->p->stat(f->relative,info))return LV_FS_RES_FS_ERR;f->at=info.size+at;}return f->at<=UINT32_MAX?LV_FS_RES_OK:LV_FS_RES_INV_PARAM;};
  fs.tell_cb=[](lv_fs_drv_t*,void*x,uint32_t*at)->lv_fs_res_t{*at=((LvFile*)x)->at;return LV_FS_RES_OK;};lv_fs_drv_register(&fs);
- uiDisplay=lv_display_create(boardpack::DISPLAY_WIDTH,boardpack::DISPLAY_HEIGHT);if(!uiDisplay){lv_deinit();return false;}lv_display_set_color_format(uiDisplay,LV_COLOR_FORMAT_RGB565);lv_display_set_buffers(uiDisplay,uiDrawBuffer,nullptr,sizeof(uiDrawBuffer),LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_flush_cb(uiDisplay,uiFlush);uiRoot=lv_screen_active();lv_obj_set_style_bg_color(uiRoot,lv_color_white(),0);return !uiMemoryFailed();
+ uiDisplay=lv_display_create(boardpack::DISPLAY_WIDTH,boardpack::DISPLAY_HEIGHT);if(!uiDisplay){lv_deinit();releaseUiDecoders();return false;}lv_display_set_color_format(uiDisplay,LV_COLOR_FORMAT_RGB565);lv_display_set_buffers(uiDisplay,uiDrawBuffer,nullptr,sizeof(uiDrawBuffer),LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_flush_cb(uiDisplay,uiFlush);uiRoot=lv_screen_active();lv_obj_set_style_bg_color(uiRoot,lv_color_white(),0);return !uiMemoryFailed();
 }
-static void resetUiRenderer(){if(uiDisplay){lv_deinit();uiDisplay=nullptr;uiRoot=nullptr;uiDecoders[0]={};uiDecoders[1]={};uiDecoders[2]={};}}
+static void resetUiRenderer(){if(uiDisplay){lv_deinit();uiDisplay=nullptr;uiRoot=nullptr;releaseUiDecoders();}}
 static char* uiFallbackText(const char*text,unsigned size){
- size_t n=strlen(text);char*out=(char*)malloc(n+1);if(!out)return nullptr;size_t at=0,wrote=0;
+ size_t n=strlen(text);char*out=static_cast<char*>(core.resources().allocate(n+1));if(!out)return nullptr;size_t at=0,wrote=0;
  while(at<n){uint8_t lead=text[at];size_t length=lead<128?1:(lead&0xe0)==0xc0?2:(lead&0xf0)==0xe0?3:(lead&0xf8)==0xf0?4:1;bool valid=at+length<=n;uint32_t cp=length==1?lead:lead&((1<<(7-length))-1);
   for(size_t i=1;valid&&i<length;++i){uint8_t byte=text[at+i];valid=(byte&0xc0)==0x80;cp=(cp<<6)|(byte&63);}
   nm::FontMetrics m;bool supported=valid&&(cp==' '||cp=='\n'||cp=='\r'||nm::nativeGlyphMetrics(cp,size,m));
@@ -94,7 +99,7 @@ static bool buildNode(JsonObjectConst node,lv_obj_t*parent,unsigned depth=0){
  unsigned size=dimension(style["fontSize"],24);const char*fontName=style["font"]|"system";char fontRef[48];if(!strncmp(fontName,"${font.",7)&&strlen(fontName)>8&&fontName[strlen(fontName)-1]=='}'){size_t n=strlen(fontName)-8;if(n>=sizeof(fontRef)){uiError="font_reference_limit";return false;}memcpy(fontRef,fontName+7,n);fontRef[n]=0;fontName=fontRef;}auto font=selectFont(size,fontName);if(!font){uiError="font_or_size_not_registered";return false;}lv_obj_set_style_text_font(o,font,0);if(strcmp(fontName,"system")&&uiLeaseOwner){for(auto&f:fontFiles)if(f.font==font&&!vfs.lockRead(f.path,uiLeaseOwner)){uiError="font_lease_capacity";return false;}}
  if(*uiRenderedView.focus&&!strcmp(node["id"]|"",uiRenderedView.focus)){lv_obj_set_style_border_width(o,2,0);lv_obj_set_style_border_color(o,lv_color_black(),0);}
  if(label){const char*text=uiValues[node["id"]|""]|(node["labelProps"]["text"]|"");const char*missing=node["labelProps"]["missingGlyph"]|"error";if(!Policies::choice("error,replace",missing)){uiError="missing_glyph_policy";return false;}
- if(!strcmp(fontName,"system")&&!nm::localTextSupported(text,size)){if(strcmp(missing,"replace")){uiError="system_font_missing_glyph";return false;}char*safe=uiFallbackText(text,size);if(!safe){uiError="ui_memory_budget";return false;}lv_label_set_text(o,safe);free(safe);}else lv_label_set_text(o,text);lv_obj_set_width(o,LV_PCT(100));}
+ if(!strcmp(fontName,"system")&&!nm::localTextSupported(text,size)){if(strcmp(missing,"replace")){uiError="system_font_missing_glyph";return false;}char*safe=uiFallbackText(text,size);if(!safe){uiError="ui_memory_budget";return false;}lv_label_set_text(o,safe);core.resources().freeAllocation(safe);}else lv_label_set_text(o,text);lv_obj_set_width(o,LV_PCT(100));}
  if(image){const char*src=node["imageProps"]["src"]|"";char full[256];if(!normalizePath(uiBase,src,full,sizeof(full))){uiError="invalid_image_path";return false;}if(uiLeaseOwner&&!vfs.lockRead(full,uiLeaseOwner)){uiError="asset_lease_capacity";return false;}const char*relative;auto provider=vfs.resolve(full,relative);FileInfo info;if(!provider){uiError="image_not_found";return false;}if(auto e=provider->stat(relative,info)){uiError=e;return false;}if(info.directory){uiError="is_directory";return false;}
  char qualified[260];snprintf(qualified,sizeof(qualified),"V:%s",full);lv_image_header_t hdr{};uiReadError=nullptr;if(lv_image_decoder_get_info(qualified,&hdr)!=LV_RESULT_OK){uiError=uiReadError?uiReadError:"image_decode_not_available";return false;}if(!hdr.w||!hdr.h||hdr.w>2048||hdr.h>2048){uiError="image_dimensions_limit";return false;}uint8_t signature[8]{};size_t signatureBytes=0;if(auto error=provider->read(relative,0,signature,sizeof signature,signatureBytes)){uiError=error;return false;}const uint8_t pngSignature[]={137,80,78,71,13,10,26,10};bool png=signatureBytes==8&&!memcmp(signature,pngSignature,8);if(png&&(uint64_t(hdr.w)*hdr.h*4>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384)||info.size>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384))){uiError="large_png_requires_streamable_asset";return false;}lv_image_set_src(o,qualified);if(!style["imageOpacity"].isNull()){int opacity=dimension(style["imageOpacity"],255);if(opacity<0||opacity>255){uiError="opacity_range";return false;}lv_obj_set_style_image_opa(o,opacity,0);}}
  if(!root){if(!place["width"].isNull())lv_obj_set_width(o,dimension(place["width"],LV_SIZE_CONTENT));else if(!label&&!image)lv_obj_set_width(o,LV_PCT(100));

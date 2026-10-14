@@ -15,7 +15,7 @@ def package(build, output):
         raw=(build/name).read_bytes()
         if hashlib.sha256(raw).hexdigest()!=digest:raise ValueError('artifact differs from compiled manifest: '+name)
         if name.endswith('.bin') or name in ('partitions.csv','flash_args') or name.startswith('notices/'):files[name]=raw
-    required={'AgenticOS.ino.bin','AgenticOS.ino.bootloader.bin','AgenticOS.ino.partitions.bin','boot_app0.bin','partitions.csv','flash_args'}
+    required={'WishOS.ino.bin','WishOS.ino.bootloader.bin','WishOS.ino.partitions.bin','boot_app0.bin','partitions.csv','flash_args'}
     if not required.issubset(files):raise ValueError('incomplete firmware set')
     files['firmware-manifest.json']=(build/'firmware-manifest.json').read_bytes()
     files['README.txt']=(

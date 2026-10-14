@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import math
 import re
 import shutil
 from pathlib import Path
@@ -59,6 +60,23 @@ def platform_package(board):
     if board.get('mcu') not in spec['mcu_variants']:raise ValueError('platform/MCU mismatch')
     return directory,spec
 
+def validate_hardware(values, schema):
+    if set(values)!=set(schema):raise ValueError('hardware fields do not match hardware composition')
+    for name,value in values.items():
+        if not re.fullmatch(r'[a-z][a-z0-9_]*',name):raise ValueError('invalid hardware field name')
+        spec=schema[name];kind=spec['type']
+        types={'boolean':bool,'integer':int,'string':str,'array':list,'object':dict}
+        valid=(type(value) in (int,float) and math.isfinite(value)) if kind=='number' else kind in types and type(value) is types[kind]
+        if not valid:raise ValueError('hardware type: '+name)
+        if kind=='integer' and not -(2**63)<=value<2**63:raise ValueError('hardware integer representation: '+name)
+        if 'enum' in spec and value not in spec['enum']:raise ValueError('hardware choice: '+name)
+        if kind in ('integer','number'):
+            if 'minimum' in spec and value<spec['minimum']:raise ValueError('hardware minimum: '+name)
+            if 'maximum' in spec and value>spec['maximum']:raise ValueError('hardware maximum: '+name)
+            if 'exclusiveMinimum' in spec and value<=spec['exclusiveMinimum']:raise ValueError('hardware minimum: '+name)
+        if kind=='string' and 'maxLength' in spec and len(value)>spec['maxLength']:raise ValueError('hardware string length: '+name)
+    json.dumps(values,allow_nan=False)
+
 def asset_sources(root, board):
     directory,package=runtime_package(root,board)
     sources={k:(directory,v) for k,v in package.get('assets',{}).items()}
@@ -97,17 +115,15 @@ def load(package):
         raise ValueError('invalid pin signal')
     if any(type(v) is not int or v not in p['available_gpios'] for v in pins.values()):
         raise ValueError('unavailable GPIO')
-    if len(set(pins.values())) != len(pins):
-        raise ValueError('conflicting GPIO assignments; shared buses use one named bus')
+    for gpio in set(pins.values()):
+        signals={name for name,value in pins.items() if value==gpio}
+        if len(signals)>1 and not any(signals<=set(group) for group in p.get('shared_pin_groups',[])):
+            raise ValueError('conflicting GPIO assignments; declare shared signals in the native composition')
     for signal, allowed in p.get('pin_constraints', {}).items():
         if pins[signal] not in allowed:
             raise ValueError(f'{signal} incompatible with required hardware capability')
     h = b.get('hardware',{})
-    if set(h) != set(p.get('hardware_fields',[])):
-        raise ValueError('hardware fields do not match hardware composition')
-    for k,v in h.items():
-        if not re.fullmatch(r'[a-z][a-z0-9_]*',k) or type(v) not in (bool,int,float) or (type(v) is not bool and not 0 < v < 1_000_001):
-            raise ValueError('invalid hardware scalar: '+k)
+    validate_hardware(h,p.get('hardware_schema',{}))
     buttons=b.get('buttons',[])
     if len(buttons)!=p.get('button_count',len(buttons)) or len(set(buttons))!=len(buttons) or any(k not in pins for k in buttons):
         raise ValueError('invalid button mapping')
@@ -163,27 +179,32 @@ def generate(package, output):
     _,platform=platform_package(b)
     partition_hash=hashlib.sha256(inside(root,b['partition_file']).read_bytes()).hexdigest()
     fingerprint=hashlib.sha256(json.dumps({'board':b,'composition':p,'platform':platform,'partitions':partition_hash,'assets':asset_hashes,'composition_files':port_hashes,'drivers':driver_hashes},sort_keys=True).encode()).hexdigest()
-    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>',f'#define NOTES_HAS_VBUS_ADC {int(b.get("hardware",{}).get("vbus_clamps_battery_adc",False))}','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};',f'inline constexpr char STARTUP_SCRIPT[]={literal(b["startup"].get("script",""))};','struct Asset {const char*path;const char*data;size_t size;};','inline constexpr Asset ASSETS[]={']
-    lines.insert(9,f'inline constexpr size_t STARTUP_MEMORY_BYTES={b["startup"].get("memory_bytes") or 0};')
+    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};',f'inline constexpr char STARTUP_SCRIPT[]={literal(b["startup"].get("script",""))};','struct Asset {const char*path;const char*data;size_t size;};','inline constexpr Asset ASSETS[]={']
+    insertion=lines.index('struct Asset {const char*path;const char*data;size_t size;};')
+    lines.insert(insertion,f'inline constexpr size_t STARTUP_MEMORY_BYTES={b["startup"].get("memory_bytes") or 0};')
     _,runtime=runtime_package(root,b)
-    lines.insert(9,f'inline constexpr char RUNTIME_ID[]={literal(runtime.get("id","board-local"))};')
-    lines.insert(9,f'inline constexpr char DRIVERS[]={literal(",".join(drivers))};')
-    lines.insert(9,f'inline constexpr char PLATFORM_ID[]={literal(b["platform"])};')
-    lines.insert(9,f'inline constexpr char COMPOSITION_ID[]={literal(p["id"])};')
+    lines.insert(insertion,f'inline constexpr char RUNTIME_ID[]={literal(runtime.get("id","board-local"))};')
+    lines.insert(insertion,f'inline constexpr char DRIVERS[]={literal(",".join(drivers))};')
+    lines.insert(insertion,f'inline constexpr char PLATFORM_ID[]={literal(b["platform"])};')
+    lines.insert(insertion,f'inline constexpr char COMPOSITION_ID[]={literal(p["id"])};')
     for key,value in sorted(assets.items()):
         raw=value.encode() if isinstance(value,str) else value
         encoded=literal(value) if isinstance(value,str) else '"'+''.join(f'\\x{x:02x}' for x in raw)+'"'
         lines.append(f'{{{literal(key)},{encoded},{len(raw)}}},')
     lines += ['};','inline constexpr size_t ASSET_COUNT=sizeof(ASSETS)/sizeof(ASSETS[0]);','struct Pin {const char*signal;int gpio;int pad;};','inline constexpr Pin PINS[]={']
     lines += [f'{{{literal(k)},{v},{p.get("package_pins",{}).get(str(v),-1)}}},' for k,v in b['pins'].items()]
-    lines += ['};',f'inline constexpr char RESOURCE_DEFAULTS[]={literal(json.dumps(b.get("resources",{}),separators=(",",":")))};',f'inline constexpr int DISPLAY_WIDTH={(b.get("display") or {}).get("width",0)};',f'inline constexpr int DISPLAY_HEIGHT={(b.get("display") or {}).get("height",0)};',f'inline constexpr int CRYSTAL_MHZ={b.get("hardware",{}).get("crystal_mhz",0)};',f'inline constexpr float CRYSTAL_LOAD_PF={b.get("hardware",{}).get("crystal_load_pf",0)};','}','namespace notesos::pins {']
+    lines += ['};',f'inline constexpr char RESOURCE_DEFAULTS[]={literal(json.dumps(b.get("resources",{}),separators=(",",":")))};',f'inline constexpr char HARDWARE_JSON[]={literal(json.dumps(b.get("hardware",{}),separators=(",",":")))};',f'inline constexpr int DISPLAY_WIDTH={(b.get("display") or {}).get("width",0)};',f'inline constexpr int DISPLAY_HEIGHT={(b.get("display") or {}).get("height",0)};','}','namespace notesos::pins {']
     lines += [f'inline constexpr int {k}={v};' for k,v in b['pins'].items()]
     if b.get('buttons'):
         lines += ['inline constexpr int buttons[]={'+','.join(b['buttons'])+'};']
     for k,v in b.get('hardware',{}).items():
-        kind='bool' if type(v) is bool else 'float' if type(v) is float else 'uint32_t'
-        value=str(v).lower()
-        lines += [f'inline constexpr {kind} {k.upper()}={value};']
+        if type(v) is bool:
+            lines += [f'#define WISHOS_HW_{k.upper()} {int(v)}',f'inline constexpr bool {k.upper()}={str(v).lower()};']
+        elif type(v) in (int,float):
+            kind='int64_t' if type(v) is int else 'double'
+            value='(-9223372036854775807LL-1)' if v==-(2**63) else str(v)
+            lines += [f'inline constexpr {kind} {k.upper()}={value};']
+        elif type(v) is str:lines += [f'inline constexpr char {k.upper()}[]={literal(v)};']
     lines += ['}']
     (output/'BoardPackage.h').write_text('\n'.join(lines)+'\n')
     return b,p,port

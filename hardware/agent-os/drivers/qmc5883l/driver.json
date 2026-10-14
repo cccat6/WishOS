@@ -1,0 +1,8 @@
+{
+  "format": "notes-driver/1",
+  "id": "qmc5883l",
+  "requires": [
+    "i2c",
+    "sensor-sampling"
+  ]
+}

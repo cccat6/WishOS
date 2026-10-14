@@ -24,9 +24,9 @@ def stage_sources(package, destination):
     load(package)  # Validate the whole selection before replacing generated sources.
     destination=Path(destination);destination.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(dir=destination.parent,prefix='notes-stage-') as tmp:
-        candidate=Path(tmp)/'AgenticOS';candidate.mkdir()
-        shutil.copytree(ROOT/'firmware/AgenticOS/src',candidate/'src')
-        shutil.copy2(ROOT/'firmware/AgenticOS/AgenticOS.ino',candidate/'AgenticOS.ino')
+        candidate=Path(tmp)/'WishOS';candidate.mkdir()
+        shutil.copytree(ROOT/'firmware/WishOS/src',candidate/'src')
+        shutil.copy2(ROOT/'firmware/WishOS/WishOS.ino',candidate/'WishOS.ino')
         board,port=stage_board(package,candidate)
         for relative in port.get('exclude_sources',[]):
             excluded=inside(candidate/'src',relative)
@@ -84,7 +84,7 @@ def build(package, stage, output):
     subprocess.run(command,check=True)
     notices=output/'notices'
     if notices.exists():shutil.rmtree(notices)
-    shutil.copytree(ROOT/'firmware/AgenticOS/licenses',notices/'system')
+    shutil.copytree(ROOT/'firmware/WishOS/licenses',notices/'system')
     for name,(directory,_) in drivers.items():
         for file in directory.glob('*.md'):
             dest=notices/'drivers'/name/file.name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(file,dest)
@@ -107,12 +107,12 @@ def build(package, stage, output):
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--board',default=os.environ.get('NOTES_OS_BOARD',str(DEFAULT)))
+    parser=argparse.ArgumentParser();parser.add_argument('--board',default=os.environ.get('WISHOS_BOARD',str(DEFAULT)))
     args=parser.parse_args();package=Path(args.board)
     if not package.exists():package=ROOT/'hardware/agent-os/boards'/package
     _,board,_,_,_=load(package)
-    stage=Path(os.environ.get('NOTES_OS_STAGE',ROOT/'build/agentic-os'/board['id']/'sketch/AgenticOS')).resolve()
-    output=Path(os.environ.get('NOTES_OS_BUILD',ROOT/'build/agentic-os'/board['id']/'firmware')).resolve()
+    stage=Path(os.environ.get('WISHOS_STAGE',ROOT/'build/wishos'/board['id']/'sketch/WishOS')).resolve()
+    output=Path(os.environ.get('WISHOS_BUILD',ROOT/'build/wishos'/board['id']/'firmware')).resolve()
     build(package,stage,output)
 
 

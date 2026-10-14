@@ -1,5 +1,5 @@
 ---
-name: agentic-notes-hardware
+name: wishos-device-api
 description: Discover and operate Notes OS resources, inspect live system state and constraints, configure behavior policies, and build portable UI or device applications. Use for display, audio input/output, buttons, networking, power, files, fonts, jobs and conditional behaviors; discover capabilities rather than assuming a particular MCU, display or storage device.
 ---
 
@@ -12,6 +12,8 @@ For script modules, startup/lifecycle, binary data and background compute, read 
 The factory suite is a default runtime application reference and its resources. Replace it through the same application loading/startup interfaces as user programs. Preserve necessary system coordination among the runtime, display, power and native services; changing pages or interaction behavior does not require dismantling those services.
 
 For button gestures, contextual navigation, motion/tap events, clock synchronization and presentation state and resource-policy boundaries, read [interaction applications](references/interactions.md).
+
+For optional temperature/humidity, magnetic, six-axis motion and touch adapters, use the [sensor driver contract](../../../hardware/agent-os/drivers/sensor-sampling/README.md). Discover registered instances; `read` returns the last valid sample, and `measure` explicitly requests a fresh conversion with a completion callback. Bus addresses and sensor configuration profiles belong to native device composition.
 
 For microphone sharing, local detection engines, speaker playback and the separation from cloud ASR/TTS, read [audio capabilities](references/audio.md).
 

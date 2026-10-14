@@ -27,6 +27,7 @@ private:
  size_t freeBytes(Region r)const{const auto&h=heaps_[index(r)];return h.available?h.available():r==Region::Internal?UINT32_MAX:0;}
  size_t pendingIn(Region r)const{size_t n=0;for(auto&s:slots_)if(s.id&&!s.elastic&&s.region==r){size_t used=s.used.load();if(used<s.limit)n+=s.limit-used;}return n;}
  bool fits(size_t bytes,Region r)const{if(!present(r))return false;size_t available=freeBytes(r),waiting=pendingIn(r),reserve=reserves_[index(r)];return available>=reserve&&waiting<=available-reserve&&bytes<=available-reserve-waiting;}
+ void*allocationDenied(){++failures_;return nullptr;}
 public:
  static const char*name(Region r){return r==Region::External?"external":r==Region::Internal?"internal":"auto";}
  // Native composition installs heaps before starting applications/services.
@@ -49,18 +50,18 @@ public:
  // Demand-allocated caches have no speculative full-size reservation. They are
  // charged for actual blocks and observe the same heap choice/reserve policy.
  void*allocate(size_t bytes,Region region=Region::Auto){std::lock_guard<std::recursive_mutex> lock(mutex_);
-  if(bytes>SIZE_MAX-sizeof(Allocation))return nullptr;size_t n=bytes+sizeof(Allocation),total=promised(),maximum=limit();
-  if(n>maximum||total>maximum-n)return nullptr;
-  if(region==Region::Auto)region=fits(n,Region::External)?Region::External:Region::Internal;if(!fits(n,region))return nullptr;
-  auto fn=heaps_[index(region)].resize;auto p=static_cast<Allocation*>(fn?fn(nullptr,n):malloc(n));if(!p)return nullptr;
+  if(bytes>SIZE_MAX-sizeof(Allocation))return allocationDenied();size_t n=bytes+sizeof(Allocation),total=promised(),maximum=limit();
+  if(n>maximum||total>maximum-n)return allocationDenied();
+  if(region==Region::Auto)region=fits(n,Region::External)?Region::External:Region::Internal;if(!fits(n,region))return allocationDenied();
+  auto fn=heaps_[index(region)].resize;auto p=static_cast<Allocation*>(fn?fn(nullptr,n):malloc(n));if(!p)return allocationDenied();
   p->size=n;p->region=region;transient_[index(region)]+=n;return p+1;
  }
  size_t allocationSize(void*ptr)const{if(!ptr)return 0;auto p=static_cast<Allocation*>(ptr)-1;return p->size-sizeof(Allocation);}
  void*reallocate(void*ptr,size_t bytes){std::lock_guard<std::recursive_mutex> lock(mutex_);
-  if(!ptr)return allocate(bytes);if(!bytes){freeAllocation(ptr);return nullptr;}if(bytes>SIZE_MAX-sizeof(Allocation))return nullptr;
+  if(!ptr)return allocate(bytes);if(!bytes){freeAllocation(ptr);return nullptr;}if(bytes>SIZE_MAX-sizeof(Allocation))return allocationDenied();
   auto p=static_cast<Allocation*>(ptr)-1;size_t n=bytes+sizeof(Allocation),old=p->size;auto region=p->region;
-  if(n>old){size_t growth=n-old,total=promised(),maximum=limit();if(growth>maximum||total>maximum-growth||!fits(growth,region))return nullptr;}
-  auto fn=heaps_[index(region)].resize;auto next=static_cast<Allocation*>(fn?fn(p,n):realloc(p,n));if(!next)return n<=old?ptr:nullptr;
+  if(n>old){size_t growth=n-old,total=promised(),maximum=limit();if(growth>maximum||total>maximum-growth||!fits(growth,region))return allocationDenied();}
+  auto fn=heaps_[index(region)].resize;auto next=static_cast<Allocation*>(fn?fn(p,n):realloc(p,n));if(!next)return n<=old?ptr:allocationDenied();
   next->size=n;next->region=region;if(n>=old)transient_[index(region)]+=n-old;else transient_[index(region)]-=old-n;return next+1;
  }
  void freeAllocation(void*ptr){std::lock_guard<std::recursive_mutex> lock(mutex_);if(!ptr)return;auto p=static_cast<Allocation*>(ptr)-1;auto r=p->region;transient_[index(r)]-=p->size;auto fn=heaps_[index(r)].resize;if(fn)fn(p,0);else free(p);}

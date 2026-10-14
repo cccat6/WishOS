@@ -34,7 +34,10 @@ static const char*validateUiDriver(const char*){return nullptr;}
 static const char*queueUi(const char*,const char*,bool,JsonObject out,const char*,const UiView*,PresentationState::Stamp stamp){if(deferUi)return "display_busy";++uiQueueCalls;lastUiStamp=stamp;out["job_id"]=uiQueueCalls;out["status"]="queued";return nullptr;}
 }
 int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
- assert(prepareUi("/system/ui/home.json"));std::ofstream image("build/os-ui-default.native",std::ios::binary);nm::Stripe stripe;
+ // Native compositions may install additional image decoders before the UI starts.
+ assert(bindUiMemory(core.resources()));lv_init();for(unsigned i=0;i<2;++i){auto decoder=lv_image_decoder_create();assert(decoder);lv_image_decoder_set_info_cb(decoder,[](lv_image_decoder_t*,lv_image_decoder_dsc_t*,lv_image_header_t*){return LV_RESULT_INVALID;});}
+
+ assert(prepareUi("/system/ui/home.json"));assert(uiDecoderCount>=5);std::ofstream image("build/os-ui-default.native",std::ios::binary);nm::Stripe stripe;
  for(int x=0;x<480;x+=16){assert(renderUiBand(x,stripe));image.write((const char*)stripe.bytes,sizeof(stripe.bytes));}image.close();
  const char* changed=R"({"version":"0.1.1","assets":[{"type":"viewScreen","id":"new","style":{"bgColor":"#ffff00"},"children":[{"type":"label","labelProps":{"text":"UPDATED"},"style":{"fontSize":"40sp","textColor":"#ff0000"}}]}]})";
  size_t wrote;assert(!files.write("/updated.json",0,(const uint8_t*)changed,strlen(changed),true,wrote));assert(prepareUi("/storage/ram/updated.json"));assert(renderUiBand(200,stripe));assert(stripe.bytes[100]==0x22);

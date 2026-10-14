@@ -1,0 +1,8 @@
+{
+  "format": "notes-driver/1",
+  "id": "gxhtc3",
+  "requires": [
+    "i2c",
+    "sensor-sampling"
+  ]
+}

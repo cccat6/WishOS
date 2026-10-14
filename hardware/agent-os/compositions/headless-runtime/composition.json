@@ -9,7 +9,6 @@
   "required_pins": [],
   "pin_constraints": {},
   "display": null,
-  "hardware_fields": [],
   "button_count": 0,
   "exclude_sources": [
     "Content.cpp",
@@ -27,5 +26,6 @@
   ],
   "platforms": [
     "esp32-c3"
-  ]
+  ],
+  "hardware_schema": {}
 }

@@ -37,10 +37,10 @@ def select(changed=None, board=None, entries=None, previous_lock=None):
         if board not in entries:raise ValueError('unknown board: '+board)
         return [board]
     if changed is None:return sorted(entries)
-    common=('firmware/AgenticOS/','.github/workflows/')
-    build_tools={'tools/build_agentic_os.py','tools/build_agentic_os.sh','tools/prepare_board_package.py',
-                 'tools/agentic_os_catalog.py','tools/prepare_os_dependencies.py','tools/prepare_library_snapshot.py',
-                 'tools/prepare_arduino.py','tools/release_agentic_os.py'}
+    common=('firmware/WishOS/','.github/workflows/')
+    build_tools={'tools/build_wishos.py','tools/build_wishos.sh','tools/prepare_board_package.py',
+                 'tools/wishos_catalog.py','tools/prepare_os_dependencies.py','tools/prepare_library_snapshot.py',
+                 'tools/prepare_arduino.py','tools/release_wishos.py'}
     selected=set()
     for name in changed:
         name=Path(name).as_posix()
