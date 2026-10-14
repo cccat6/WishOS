@@ -209,7 +209,7 @@ Wi-Fi 使用单份配置持久化，自动决策只改变 RAM 状态。旧单 SS
 
 ## 硬件包、脚本调用与后台执行
 
-板级接线、启动 UI/脚本与默认配置已迁到 `hardware/agent-os/boards/e6-nova-c6`，原生适配入口迁到 `hardware/agent-os/ports/esp32-c6-e6/Port.inc`。`NOTES_OS_BOARD` 选择包，构建只生成独立 sketch，不修改公共系统代码。自制同类接线板修改包即可；新 MCU/显示器/外设需要相应原生端口，不把 C6 固件冒充可直接烧录到 S3/C3。当前仅有 C6/E6 的产品适配端口。详见 [硬件包接口](../hardware/agent-os/README.md)。
+MCU 平台能力位于 `hardware/agent-os/platforms/`，器件实现位于 `drivers/`，具体设备的原生组合位于 `compositions/`，接线、电气参数与分区位于 `boards/`，初始 UI/交互位于 `runtime/`。设备包独立选择平台、硬件组合与运行时引用；同一 C6 可以对应完全不同的屏幕、按键、传感器、引脚和初始化方式。`NOTES_OS_BOARD` 选择具体设备，构建生成独立 sketch，不修改公共系统代码。同拓扑改线可复用组合；不同拓扑增加组合并复用适用的器件驱动。当前实现包括 Agentic Notes E6 设备组合和无外设 C3 验证组合；S3 等平台尚需相应原生适配与实测，不把同一源码冒充同一可烧录二进制。详见 [硬件包接口](../hardware/agent-os/README.md)。
 
 上层 `notes.call` 与外部 `/os/invoke` 共用 Core 驱动入口及关机/占用检查。新增 VFS 相对模块导入、开机脚本配置、重载与 `on_stop`、保真 JSON null/空数组、二进制 hex/base64 编解码、精简分页能力发现。脚本创建的定时器和规则带运行实例 owner，退出/替换/故障清理，并隔离此前残留的定时事件。录音增加 readable 通知，无须硬编码轮询周期。
 
