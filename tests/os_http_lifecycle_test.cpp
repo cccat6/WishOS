@@ -74,6 +74,10 @@ int main(){JsonDocument a,out,empty,handle;a["url"]="http://test/";a["stream"]=t
   JsonDocument invalid;invalid.set(a);invalid[field]="invalid";if(!strcmp(field,"body"))invalid[field]=42;
   assert(core.invoke("/net/http","request",invalid.as<JsonObjectConst>(),out.to<JsonObject>(),owner));assert(!networkJob&&core.resources().promised()==0);
  }
+ // A maximum-size buffered result remains retrievable when JSON escaping and
+ // transport metadata prevent embedding the entire body in one wire reply.
+ responseBlocks=8;assert(!core.invoke("/net/http","request",a.as<JsonObjectConst>(),out.to<JsonObject>(),owner));handle["job_id"]=out["job_id"];join();pollNetwork();assert(!core.invoke("/net/http","read",handle.as<JsonObjectConst>(),out.to<JsonObject>(),owner));assert(out["body_requires_receive"]==true&&out["body"].isNull());
+ size_t recovered=0;for(unsigned offset=0;offset<4096;offset+=512){handle["offset"]=offset;assert(!core.invoke("/net/http","receive",handle.as<JsonObjectConst>(),out.to<JsonObject>(),owner));recovered+=out["bytes"].as<unsigned>();assert(out["next_offset"]==offset+512);}assert(recovered==4096);handle.remove("offset");assert(!core.invoke("/net/http","release",handle.as<JsonObjectConst>(),out.to<JsonObject>(),owner));
  // Reproduce the final-enqueue race between an empty read and the producer's
  // completion flag. A later chunk is not lost behind a premature finished=true.
  networkJob=new NetworkJob;networkJob->id=nextJob++;networkJob->owner=owner;networkJob->stream=true;networkJob->chunks=xQueueCreate(4,sizeof(NetworkChunk));handle["job_id"]=networkJob->id;

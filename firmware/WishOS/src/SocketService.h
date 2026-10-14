@@ -1,5 +1,6 @@
 #pragma once
 #include "Core.h"
+#include "WireBytes.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <ctype.h>
@@ -36,6 +37,11 @@ public:
    else if(!n||(n<0&&!transient())){event(s,"closed");::close(s.fd);s={};}
  }}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
+   const char*fields=(!strcmp(m,"listen")||!strcmp(m,"connect"))?"address,port":!strcmp(m,"write")?"id,text,hex":!strcmp(m,"read")?"id,length":!strcmp(m,"close")?"id":"";
+   for(auto f:a)if(!Core::containsMethod(fields,f.key().c_str()))return "unknown_socket_argument";
+   for(auto key:{"id","length","port"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "socket_argument_type";
+   if(a.containsKey("address")&&(!a["address"].is<const char*>()||a["address"].as<JsonString>().size()!=strlen(a["address"].as<const char*>())))return "socket_argument_type";
+
    if(!strcmp(m,"status")||(!strcmp(m,"read")&&!a["id"].is<uint32_t>())){out["active"]=active();auto list=out["sockets"].to<JsonArray>();for(auto&s:sockets_)if(s.fd>=0&&(!core_.callerOwner()||s.owner==core_.callerOwner())){auto o=list.add<JsonObject>();o["id"]=s.id;o["owner"]=s.owner;o["state"]=s.listener?"listening":s.connecting?"connecting":"connected";}out["capacity"]=4;out["address_family"]="ipv4";return nullptr;}
    if(!strcmp(m,"listen")||!strcmp(m,"connect")){
      if(!registered_)return "owner_hook_capacity";auto slot=vacant();if(!slot)return "socket_capacity";bool listen=!strcmp(m,"listen");
@@ -53,8 +59,7 @@ public:
    auto s=find(a["id"]|0u);if(!s)return "socket_not_found";if(core_.callerOwner()&&s->owner!=core_.callerOwner())return "socket_owned_by_other";
    if(!strcmp(m,"close")){::close(s->fd);*s={};return nullptr;}
    if(s->listener||s->connecting)return "socket_not_connected";
-   if(!strcmp(m,"write")){const char*text=a["text"]|"";size_t n=strlen(text);uint8_t bytes[1024];
-     if(a["hex"].is<const char*>()){const char*h=a["hex"];size_t z=strlen(h);if(z%2||z>2048)return "chunk_limit";n=z/2;for(size_t i=0;i<n;++i){if(!isxdigit((unsigned char)h[i*2])||!isxdigit((unsigned char)h[i*2+1]))return "invalid_hex";char tmp[3]={h[i*2],h[i*2+1],0};char*end;bytes[i]=strtoul(tmp,&end,16);if(*end)return "invalid_hex";}}else{if(n>1024)return "chunk_limit";memcpy(bytes,text,n);}
+   if(!strcmp(m,"write")){uint8_t bytes[1024];size_t n=0;if(auto e=wirePayload(a,bytes,sizeof bytes,n))return e;
      int flags=MSG_DONTWAIT;
 #ifdef MSG_NOSIGNAL
      flags|=MSG_NOSIGNAL;

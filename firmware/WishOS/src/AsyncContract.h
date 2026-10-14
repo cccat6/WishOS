@@ -7,6 +7,7 @@ namespace notesos {
 inline JsonObject asyncContract(JsonObject out,const char*method,const char*source,
  std::initializer_list<const char*>events={"completed","failed"}){
  auto spec=out["async"][method].to<JsonObject>();spec["source"]=source;
+ auto success=spec["success_events"].to<JsonArray>();if(events.size())success.add(*events.begin());
  auto names=spec["events"].to<JsonArray>();for(auto event:events)names.add(event);names.add("delivery_error");
  return spec["match"].to<JsonObject>();
 }

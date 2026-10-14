@@ -39,20 +39,11 @@ execution layer or privileges. `runtime` links to a directory with `package.json
 entry/modules and default policy snapshots are compiled read-only. User apps/assets
 can instead be replaced at runtime on writable providers. `/defaults.json` is a
 normal `Policies` restore snapshot, not an unchecked bypass; saved settings override
-package defaults. Optional `startup.script` references an ordinary Lua entrypoint;
-`startup.memory_bytes` is its optional VM ceiling, not a preallocated partition.
+package defaults. `/applications.json` selects ordinary launcher and voice application descriptors and their initial catalog. The application manager owns boot/activation selection. A descriptor's `memory_bytes` is an optional VM ceiling, not a preallocated partition.
 The E6 suite requests 81920 bytes; other applications retain the system default.
 Its measured 64-bit host startup peak is about 63 KiB; device use differs.
 The E6 package's entrypoint loads its UI manifest and opens its entry through public
-resource calls. There is no independent native factory-UI boot step. Explicit
-`/sys/runtime configure` startup settings override that reference, including when
-auto-start is disabled. Inline source is runtime-only; persistent startup requires a
-persistent provider. Package changes take effect in a new firmware deployment;
-user application references and files change through runtime interfaces. A board
-may override individual `assets` and the complete `startup` reference; omitted
-values use its selected runtime package. Sharing a driver does not require sharing
-the initial UI. `BoardPackage.h` is generated per target and for host test fixtures;
-no default board identity or factory pages are stored in kernel source.
+resource calls. There is no independent native factory-UI boot step. `/sys/apps configure` selects installed launcher/voice references. The low-level runtime resource can load/restart/stop a transient script, but does not create another boot-selection authority. Package files may reside on any suitable VFS provider. Factory packages publish their source repository/path and user help; replacing the launcher uses the same loading and resource interfaces as any other application.
 
 A chip model is not a device model. Two devices using ESP32-C6FH4 can have
 unrelated displays, input devices, pin assignments, power circuits and startup UIs.
@@ -249,3 +240,5 @@ offsets, strings and structured JSON are not rejected by an OS-wide positive-num
 rule. `HARDWARE_JSON` preserves structured values for native composition. Scalar
 constants are generated for convenience. Intentional signal aliases use explicit
 `shared_pin_groups`; undeclared pin collisions remain errors.
+
+Runtime packages can list `gzip_assets` for HTML/JS/CSS. The builder retains only deterministic `.gz` assets in the image; the HTTP adapter sends their encoding and the browser decompresses them. Other runtime files remain directly accessible. `applications.json` carries launcher/voice references, package provenance and device-selected recovery bindings.

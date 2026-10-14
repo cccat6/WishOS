@@ -22,11 +22,17 @@ export CPLUS_INCLUDE_PATH="$ROOT/hardware/agent-os:$ROOT/firmware/WishOS/src:$RO
 mkdir -p build/previews
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_core_test.cpp -o build/os-core-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_interaction_test.cpp -o build/os-interaction-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_rpc_link_test.cpp -o build/os-rpc-link-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_envelope_limits_test.cpp -o build/os-envelope-limits-test
+build/os-envelope-limits-test
+build/os-rpc-link-test
 build/os-interaction-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_e6_color_test.cpp -o build/os-e6-color-test
 build/os-e6-color-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_display_scheduler_test.cpp -o build/os-display-scheduler-test
 build/os-display-scheduler-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_native_operation_test.cpp -o build/os-native-operation-test
+build/os-native-operation-test
 build/os-core-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_retention_test.cpp -o build/os-retention-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/tests/os-stubs" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_littlefs_test.cpp -o build/os-littlefs-test
@@ -35,6 +41,12 @@ build/os-files-test
 build/os-littlefs-test
 build/os-retention-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_voice_test.cpp -o build/os-voice-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_recording_buffer_test.cpp -o build/os-recording-buffer-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_lease_concurrency_test.cpp -o build/os-lease-concurrency-test
+build/os-lease-concurrency-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_recording_archive_test.cpp -o build/os-recording-archive-test
+build/os-recording-archive-test
+build/os-recording-buffer-test
 build/os-voice-test
 "$CXX" $SYSROOT_FLAGS $CXX_SYSTEM_FLAGS -std=c++17 -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_sd_clock_test.cpp -o build/os-sd-clock-test
 build/os-sd-clock-test
@@ -54,6 +66,8 @@ build/os-nfs-scaling-test
 build/os-network-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_http_lifecycle_test.cpp -o build/os-http-lifecycle-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_ws_lifecycle_test.cpp -o build/os-ws-lifecycle-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_ble_lifecycle_test.cpp -o build/os-ble-lifecycle-test
+build/os-ble-lifecycle-test
 build/os-ws-lifecycle-test
 build/os-http-lifecycle-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_wifi_test.cpp -o build/os-wifi-test
@@ -83,6 +97,7 @@ build/os-ui/notes_input_test
 build/os-ui/notes_actuator_test
 build/os-ui/notes_memory_test
 build/os-ui/notes_app_test
+build/os-ui/notes_applications_test
 build/os-ui/notes_failure_test
 "$PYTHON" -m unittest discover -s tests -p 'test_board_packages.py' -v
 "$PYTHON" -m unittest discover -s tests -p 'test_os_build.py' -v

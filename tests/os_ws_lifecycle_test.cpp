@@ -34,6 +34,7 @@ enum WStype_t{WStype_CONNECTED,WStype_DISCONNECTED,WStype_FRAGMENT_TEXT_START,WS
 struct WebSocketsClient{
  std::function<void(WStype_t,uint8_t*,size_t)>callback;const char*headers=nullptr;bool connected=false;unsigned loops=0;
  void onEvent(std::function<void(WStype_t,uint8_t*,size_t)>fn){callback=fn;}void setReconnectInterval(unsigned){}void setExtraHeaders(const char*h){headers=h;}
+ void beginSSL(const char*,unsigned,const char*,const char*,const char*){}
  void begin(const char*,unsigned,const char*,const char*){}void beginSslWithCA(const char*,unsigned,const char*,const char*,const char*){}
  void loop(){entered=true;while(holdTransport.load())std::this_thread::yield();if(!connected){assert(headers&&strstr(headers,"X-Test: retained"));connected=true;callback(WStype_CONNECTED,nullptr,0);}++loops;}
  bool sendBIN(uint8_t*p,size_t n){callback(WStype_BIN,p,n);return true;}bool sendTXT(uint8_t*p,size_t n){callback(WStype_TEXT,p,n);return true;}

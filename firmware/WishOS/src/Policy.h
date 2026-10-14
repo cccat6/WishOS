@@ -61,20 +61,22 @@ public:
     static_assert(!std::is_pointer<T>::value,"Resolve string settings into a caller-owned JsonDocument");
     JsonDocument d;resolve(r,scope,d.to<JsonObject>());return d[key].isNull()?fallback:d[key].as<T>();
   }
-  void describe(JsonArray out) const {
-    for(size_t i=0;i<count_;++i){auto o=out.add<JsonObject>();const auto &s=fields_[i];o["resource"]=s.resource;o["key"]=s.key;o["type"]=s.type;o["nullable"]=s.nullable;
+  size_t settingCount(const char*resource=nullptr)const{size_t n=0;for(size_t i=0;i<count_;++i)if(!resource||!strcmp(resource,fields_[i].resource))++n;return n;}
+  void describe(JsonArray out,const char*resource=nullptr,unsigned start=0,unsigned limit=UINT32_MAX) const {
+    unsigned seen=0;for(size_t i=0;i<count_;++i){const auto&s=fields_[i];if(resource&&strcmp(resource,s.resource))continue;if(seen++<start)continue;if(out.size()>=limit)break;auto o=out.add<JsonObject>();o["resource"]=s.resource;o["key"]=s.key;o["type"]=s.type;o["nullable"]=s.nullable;
       JsonDocument v;deserializeJson(v,s.initial);o["default"]=v.as<JsonVariantConst>();
       if(!strcmp(s.type,"integer")||!strcmp(s.type,"number")){o["minimum"]=s.minimum;o["maximum"]=s.maximum;}
       if(s.choices&&*s.choices)o["choices"]=s.choices;
       o["apply_time"]=s.applyTime;o["scope"]=s.systemOnly?"system":"system_or_application";
     }
   }
-  void read(const char *scope,JsonObject out) const {
-    out["revision"]=revision_;out["scope"]=scope;out["overrides"]=saved_[scope];
-    auto sources=out["sources"].to<JsonObject>();
-    for(size_t i=0;i<count_;++i){auto&s=fields_[i];sources[s.resource][s.key]=saved_[scope][s.resource].as<JsonObjectConst>().containsKey(s.key)?scope:saved_["system"][s.resource].as<JsonObjectConst>().containsKey(s.key)?"system":"defaults";}
-    auto effective=out["effective"].to<JsonObject>();
-    for(size_t i=0;i<count_;++i)if(!effective.containsKey(fields_[i].resource))resolve(fields_[i].resource,scope,effective[fields_[i].resource].to<JsonObject>());
+  void read(const char *scope,JsonObject out,const char*resource=nullptr,unsigned start=0,unsigned limit=UINT32_MAX) const {
+    out["revision"]=revision_;out["scope"]=scope;auto overrides=out["overrides"].to<JsonObject>();auto sources=out["sources"].to<JsonObject>();auto effective=out["effective"].to<JsonObject>();unsigned seen=0,added=0;
+    for(size_t i=0;i<count_;++i){auto r=fields_[i].resource;if(resource&&strcmp(resource,r))continue;bool earlier=false;for(size_t k=0;k<i;++k)if(!strcmp(fields_[k].resource,r)){earlier=true;break;}if(earlier)continue;
+      if(seen++<start||added>=limit)continue;++added;resolve(r,scope,effective[r].to<JsonObject>());if(!saved_[scope][r].isNull())overrides[r]=saved_[scope][r];
+      for(size_t k=0;k<count_;++k){auto&s=fields_[k];if(strcmp(s.resource,r))continue;sources[r][s.key]=saved_[scope][r].as<JsonObjectConst>().containsKey(s.key)?scope:saved_["system"][r].as<JsonObjectConst>().containsKey(s.key)?"system":"defaults";}
+    }
+    out["next_cursor"]=start+added;out["more"]=start+added<seen;
   }
   const char *apply(JsonObjectConst a,JsonObject out,bool dry=false,Persist persist=nullptr){
     for(auto field:a)if(!choice("scope,expected_revision,changes,persist",field.key().c_str()))return "unknown_policy_argument";

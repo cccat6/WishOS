@@ -3,8 +3,8 @@ local report_map='05010906a1018501050719e029e71500250175019508810295017508810195
 local ready=false
 function on_start()
   notes.subscribe('/dev/buttons')
-  local r=notes.call('/dev/ble','start',{mode='hid',name='Notes Presenter',report_map_hex=report_map})
-  ready=r.ok
+  local r=notes.request('/dev/ble','start',{mode='hid',name='Notes Presenter',report_map_hex=report_map},function(e) ready=e.event=='operation_completed' end)
+  assert(r.ok,r.error)
 end
 function on_event(e)
   if not ready or e.source~='/dev/buttons' then return end

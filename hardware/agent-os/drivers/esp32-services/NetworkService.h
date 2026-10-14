@@ -56,7 +56,7 @@ static void pollNetwork(){
 static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
  const bool request=!strcmp(m,"request"),read=!strcmp(m,"read");
  if(!request&&!read&&strcmp(m,"receive")&&strcmp(m,"cancel")&&strcmp(m,"release"))return "unsupported_method";
- const char*allowed=request?"url,method,body,headers,stream,response_limit,timeout_ms,ca_pem":"job_id";
+ const char*allowed=request?"url,method,body,headers,stream,response_limit,timeout_ms,ca_pem":!strcmp(m,"receive")?"job_id,offset,length":"job_id";
  for(auto f:a)if(!Policies::choice(allowed,f.key().c_str()))return "unknown_http_argument";
  if(a.containsKey("job_id")&&(!a["job_id"].is<uint32_t>()||!a["job_id"].as<uint32_t>()))return "invalid_job_id";
  if(!request&&!read&&!a.containsKey("job_id"))return "job_id_required";
@@ -66,7 +66,13 @@ static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
  if(!strcmp(m,"cancel")){if(!networkJob->busy)return "network_job_finished";networkJob->cancel=true;out["status"]="cancel_requested";out["job_id"]=networkJob->id;return nullptr;}
  if(!strcmp(m,"release")){if(networkJob->busy)return "network_job_busy";delete networkJob;networkJob=nullptr;networkNotified=false;return nullptr;}
  if(!strcmp(m,"receive")){
-   if(!networkJob->stream)return "no_stream_response";
+   if(!networkJob->stream){
+    for(auto key:{"offset","length"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "response_range";
+    uint32_t at=a["offset"]|0u,limit=a["length"]|512u;if(!limit||limit>512)return "response_range";out["job_id"]=networkJob->id;
+    if(networkJob->busy){out["available"]=false;out["finished"]=false;return nullptr;}
+    if(at>networkJob->received)return "response_range";size_t n=std::min<size_t>(limit,networkJob->received-at);char encoded[1025];hex((const uint8_t*)networkJob->response+at,n,encoded);out["available"]=n>0;out["hex"]=encoded;out["bytes"]=n;out["next_offset"]=at+n;out["finished"]=at+n==networkJob->received;describeNetworkResult(out);return nullptr;
+   }
+   if(a.containsKey("offset")||a.containsKey("length"))return "stream_reads_are_queued_blocks";
    // Observe producer completion before reading the queue. An empty queue just
    // before a producer's final enqueue must never be reported as EOF.
    bool finished=!networkJob->busy.load();out["job_id"]=networkJob->id;
@@ -74,10 +80,10 @@ static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
    char data[1025];hex(chunk.data,chunk.length,data);out["available"]=true;out["hex"]=data;out["bytes"]=chunk.length;
    out["finished"]=finished&&!uxQueueMessagesWaiting(networkJob->chunks);networkJob->readableNotified=false;return nullptr;
  }
- if(read){out["active"]=networkActive();out["response_pending"]=networkJob!=nullptr;out["max_inline_response_bytes"]=4096;out["stream_chunk_bytes"]=512;out["https_trust"]="caller_provided_ca";
+ if(read){out["active"]=networkActive();out["response_pending"]=networkJob!=nullptr;out["max_buffered_response_bytes"]=4096;out["buffered_read"]="receive with offset and length; read embeds body only when it fits";out["stream_chunk_bytes"]=512;out["https_trust"]="caller_provided_ca";
    if(networkJob){out["job_id"]=networkJob->id;out["stream"]=networkJob->stream;out["owner"]=networkJob->owner;out["cancel_requested"]=networkJob->cancel.load();out["buffered_chunks"]=networkJob->chunks?uxQueueMessagesWaiting(networkJob->chunks):0;
      out["state"]="running";if(!networkJob->busy){out["state"]=httpOutcome(networkJob->status,networkJob->error).ok?"completed":"failed";out["status"]=networkJob->status;describeNetworkResult(out);
-       if(!core.callerOwner()||core.callerOwner()==networkJob->owner)out["body"]=networkJob->response;}}
+       if(!core.callerOwner()||core.callerOwner()==networkJob->owner){out["response_bytes"]=networkJob->received;out["body"]=networkJob->response;if(measureJson(out)>MAX_WIRE-512){out.remove("body");out["body_requires_receive"]=true;}}}}
    return nullptr;
  }
  if(networkJob)return networkJob->busy?"network_job_busy":"network_result_pending";

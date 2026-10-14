@@ -18,7 +18,7 @@ the sequence of hardware calls belong to runtime application files. The system
 implements loading and executing them; it does not prescribe a particular product
 flow. A hardware package supplies a startup reference to a factory runtime application
 and its resources, using these same public interfaces. There is no separate factory
-execution layer. Saved runtime startup configuration selects the user's replacement.
+execution layer. The application catalog selects the user's replacement launcher and voice entry.
 Replacing an application must preserve hardware invariants and system resource
 controls. Current implementation coverage and limits are listed in
 `docs/agent-os-runtime.md`; this boundary does not imply every application lifecycle
@@ -72,3 +72,9 @@ or build is not evidence of physical display/audio behavior.
 ## License
 
 WishOS original code is licensed under [MIT](LICENSE). Third-party components retain their existing notices. Device drivers are adapters used by WishOS, not definitions of the operating system.
+
+System-owned `/services/link` connects actively over WS/WSS or serves passive HTTP
+resource calls without tying the connection to the current UI application. The
+shared offline control page is a replaceable runtime asset; image encoding uses
+geometry and palette declared by the selected display adapter. See the Agent skill
+for compressed recording acknowledgements and indexed optional recording archives.

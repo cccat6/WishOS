@@ -6,6 +6,7 @@ struct SdReference {
   uint64_t key=0;
 };
 static SdReference sdReference;
+struct SdClockCache{uint64_t card=0;uint32_t profile=0,requested=0;};static SdClockCache sdClockCache;
 static uint8_t sdSwitchStatus[64];
 static uint32_t sdCandidateRequests[256],sdCandidateActual[256];
 
@@ -69,6 +70,7 @@ static bool sdVerifyRegisters(uint32_t requested){
   auto card=SD.card();if(!card)return false;
   for(unsigned round=0;round<12;++round){
     cid_t cid{};csd_t csd{};
+    if(sdCancellationRequested())return false;
     if(!card->readCID(&cid)||memcmp(&cid,&sdReference.cid,sizeof(cid))||
        !card->readCSD(&csd)||memcmp(&csd,&sdReference.csd,sizeof(csd)))return false;
     if(sdReference.hasOcr){uint32_t ocr=0;if(!card->readOCR(&ocr)||ocr!=sdReference.ocr)return false;}
@@ -93,15 +95,13 @@ static bool sdTryClock(uint32_t requested,bool cached){
   sdSetWritable(!sdLink.readOnly);
   return true;
 }
-static bool sdMountConfigured(){
+static bool sdMountConfigured(const SdConfiguration&desiredConfig){
   sdTuned=true;sdCanWrite=true;mounted=false;sdVolumeAttempted=false;
-  JsonDocument configured;policies.resolve("/sys/bus","system",configured.to<JsonObject>());
-  const char*mode=configured["sd_spi_mode"]|"auto";
-  uint32_t fixed=configured["sd_spi_hz"]|20000000u;
-  uint32_t ceiling=configured["sd_auto_ceiling_hz"]|80000000u;
-  bool experimental=configured["sd_allow_experimental"]|false;
+  const char*mode=desiredConfig.automatic?"auto":"fixed";
+  uint32_t fixed=desiredConfig.fixedHz,ceiling=desiredConfig.ceilingHz;
+  bool experimental=desiredConfig.experimental;
   sdLink={};copy(sdLink.activeMode,sizeof(sdLink.activeMode),mode);
-  sdLink.applied=sdConfiguration(policies);
+  sdLink.applied=desiredConfig;
   copy(sdLink.error,sizeof(sdLink.error),"card_init_failed");
   if(!strcmp(mode,"fixed")&&!sdClockExact(fixed,sdEffectiveHz)){
     copy(sdLink.error,sizeof(sdLink.error),"unsupported_exact_spi_clock");
@@ -132,11 +132,12 @@ static bool sdMountConfigured(){
     else copy(sdLink.error,sizeof(sdLink.error),"fixed_clock_handshake_failed");
   }else{
     if(allowed>ceiling)allowed=ceiling;
-    uint32_t cached=preferences.getUInt("sd_req_hz",0);
+    uint32_t cached=sdClockCache.requested;
     uint32_t profile=sdLink.applied.cacheProfile(hostMax,sdLink.cardModeMaxHz,sdLink.highSpeedEnabled);
-    if(preferences.getULong64("sd_card_id",0)==sdReference.key&&
-       preferences.getUInt("sd_profile",0)==profile&&cached&&
+    if(sdClockCache.card==sdReference.key&&
+       sdClockCache.profile==profile&&cached&&
        sdEffectiveHz(cached)<=allowed){
+      if(sdCancellationRequested()){copy(sdLink.error,sizeof sdLink.error,"cancelled");return false;}
       ++sdLink.candidateCount;
       if(sdTryClock(cached,true)){event("/dev/sd","link_ready");return true;}
     }
@@ -144,15 +145,10 @@ static bool sdMountConfigured(){
                                sdCandidateRequests,sdCandidateActual,
                                sizeof(sdCandidateRequests)/sizeof(sdCandidateRequests[0]));
     for(size_t i=0;i<n;++i){
+      if(sdCancellationRequested()){copy(sdLink.error,sizeof sdLink.error,"cancelled");return false;}
       ++sdLink.candidateCount;
       if(!sdTryClock(sdCandidateRequests[i],false))continue;
-      if(preferences.getULong64("sd_card_id",0)!=sdReference.key||
-         preferences.getUInt("sd_req_hz",0)!=sdCandidateRequests[i]||
-         preferences.getUInt("sd_profile",0)!=profile){
-        preferences.putULong64("sd_card_id",sdReference.key);
-        preferences.putUInt("sd_req_hz",sdCandidateRequests[i]);
-        preferences.putUInt("sd_profile",profile);
-      }
+      sdClockCache={sdReference.key,profile,sdCandidateRequests[i]};
       event("/dev/sd","link_ready");return true;
     }
     copy(sdLink.error,sizeof(sdLink.error),n?"no_register_verified_clock":"no_clock_candidate");
@@ -160,22 +156,20 @@ static bool sdMountConfigured(){
   boardSdSpi.setSckSpeed(1000000);sdSetWritable(false);
   event("/dev/sd","link_failed",sdLink.error);return false;
 }
-static bool sdMountVolume(bool retry=false){
+static bool sdMountVolume(const SdConfiguration&requestedConfig,bool retry=false){
   if(!sdLink.ready)return false;
   if(sdVolumeAttempted&&!retry)return mounted;
   sdVolumeAttempted=true;mounted=false;sdLink.partition=-1;
   sdVolumeSnapshot(false);
-  JsonDocument configured;policies.resolve("/sys/bus","system",configured.to<JsonObject>());
-  auto requestedConfig=sdConfiguration(policies);
+
   sdLink.applied.partition=requestedConfig.partition;
   sdLink.applied.experimentalIo=requestedConfig.experimentalIo;
-  if(sdLink.outOfSpec&&!(configured["sd_allow_experimental_io"]|false)){
+  if(sdLink.outOfSpec&&!requestedConfig.experimentalIo){
     copy(sdLink.volumeError,sizeof(sdLink.volumeError),"experimental_link_only");
     event("/dev/sd","volume_unavailable",sdLink.volumeError);return false;
   }
-  const char*choice=configured["sd_partition"]|"auto";
   uint8_t parts[5]={1,2,3,4,0};size_t n=5;
-  if(strcmp(choice,"auto")){parts[0]=!strcmp(choice,"superfloppy")?0:uint8_t(atoi(choice));n=1;}
+  if(requestedConfig.partition>=0){parts[0]=requestedConfig.partition;n=1;}
   for(size_t i=0;i<n;++i){
     if(SD.vol()->begin(SD.card(),true,parts[i])){
       mounted=true;sdLink.partition=parts[i];break;

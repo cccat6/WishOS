@@ -1,3 +1,4 @@
+#include "ConnectionProfiles.h"
 #include "drivers/esp32-services/EspWifiCapabilities.h"
 #include "compositions/agentic-notes-e6/Defaults.h"
 #include "CachePath.h"
@@ -15,6 +16,10 @@ struct ObservedFiles:MemoryFiles {
  const char*mkdir(const char*p)override{++writes;return MemoryFiles::mkdir(p);}
 };
 int main(){
+ {ConnectionProfiles profiles;JsonDocument a,o;a["profiles"]["custom-reader"]["address"]="arbitrary-protocol://target";a["profiles"]["custom-reader"]["custom"]=-1;
+ assert(!profiles.invoke("configure",a.as<JsonObjectConst>(),o.to<JsonObject>(),nullptr));assert(o["profiles"]["custom-reader"]["custom"]==-1);auto revision=o["revision"].as<unsigned>();a["profiles"]["invalid/name"]["x"]=1;assert(profiles.invoke("configure",a.as<JsonObjectConst>(),o.to<JsonObject>(),nullptr));assert(!profiles.invoke("read",JsonObjectConst(),o.to<JsonObject>(),nullptr)&&o["revision"]==revision&&!o["profiles"].containsKey("invalid/name"));
+ assert(!profiles.restore("{\"invalid/name\":{}}"));assert(!profiles.invoke("read",JsonObjectConst(),o.to<JsonObject>(),nullptr)&&o["profiles"]["custom-reader"]["custom"]==-1);}
+
  // A new sensor can declare signed offsets and fractional thresholds without a
  // kernel edit. Online changes and restored snapshots use the identical schema.
  const Setting sensorSettings[]={

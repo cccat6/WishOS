@@ -42,6 +42,37 @@ may start recording on a word, show a page, submit a remote request, or do nothi
 Do not automatically disable detection during playback; the application's policy
 and the adapter's duplex/AEC capability determine that combination.
 
+## Delivery and optional archives
+
+`/dev/mic start` returns `recording_id`. Retain that identity in every stop/read/
+acknowledgement so a later recording cannot replace the intended target. Multiple
+finished RAM tails may coexist within the advertised session capacity. Configure
+`network_buffer_blocks` and `storage_buffer_blocks` through the microphone policy;
+those are queue budgets, not total recording-duration limits.
+
+`read_chunk {recording_id,limit}` peeks compressed blocks without removing them.
+Only after durable server acceptance call `ack {recording_id,next_sequence}` using
+`offered_sequence`, or piggyback it as `after_sequence` in the next read. Repeating
+an unacknowledged read is safe. Overflow drops old blocks and reports missing
+samples; it does not write internal Flash. `release` frees a finished RAM handle.
+The sample timeline and sequence identify gaps independently of each packet's
+ADPCM predictor, so following packets remain decodable.
+
+When a removable storage sink is selected, preparation/writes/flush run in a native
+worker. `stored` and `durable` describe the file sink, not network delivery or ASR.
+`/services/recordings` reads a completed archive through VFS: `read {file}` returns
+metadata; `read_chunk {file,cursor,limit}` uses an existing fixed-entry block index
+and returns `next_cursor`. It never rebuilds an audio index on opening. `remove`
+removes the audio/index/metadata group after checking leases. Only explicitly
+selected archives are removed; ordinary files are not recording-cleanup targets.
+
+The default runtime suite submits the ordinary `voice` route. The Hub receives
+compressed blocks durably, can refill gaps from an optional archive, then orders
+ASR and Harness admission by recording start order. A following utterance can
+steer the existing session while the first turn runs. Delivery receipts and local
+history retention are independent: retry-only archives can be deleted after
+confirmed delivery; history remains under its configured space/count policy.
+
 ## Playback
 
 When `/dev/speaker` exists, inspect its rates, channels, codec formats, packet

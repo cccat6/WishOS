@@ -1,12 +1,13 @@
 // Included inside the BSP namespace. All file users share the same provider and SPI lock.
 static const char*validateSdVolume(){
+  if(sdWorkActive())return "resource_busy";
   if(!rail||!sdLink.ready)return "sd_link_unavailable";
   if(!mounted)return "volume_not_mounted";
   if(sdLink.outOfSpec&&!policies.get<bool>("/sys/bus","sd_allow_experimental_io",false))return "experimental_link_only";
   return nullptr;
 }
 static SdProvider sdFiles(SD,mounted,takeSPI,giveSPI,validateSdVolume);
-static void sdSetWritable(bool enabled){sdFiles.writable=enabled;}
+static void sdSetWritable(bool enabled){sdCanWrite=enabled;if(!sdWorkActive())sdFiles.writable=enabled;}
 // Called with the SPI lease held. Discovery only returns this snapshot.
 static void sdVolumeSnapshot(bool ready){
   if(ready)sdFiles.captureMount(uint64_t(sdReference.csd.capacity())*512,
@@ -19,9 +20,45 @@ static bool resolveFile(const char*input,char*full,const char*&relative,FileProv
 }
 static FileService fileService(vfs);
 static const char*fsHandler(const char*m,JsonObjectConst a,JsonObject o){return fileService.invoke(m,a,o);}
+static JsonDocument sdStatusSnapshot;static SdConfiguration sdRequestedConfiguration;
+static char sdWorkMethod[12]{};
+static const char*sdHandler(const char*,JsonObjectConst,JsonObject);
+static const char*runSdWork(void*,const std::atomic<bool>&cancel){
+ if(cancel)return "cancelled";
+ if(!strcmp(sdWorkMethod,"space"))return sdFiles.scanSpace();
+ if(!takeSPI())return "spi_busy";
+ const char*error=ensureRailNative();
+ if(!strcmp(sdWorkMethod,"rail")){giveSPI();return error;}
+ if(!error&&(!strcmp(sdWorkMethod,"probe")||!sdTuned||!sdRequestedConfiguration.sameLink(sdLink.applied)))sdMountConfigured(sdRequestedConfiguration);
+ if(!error&&cancel)error="cancelled";
+ if(!error&&sdLink.ready&&!strcmp(sdWorkMethod,"mount"))sdMountVolume(sdRequestedConfiguration,true);
+ if(!error)error=!sdLink.ready?sdLink.error:!strcmp(sdWorkMethod,"mount")&&!mounted?sdLink.volumeError:nullptr;
+ giveSPI();return error;
+}
+static void sdWorkSettled(void*){sdFiles.writable=sdCanWrite;sdFiles.publish();sdStatusSnapshot.clear();}
+struct SdWorkEntry{void(*run)(void*);void*context;};static SdWorkEntry sdWorkEntry;
+static NativeOperation sdOperation(core,"/dev/sd",{
+ [](void(*fn)(void*),void*context){sdWorkEntry={fn,context};return xTaskCreate([](void*){auto task=sdWorkEntry;task.run(task.context);vTaskDelete(nullptr);},"notes-sd",6144,nullptr,1,nullptr)==pdPASS;},8192},nullptr,runSdWork,sdWorkSettled);
+static bool sdWorkActive(){return sdOperation.active();}
+static bool sdWorkBlocksPeripherals(){return sdWorkActive()&&strcmp(sdWorkMethod,"space");}
+static bool sdCancellationRequested(){return sdOperation.cancellation().load();}
+static const char*requestSdSpace(){JsonDocument out;if(sdWorkActive())return "resource_busy";auto e=startSdWork("space",out.to<JsonObject>());return e?e:"resource_busy";}
+static void pollSdWork(){sdOperation.poll();}
+static const char*startSdWork(const char*method,JsonObject out){
+ if(sdWorkActive())return "operation_active";
+ if(strcmp(method,"rail")&&(shutdownRequested||pendingPower[0]))return "power_transition";
+ if(strcmp(method,"rail")&&(audioSpooling||displayActive()||streaming||(strcmp(method,"space")&&captureRunning)))return "resource_busy";
+ if(strcmp(method,"space")&&strcmp(method,"rail")&&(vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user")))return "storage_in_use";
+ if(!strcmp(method,"space")){if(auto e=validateSdVolume())return e;}
+ JsonDocument empty;sdStatusSnapshot.clear();sdHandler("read",empty.as<JsonObjectConst>(),sdStatusSnapshot.to<JsonObject>());
+ sdRequestedConfiguration=sdConfiguration(policies);copy(sdWorkMethod,sizeof sdWorkMethod,method);
+ sdFiles.background(sdWorkActive,requestSdSpace);
+ return sdOperation.start(method,out);
+}
 static const char* sdHandler(const char*m,JsonObjectConst a,JsonObject out){
   if(!strcmp(m,"read")){
-    sdFiles.describe(out);out["powered"]=rail;out["mounted"]=mounted;
+    if(sdWorkActive()){out.set(sdStatusSnapshot.as<JsonObjectConst>());out["state_snapshot"]="before_operation";sdOperation.read(out["operation"].to<JsonObject>());return nullptr;}
+    sdOperation.read(out["operation"].to<JsonObject>());sdFiles.describe(out);out["powered"]=rail.load();out["mounted"]=mounted;
     out["presence"]=sdLink.ready?"card_link_ready":"unknown";
     out["tuned"]=sdTuned;
     out["link_ready"]=sdLink.ready;
@@ -59,27 +96,10 @@ static const char* sdHandler(const char*m,JsonObjectConst a,JsonObject out){
     return nullptr;
   }
   if(!strcmp(m,"off"))return railOff();
-  if(!strcmp(m,"probe")){
-    if(vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "storage_in_use";
-    if(audioRunning||audioSpooling||displayActive()||streaming)return "resource_busy";
-    if(!takeSPI())return "spi_busy";
-    auto e=ensureRail();
-    if(!e)sdMountConfigured();
-    giveSPI();
-    if(e)return e;
-    sdHandler("read",a,out);
-    return sdLink.ready?nullptr:"sd_link_failed";
-  }
-  if(!strcmp(m,"mount")){
-    if(vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "storage_in_use";
-    if(audioRunning||audioSpooling||displayActive()||streaming)return "resource_busy";
-    if(!takeSPI())return "spi_busy";
-    auto e=ensureRail();
-    if(!e&&(!sdTuned||!sdConfiguration(policies).sameLink(sdLink.applied)))sdMountConfigured();
-    if(!e&&sdLink.ready)sdMountVolume(true);
-    giveSPI();
-    sdHandler("read",a,out);
-    return e?e:mounted?nullptr:sdLink.ready?"volume_unavailable":"sd_link_failed";
+  if(!strcmp(m,"cancel"))return sdOperation.cancel(a);
+  if(!strcmp(m,"probe")||!strcmp(m,"mount")||!strcmp(m,"space")){
+    if(a.size())return "unknown_sd_argument";
+    return startSdWork(m,out);
   }
   return "use_fs_resource";
 }
@@ -98,6 +118,7 @@ static const char* busHandler(const char*m,JsonObjectConst,JsonObject out){
     return nullptr;
   }
   if(strcmp(m,"read"))return "unsupported_method";
+  if(sdWorkActive()){out["operation_pending"]=true;out["display_spi_effective_hz"]=sdEffectiveHz(panelSpiHz);out["sd_link_ready"]=sdStatusSnapshot["link_ready"];out["sd_mounted"]=sdStatusSnapshot["mounted"];out["sd_active_effective_hz"]=sdStatusSnapshot["active_effective_hz"];return nullptr;}
   JsonDocument configured;policies.resolve("/sys/bus","system",configured.to<JsonObject>());
   out["display_spi_requested_hz"]=configured["display_spi_hz"];
   out["display_spi_effective_hz"]=sdEffectiveHz(panelSpiHz);
@@ -135,8 +156,14 @@ static const char*validatePlatformPolicy(const Policies&candidate){
 }
 static bool persistPolicies(const char*value,size_t n){return preferences.putString("policy",value)==n;}
 static const char* policyHandler(const char*m,JsonObjectConst a,JsonObject out){
-  if(!strcmp(m,"describe")){policies.describe(out["settings"].to<JsonArray>());out["max_scopes"]=8;out["max_serialized_bytes"]=4096;return nullptr;}
-  if(!strcmp(m,"read")){policies.read(a["scope"]|"system",out);out["restore_valid"]=policyRestoreOk;return nullptr;}
+  if(!strcmp(m,"describe")||!strcmp(m,"read")){
+    for(auto f:a)if(!Policies::choice("scope,resource,cursor,limit",f.key().c_str()))return "unknown_policy_argument";
+    for(auto key:{"scope","resource"})if(a.containsKey(key)&&(!a[key].is<const char*>()||a[key].as<JsonString>().size()!=strlen(a[key].as<const char*>())))return "policy_string_required";
+    for(auto key:{"cursor","limit"})if(a.containsKey(key)&&!a[key].is<unsigned>())return "policy_cursor_type";
+    const char*scope=a["scope"]|"system",*resource=a["resource"]|static_cast<const char*>(nullptr);unsigned cursor=a["cursor"]|0u,limit=a["limit"]|(!strcmp(m,"describe")?8u:2u);if(!limit||limit>16||!Policies::validScope(scope))return "policy_read_range";
+    if(!strcmp(m,"describe")){policies.describe(out["settings"].to<JsonArray>(),resource,cursor,limit);out["next_cursor"]=cursor+out["settings"].size();out["more"]=cursor+out["settings"].size()<policies.settingCount(resource);out["max_scopes"]=8;out["max_serialized_bytes"]=4096;}
+    else{policies.read(scope,out,resource,cursor,limit);out["restore_valid"]=policyRestoreOk;}return nullptr;
+  }
   if(!strcmp(m,"validate")||!strcmp(m,"apply")){
     if(!a["expected_boot_id"].isNull()&&strcmp(a["expected_boot_id"]|"",bootId))return "boot_changed";
     bool busChanged=false,sdChanged=false;
@@ -146,6 +173,7 @@ static const char* policyHandler(const char*m,JsonObjectConst a,JsonObject out){
       for(auto field:c["settings"].as<JsonObjectConst>())
         if(!strncmp(field.key().c_str(),"sd_",3)&&field.value()!=currentBus[field.key()])sdChanged=true;
     }
+    if(busChanged&&sdWorkActive()&&!strcmp(m,"apply"))return "storage_preparing";
     bool sdLocked=false;
     if(sdChanged&&!strcmp(m,"apply")){
       if(audioRunning||audioSpooling||displayActive()||streaming||vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "resource_busy";
@@ -188,11 +216,11 @@ static void sampleStats(){
   cpuKnown=n&&previous&&elapsed&&rest<=elapsed;if(cpuKnown)cpuPercent=100.0*(double(elapsed-rest)/double(elapsed));previous=total;previousIdle=idle;
 #endif
   statsWindow=uint32_t(now-statsAt);statsAt=now;
-  JsonDocument reading;auto sample=reading.to<JsonObject>();sample["heap_free_bytes"]=ESP.getFreeHeap();sample["largest_free_block_bytes"]=ESP.getMaxAllocHeap();if(cpuKnown)sample["cpu_percent"]=cpuPercent;else sample["cpu_percent"]=nullptr;sample["audio_queue_blocks"]=uxQueueMessagesWaiting(audioQueue);emit("/sys/stats","sample",sample);
+  JsonDocument reading;auto sample=reading.to<JsonObject>();sample["heap_free_bytes"]=ESP.getFreeHeap();sample["largest_free_block_bytes"]=ESP.getMaxAllocHeap();if(cpuKnown)sample["cpu_percent"]=cpuPercent;else sample["cpu_percent"]=nullptr;sample["audio_queue_blocks"]=audioDelivery.queued();emit("/sys/stats","sample",sample);
 }
 static const char* statsHandler(const char*,JsonObjectConst,JsonObject o){
   o["at_ms"]=statsAt;o["window_ms"]=statsWindow;o["heap_free_bytes"]=ESP.getFreeHeap();o["heap_min_free_bytes"]=ESP.getMinFreeHeap();o["largest_free_block_bytes"]=ESP.getMaxAllocHeap();o["clock_mhz"]=getCpuFrequencyMhz();if(cpuKnown)o["cpu_percent"]=cpuPercent;else{o["cpu_percent"]=nullptr;o["cpu_reason"]="sampling_unavailable_or_warmup";}
-  o["psram_bytes"]=ESP.getPsramSize();o["psram_free_bytes"]=ESP.getFreePsram();o["flash_bytes"]=ESP.getFlashChipSize();o["firmware_bytes"]=ESP.getSketchSize();o["event_drops"]=eventDrops.load()+core.eventOverruns();o["audio_dropped_samples"]=audioDrops.load();o["audio_queue_blocks"]=uxQueueMessagesWaiting(audioQueue);o["display_active"]=bool(displayActive());o["card_mounted"]=mounted;return nullptr;
+  o["psram_bytes"]=ESP.getPsramSize();o["psram_free_bytes"]=ESP.getFreePsram();o["flash_bytes"]=ESP.getFlashChipSize();o["firmware_bytes"]=ESP.getSketchSize();o["event_drops"]=eventDrops.load()+core.eventOverruns();o["audio_dropped_samples"]=audioDrops.load();o["audio_queue_blocks"]=audioDelivery.queued();o["display_active"]=bool(displayActive());o["card_mounted"]=sdFiles.available();return nullptr;
 }
 
 static int inputGate(const Event&e){
@@ -225,12 +253,7 @@ static const char*nfsHandler(const char*m,JsonObjectConst a,JsonObject out){
       if(auto e=policies.check(*s,field.value()))return e;options[field.key()]=field.value();}
     NfsOptions parsed;if(auto e=NfsOptions::parse(options.as<JsonObjectConst>(),parsed))return e;
     auto provider=vfs.get(parsed.provider);if(!provider)return "unknown_provider";
-    if(provider==&sdFiles){
-      if(audioRunning||audioSpooling||displayActive()||streaming)return "resource_busy";
-      if(!takeSPI())return "spi_busy";auto e=ensureSdReady();giveSPI();if(e)return e;
-      // This is an explicitly requested volume service, not a presence test.
-      if(!sdFiles.freeKnown){if(auto e=sdFiles.refreshSpace())return e;}
-    }
+    if(provider==&sdFiles){if(auto e=ensureSdReady())return e;}
     uint64_t epoch=(uint64_t(esp_random())<<32)|esp_random();
     if(auto e=nfsService.start(parsed,nfsTransport,epoch?epoch:1))return e;
     event("/services/nfs","started",parsed.provider);

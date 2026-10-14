@@ -69,12 +69,14 @@ UI 引擎输出普通 RGB565 区域；六色色值映射和控制器方向转换
 | `/sys/cache` | resolve：只计算路径和返回提供者快照，不访问存储；prepare：显式创建缓存目录。两者均不预留文件空间或执行淘汰 |
 | `/fs` | mounts/stat/list/read/write/mkdir/rename/remove；offset/size 使用十进制字符串保留 64 位精度 |
 | `/sys/ui` | capabilities/fonts/font_register/font_unregister/app_load/create/open/update/activate/close/refresh/back/read |
-| `/sys/runtime` | load/restart/stop/read/configure；模块、生命周期、持久启动配置、内存/指令预算 |
+| `/sys/runtime` | load/restart/stop/read；临时脚本、模块、生命周期、内存/指令预算 |
+| `/sys/apps` | list/inspect/install/remove/configure/launch/home/voice/exit/read；安装引用、启动器选择与切换 |
+| `/sys/navigation` | read/configure；独立于前台程序的系统返回／语音输入绑定 |
 | `/sys/workers` | submit/read/cancel/release；受限后台 Lua 计算、可用核心亲和性、结果事件 |
 | `/sys/events`, `/sys/rules`, `/sys/timers` | 有界事件日志、条件动作、定时事件 |
 | `/dev/display` | drivers/read/present/scene/clear，以及原生帧 begin/chunk/commit/abort；recover 仅在就绪后解除故障 |
-| `/dev/mic` | read/start/stop/read_chunk；时长、采样率、保存方式、溢出行为可配置 |
-| `/dev/sd` | read/probe/mount/off；只用卡寄存器握手选择链路频率，卷识别另行进行；卡无格式时链路仍可就绪 |
+| `/dev/mic` | read/start/stop/read_chunk/ack/release/list；时长、采样率、保存方式、溢出行为可配置 |
+| `/dev/sd` | read/probe/mount/space/cancel/off；只用卡寄存器握手选择链路频率，卷识别另行进行；卡无格式时链路仍可就绪 |
 | `/net/default`, `/dev/wifi` | 连接、状态及平台支持的功耗/TX 设置 |
 | `/net/http` | 有界异步文本请求，HTTP/HTTPS；HTTPS 目前需要调用方提供 CA；返回作业和完成事件 |
 | `/dev/buttons`, `/dev/imu`, `/dev/usb` | 按键/IMU事件、传感数据、CDC 状态 |
@@ -275,11 +277,11 @@ E6 端口提供蓝黄双色、快速彩色、高质量彩色三个固定复合�
 细节与先前板子的参考时间见 [E6 显示驱动](../skills/agentic-notes-hardware/references/e6-display.md)。
 新板尚未完成光学、录音与并发功耗验收，不能把主机驱动序列测试当成实屏结果。
 
-板包的普通 startup 引用选择基础 Lua 应用，页面/行为/显示驱动选择均在
-`assets/suite` 和 `assets/ui` 内。十页同时提供横竖版，欢迎页可选择热点、
-已保存网络或离线入口；其它页提供网络地址、服务配置摘要、存储、电源状态、
-录音与休眠。服务接入仍需配置上位应用。包里的单应用 80 KiB 上限来自该套
-脚本的测量，不改变全系统默认配额，也不一次占用 80 KiB。
+硬件包通过 `/applications.json` 选择桌面、语音和手机传图等普通应用引用。
+页面、按键含义和显示配置在运行时包内，用户可替换；横竖版页面共用应用逻辑。
+欢迎入口提供热点配网、已保存网络和本地配置，菜单提供应用列表、网络、服务、
+存储和设备状态。没有全局主动／被动工作模式。某个应用声明的内存上限属于
+该应用的资源请求，不改变系统默认配额，也不表示启动时一次占满相同大小的 RAM。
 
 图标是小型索引色文件，经同一 VFS 逐行读取；字体沿用方格像素对齐的
 主机编译流程。外部字库使用可随机读取的 NMF1 字形索引，不在设备执行
@@ -334,3 +336,29 @@ NTP 地址后同步成功，并已恢复原配置；这不等于默认外网服�
 系统核心负责运行、资源调用、呈现与调度；同仓的器件驱动负责各自硬件协议，具体设备组合选择驱动实例与接线，初始 UI 只是一套普通运行时引用。MCU 型号不决定功能组合。
 
 新增采样驱动通过统一 `Sampling` 辅助类使用已有资源 ABI：`describe/read` 不访问总线，`measure` 显式采集并产生可关联终态，`configure` 回显配置，应用定时器/规则决定周期与行为。测量等待释放 I2C；缓存结果标注采集时间，失败保留此前有效结果及其时间戳。IMU/地磁的 `enabled=false` 进入非工作模式。
+
+
+## 连接、长操作与归档
+
+`/services/link` 是系统拥有的 WS/WSS 控制连接；HTTP 资源接口可独立使用；运行时替换不改变其生命周期。`/sys/connections` 仅保存具名应用配置，不解释厂商／模型协议。Hub 的 `/mcp` 使用实时资源目录，不假定 E6 颜色或尺寸。
+
+原生 SDK 初始化、停止、SD 协商／挂载／容量扫描及录音落盘运行在原生工作任务。调用返回操作身份，完成后由系统循环发布回执；取消发生在协议允许的边界。光学刷新等已经开始的不可中断操作仍完成至硬件安全点。
+
+`/dev/mic read_chunk` 为可重试窥读，显式 `ack` 才推进每段录音的消费位置。`/services/recordings read_chunk` 通过捕获时生成的索引定位完成的录音块；没有存储卡时只使用短期 RAM 环形缓存。服务器的耐久确认、ASR、Harness admission／steer 和显示回执分开，历史保留策略不会因任务完成被隐式覆盖。
+
+`/sys/config describe` 支持 `resource` 筛选及 `cursor/limit` 分页；`read` 按资源分页，使用 `next_cursor/more`，避免一次读取所有策略超过控制报文。HTTP 缓冲响应过大时使用 `receive {job_id,offset,length}`，不丢弃结果或伪报成功。
+
+
+## 多应用与可替换桌面
+
+`/sys/apps` 管理多个安装引用，程序与资源存放在已选存储卷，按需启动。安装引用不执行程序；启动在当前运行时回调结束后发生，先验证候选程序，再切换并释放原实例拥有的资源。当前资源模型是一个前台实例加隔离工作器，多个已安装程序不等于全部常驻 RAM。
+
+预置桌面、语音入口、手机传图都是普通应用描述与 Lua／UI／网页资源。`/applications.json` 指定硬件包的初始引用和来源；用户通过 `/sys/apps configure` 选择自己的启动器。低层 `/sys/runtime` 只负责临时 load/restart/stop，不再拥有当前固件的独立启动配置入口。
+
+`/sys/navigation` 由硬件适配提供逻辑按键采样，独立于前台程序的手势参数和事件消费。系统绑定保留返回／语音入口；普通应用不能把这个入口删除。C6 的有效唤醒按键也包含这些受保护的按键。自定义启动器文件不可用时回到硬件包中的普通预置启动器，仍使用同一 ScriptHost。
+
+应用描述可用 `help` 说明操作；`inspect` 只读取描述，不启动程序或准备介质。默认网页在安装后展示说明。生成应用的 Agent 应参照已声明的默认包来源，提供首次引导、按键与组合说明、处理／错误反馈及返回方法。界面内容和具体流程不进入内核。
+
+不再把主动／被动连接作为用户工作模式。正常应用使用已配置的网络；配网和临时传图热点是应用流程。`/services/link` 的 enabled 与地址只是系统控制通道的传输配置，不决定设备是否联网。离线浏览器资源在构建时 gzip 压缩，由浏览器解压，避免占用 MCU 解压内存；源文件仍在运行时包里维护。
+
+当前版本验证：公共主机回归、Hub 104 项测试、C3/C6 构建与 S3 可选适配 SDK 编译通过。独立 C3 最终镜像验证了两个持久应用引用重启后保留且不自行执行、应用持有定时器／NFS、无限循环的退出回调被终止后仍能回到桌面、资源释放，以及应用替换期间系统 WS 控制通道持续可用。C3 固件 1,715,465 B、静态 RAM 124,792 B；C6 固件 3,987,608 B、静态 RAM 241,404 B。C6 的应用分区已接近容量；这些编译数值不是运行时堆余量或整机并发验收结果。

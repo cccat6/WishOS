@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compose MCU platform, device wiring/native composition and runtime assets."""
 import argparse
+import gzip
 import hashlib
 import json
 import math
@@ -128,7 +129,11 @@ def load(package):
     if len(buttons)!=p.get('button_count',len(buttons)) or len(set(buttons))!=len(buttons) or any(k not in pins for k in buttons):
         raise ValueError('invalid button mapping')
     assets = {}
-    for vpath, asset in asset_sources(root,b).items():
+    _,runtime=runtime_package(root,b)
+    compressed=b.get('gzip_assets',runtime.get('gzip_assets',[]))
+    sources=asset_sources(root,b)
+    if not isinstance(compressed,list) or any(not isinstance(path,str) or path not in sources or Path(path).suffix not in ('.html','.js','.css') for path in compressed):raise ValueError('invalid compressed web asset')
+    for vpath, asset in sources.items():
         if len(vpath)>=256 or not vpath.startswith('/') or str(Path(vpath)) != vpath or '..' in Path(vpath).parts or '\\' in vpath:
             raise ValueError('invalid asset path')
         raw = asset.read_bytes()
@@ -140,6 +145,9 @@ def load(package):
             if vpath.endswith('.json'):text=json.dumps(json.loads(text),ensure_ascii=False,separators=(',',':'))
             assets[vpath]=text
         else:assets[vpath]=raw
+        if vpath in compressed:
+            value=assets.pop(vpath);encoded=value.encode() if isinstance(value,str) else value
+            assets[vpath+'.gz']=gzip.compress(encoded,compresslevel=9,mtime=0)
     if p.get('asset_budget_bytes') and sum(len(x.encode()) if isinstance(x,str) else len(x) for x in assets.values())>p['asset_budget_bytes']:
         raise ValueError('compiled asset budget')
     defaults = json.loads(assets.get('/defaults.json','{}'))
@@ -155,15 +163,25 @@ def load(package):
         elif type(value) is not int or value<0 or value>0xffffffff or (key=='default_vm_memory_bytes' and value<16384) or (key=='memory_limit_bytes' and value==0):
             raise ValueError('invalid resource default: '+key)
     _,runtime=runtime_package(root,b)
-    b['startup']=b.get('startup',runtime.get('startup',{}))
-    if not isinstance(b['startup'], dict) or set(b['startup']) - {'script','memory_bytes'}:
-        raise ValueError('startup must reference an optional runtime script')
-    memory_hint=b['startup'].get('memory_bytes')
-    if memory_hint is not None and (type(memory_hint) is not int or not 16384<=memory_hint<=0xffffffff):
-        raise ValueError('invalid startup memory ceiling')
-    script=b['startup'].get('script','')
-    if not isinstance(script,str) or (script and (not script.startswith('/system/') or not isinstance(assets.get(script[7:]),str) or len(assets[script[7:]].encode())>8192)):
-        raise ValueError('startup script missing or too large')
+    if b.get('startup') or runtime.get('startup'):
+        raise ValueError('startup is defined by applications.json launcher reference')
+    applications=json.loads(assets.get('/applications.json','{}'))
+    if applications:
+        records=applications.get('applications',[])
+        if not isinstance(records,list):raise ValueError('invalid application catalog')
+        ids=set()
+        for record in records:
+            app_id=record.get('id');path=record.get('manifest','')
+            if not isinstance(app_id,str) or not app_id or app_id in ids:raise ValueError('duplicate or invalid application id')
+            ids.add(app_id)
+            if not path.startswith('/system/') or path[7:] not in assets:raise ValueError('application manifest missing')
+            descriptor=json.loads(assets[path[7:]])
+            if descriptor.get('format')!='wishos-app/1' or descriptor.get('id')!=app_id:raise ValueError('application manifest identity')
+            import posixpath
+            entry=posixpath.normpath(posixpath.join(posixpath.dirname(path),descriptor.get('entry','')))
+            if not entry.startswith('/system/') or not isinstance(assets.get(entry[7:]),str) or len(assets[entry[7:]].encode())>8192:raise ValueError('application entry missing or too large')
+        for role in ('launcher','voice'):
+            if applications.get(role) and applications[role] not in ids:raise ValueError('application role not installed')
     return root,b,port,p,assets
 
 def literal(value):
@@ -179,9 +197,8 @@ def generate(package, output):
     _,platform=platform_package(b)
     partition_hash=hashlib.sha256(inside(root,b['partition_file']).read_bytes()).hexdigest()
     fingerprint=hashlib.sha256(json.dumps({'board':b,'composition':p,'platform':platform,'partitions':partition_hash,'assets':asset_hashes,'composition_files':port_hashes,'drivers':driver_hashes},sort_keys=True).encode()).hexdigest()
-    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};',f'inline constexpr char STARTUP_SCRIPT[]={literal(b["startup"].get("script",""))};','struct Asset {const char*path;const char*data;size_t size;};','inline constexpr Asset ASSETS[]={']
+    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};','struct Asset {const char*path;const char*data;size_t size;};','inline constexpr Asset ASSETS[]={']
     insertion=lines.index('struct Asset {const char*path;const char*data;size_t size;};')
-    lines.insert(insertion,f'inline constexpr size_t STARTUP_MEMORY_BYTES={b["startup"].get("memory_bytes") or 0};')
     _,runtime=runtime_package(root,b)
     lines.insert(insertion,f'inline constexpr char RUNTIME_ID[]={literal(runtime.get("id","board-local"))};')
     lines.insert(insertion,f'inline constexpr char DRIVERS[]={literal(",".join(drivers))};')

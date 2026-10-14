@@ -93,9 +93,10 @@ public:
   }
   const char*remove(const char*id){if(!strncmp(id,"system:",7))return "system_condition_use_policy";for(auto&e:entries_)if(e.id[0]&&!strcmp(e.id,id)){if(core_.callerOwner()&&e.owner!=core_.callerOwner())return "condition_owned_by_other";e={};return nullptr;}return "condition_not_found";}
   bool active(const char*id)const {for(auto&e:entries_)if(!strcmp(e.id,id))return e.known&&e.available&&e.active;return false;}
-  void list(JsonObject out)const {
+  void list(JsonObject out,unsigned cursor=0,unsigned limit=CAPACITY)const {
     out["capacity"]=CAPACITY;auto arr=out["conditions"].to<JsonArray>();
-    for(auto&e:entries_)if(e.id[0]){auto o=arr.add<JsonObject>();o["id"]=e.id;o["owner"]=e.owner;o["source"]=e.source;o["property"]=e.property;o["operator"]=e.op;JsonDocument v;deserializeJson(v,e.target);if(strcmp(e.op,"change"))o["value"]=v.as<JsonVariantConst>();o["hysteresis"]=e.hysteresis;o["hold_ms"]=e.holdMs;o["interval_ms"]=e.intervalMs;o["emit_initial"]=e.initialEvent;if(e.known&&e.available)o["active"]=e.active;else o["active"]=nullptr;if(e.error[0])o["error"]=e.error;}
+    unsigned seen=0;for(auto&e:entries_)if(e.id[0]){if(seen++<cursor||arr.size()>=limit)continue;auto o=arr.add<JsonObject>();o["id"]=e.id;o["owner"]=e.owner;o["source"]=e.source;o["property"]=e.property;o["operator"]=e.op;JsonDocument v;deserializeJson(v,e.target);if(strcmp(e.op,"change"))o["value"]=v.as<JsonVariantConst>();o["hysteresis"]=e.hysteresis;o["hold_ms"]=e.holdMs;o["interval_ms"]=e.intervalMs;o["emit_initial"]=e.initialEvent;if(e.known&&e.available)o["active"]=e.active;else o["active"]=nullptr;if(e.error[0])o["error"]=e.error;}
+    out["next_cursor"]=cursor+arr.size();out["more"]=cursor+arr.size()<seen;
   }
   void tick(uint64_t now){
     bool processed[CAPACITY]{};

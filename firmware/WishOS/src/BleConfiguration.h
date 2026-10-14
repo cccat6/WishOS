@@ -6,14 +6,16 @@ namespace notesos {
 inline bool validBleUuid(const char*s){size_t n=strlen(s);if(n!=4&&n!=8&&n!=36)return false;for(size_t i=0;i<n;++i)if(n==36&&(i==8||i==13||i==18||i==23)){if(s[i]!='-')return false;}else if(!isxdigit((unsigned char)s[i]))return false;return true;}
 inline const char*normalizeBleProfile(JsonObjectConst in,JsonObject out){
  for(auto f:in)if(strcmp(f.key().c_str(),"name")&&strcmp(f.key().c_str(),"mode")&&strcmp(f.key().c_str(),"report_map_hex")&&strcmp(f.key().c_str(),"service_uuid")&&strcmp(f.key().c_str(),"characteristics"))return "unknown_ble_setting";
- for(auto k:{"name","mode"})if(in.containsKey(k)&&!in[k].is<const char*>())return "ble_profile_type";
+ for(auto k:{"name","mode","report_map_hex","service_uuid"})if(in.containsKey(k)&&(!in[k].is<const char*>()||in[k].as<JsonString>().size()!=strlen(in[k].as<const char*>())))return "ble_profile_type";
  const char*name=in["name"]|"Agentic Notes",*mode=in["mode"]|"central";
  if(!*name||strlen(name)>29)return "ble_name_limit";
  if(strcmp(mode,"gatt")&&strcmp(mode,"central")&&strcmp(mode,"hid"))return "ble_mode";
+ if(strcmp(mode,"hid")&&in.containsKey("report_map_hex"))return "ble_setting_not_supported_in_mode";
+ if(strcmp(mode,"gatt")&&(in.containsKey("service_uuid")||in.containsKey("characteristics")))return "ble_setting_not_supported_in_mode";
  out["name"]=name;out["mode"]=mode;
  if(!strcmp(mode,"hid")){const char*h=in["report_map_hex"]|"";size_t n=strlen(h);if(!n||n%2||n>1024)return "hid_report_map_required";for(size_t i=0;i<n;++i)if(!isxdigit((unsigned char)h[i]))return "invalid_hex";out["report_map_hex"]=h;}
  if(!strcmp(mode,"gatt")){const char*uuid=in["service_uuid"]|"";auto chars=in["characteristics"].as<JsonArrayConst>();if(!validBleUuid(uuid)||!chars.size()||chars.size()>4)return "gatt_configuration";out["service_uuid"]=uuid;auto target=out["characteristics"].to<JsonArray>();
-   for(auto c:chars){const char*u=c["uuid"]|"";if(!validBleUuid(u)||!c["properties"].is<unsigned>()||!c["properties"].as<unsigned>()||(c["properties"].as<unsigned>()&~26u))return "gatt_characteristic";for(auto old:target)if(!strcasecmp(old["uuid"].as<const char*>(),u))return "duplicate_gatt_uuid";auto t=target.add<JsonObject>();t["uuid"]=u;t["properties"]=c["properties"];}}
+   for(auto c:chars){if(!c.is<JsonObjectConst>())return "gatt_characteristic";for(auto f:c.as<JsonObjectConst>())if(strcmp(f.key().c_str(),"uuid")&&strcmp(f.key().c_str(),"properties"))return "unknown_gatt_setting";const char*u=c["uuid"]|"";if(!validBleUuid(u)||!c["properties"].is<unsigned>()||!c["properties"].as<unsigned>()||(c["properties"].as<unsigned>()&~26u))return "gatt_characteristic";for(auto old:target)if(!strcasecmp(old["uuid"].as<const char*>(),u))return "duplicate_gatt_uuid";auto t=target.add<JsonObject>();t["uuid"]=u;t["properties"]=c["properties"];}}
  return nullptr;
 }
 inline const char*mergeBleProfile(JsonObjectConst base,JsonObjectConst patch,JsonObject out){

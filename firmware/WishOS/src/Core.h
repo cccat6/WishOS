@@ -7,7 +7,10 @@
 #include <string.h>
 #include <stdlib.h>
 namespace notesos {
-constexpr unsigned MAX_DEVICES = 48, MAX_RULES = 16, MAX_EVENTS = 32, MAX_TIMERS = 12;
+#ifndef WISHOS_RESOURCE_CAPACITY
+#define WISHOS_RESOURCE_CAPACITY 48
+#endif
+constexpr unsigned MAX_DEVICES = WISHOS_RESOURCE_CAPACITY, MAX_RULES = 16, MAX_EVENTS = 32, MAX_TIMERS = 12;
 constexpr size_t MAX_WIRE = 4096, MAX_EVENT = 512;
 using Handler = const char *(*)(const char *, JsonObjectConst, JsonObject);
 struct Device {
@@ -15,6 +18,14 @@ struct Device {
   Handler handle;
   void (*describe)(JsonObject)=nullptr;
   const char *readMethods=""; // Declared side-effect-free calls, also valid during preparation.
+  void*context=nullptr;
+  const char*(*contextHandle)(void*,const char*,JsonObjectConst,JsonObject)=nullptr;
+  void(*contextDescribe)(void*,JsonObject)=nullptr;
+  template<class Driver>static Device bind(const char*path,const char*methods,const char*guide,Driver&driver,const char*reads=""){
+    Device d{path,methods,guide,nullptr,nullptr,reads};d.context=&driver;
+    d.contextHandle=[](void*p,const char*m,JsonObjectConst a,JsonObject o){return static_cast<Driver*>(p)->invoke(m,a,o);};
+    d.contextDescribe=[](void*p,JsonObject o){static_cast<Driver*>(p)->describe(o);};return d;
+  }
 };
 struct Event {
   uint32_t sequence = 0;
@@ -54,7 +65,7 @@ class Core {
   uint64_t now_ = 0;
   uint64_t(*clockSource_)()=nullptr;
   uint32_t invocationOwner_=0,nextOwner_=1,nextTimerId_=1;
-  struct OwnerHook{void*context=nullptr;void(*release)(void*,uint32_t)=nullptr;};OwnerHook ownerHooks_[16]{};
+  struct OwnerHook{void*context=nullptr;void(*release)(void*,uint32_t)=nullptr;};OwnerHook ownerHooks_[MAX_DEVICES]{};
   int (*gate_)(const Event&)=nullptr;
   bool (*observe_)(const Event&)=nullptr;
   const char*(*invokeGate_)(const char*,const char*)=nullptr;
@@ -85,7 +96,7 @@ public:
     std::lock_guard<std::recursive_mutex>lock(eventMutex_);return clockSource_?clockSource_():now_;
   }
   bool add(Device d) {
-    if (!d.path || !d.handle || count_ == MAX_DEVICES || find(d.path))
+    if (!d.path || (!d.handle&&!d.contextHandle) || count_ == MAX_DEVICES || find(d.path))
       return false;
     devices_[count_++] = d;
     return true;
@@ -129,10 +140,10 @@ public:
     if (!supports(*d, method))
       return "unsupported_method";
     if(invokeGate_)if(auto e=invokeGate_(path,method))return e;
-    auto previous=invocationOwner_;invocationOwner_=owner;auto result=d->handle(method,args,out);invocationOwner_=previous;return result;
+    auto previous=invocationOwner_;invocationOwner_=owner;auto result=d->contextHandle?d->contextHandle(d->context,method,args,out):d->handle(method,args,out);invocationOwner_=previous;return result;
   }
   const char*request(const char*path,const char*method,JsonObjectConst args,JsonObject out,uint32_t owner=0){
-    JsonDocument description;if(auto error=describe(path,description.to<JsonObject>()))return error;
+    JsonDocument description;if(auto error=describe(path,description.to<JsonObject>()))return error;if(description.overflowed())return "response_memory_low";
     auto spec=description["async"][method].as<JsonObjectConst>();if(spec.isNull())return "async_not_declared";
     // Producer tasks never wait for a native method to return: a driver may
     // hold its own lock while publishing. Capture candidates, then bind the reply.
@@ -160,11 +171,11 @@ public:
       d["methods"] = devices_[i].methods;
       d["guide"] = devices_[i].guide;
       d["read_methods"] = devices_[i].readMethods;
-      if(details&&devices_[i].describe)devices_[i].describe(d);
+      if(details){if(devices_[i].contextDescribe)devices_[i].contextDescribe(devices_[i].context,d);else if(devices_[i].describe)devices_[i].describe(d);}
     }
   }
   const char*describe(const char*path,JsonObject out)const {
-    auto d=find(path);if(!d)return "not_found";out["path"]=d->path;out["version"]=1;out["methods"]=d->methods;out["guide"]=d->guide;out["read_methods"]=d->readMethods;if(d->describe)d->describe(out);return nullptr;
+    auto d=find(path);if(!d)return "not_found";out["path"]=d->path;out["version"]=1;out["methods"]=d->methods;out["guide"]=d->guide;out["read_methods"]=d->readMethods;if(d->contextDescribe)d->contextDescribe(d->context,out);else if(d->describe)d->describe(out);return nullptr;
   }
   bool emit(const char *path, const char *name, JsonObjectConst data, uint32_t targetOwner=0,uint64_t timestamp=UINT64_MAX) {
     if (!path || !name || strlen(path) >= 48 || strlen(name) >= 40 ||
@@ -209,6 +220,7 @@ public:
       JsonDocument d;
       deserializeJson(d, e.data);
       x["data"] = d.as<JsonObjectConst>();
+      if(measureJson(out)>MAX_WIRE-256){a.remove(a.size()-1);break;}
       cursor = i;
     }
     out["cursor"] = cursor;
@@ -266,9 +278,10 @@ public:
     out["id"] = r->id;
     return nullptr;
   }
-  void listRules(JsonArray out) const {
-    for (auto &r : rules_)
-      if (r.used) {
+  unsigned ruleCount()const{unsigned n=0;for(auto&r:rules_)if(r.used)++n;return n;}
+  void listRules(JsonArray out,unsigned cursor=0,unsigned limit=MAX_RULES) const {
+    unsigned seen=0;for (auto &r : rules_)
+      if (r.used) {if(seen++<cursor||out.size()>=limit)continue;
         auto x = out.add<JsonObject>();
         x["id"] = r.id;
         x["enabled"] = r.enabled;x["owner"]=r.owner;
@@ -285,6 +298,10 @@ public:
         deserializeJson(w, r.where);
         x["where"] = w.as<JsonObjectConst>();
       }
+  }
+  const char*readRules(JsonObjectConst a,JsonObject out)const{
+    for(auto f:a)if(!containsMethod("cursor,limit",f.key().c_str()))return "unknown_rule_argument";for(auto key:{"cursor","limit"})if(a.containsKey(key)&&!a[key].is<unsigned>())return "rule_cursor_type";
+    unsigned cursor=a["cursor"]|0u,limit=a["limit"]|2u;if(!limit||limit>2)return "rule_page_limit";listRules(out["rules"].to<JsonArray>(),cursor,limit);out["next_cursor"]=cursor+out["rules"].size();out["more"]=cursor+out["rules"].size()<ruleCount();return nullptr;
   }
   bool removeRule(uint32_t id) {
     for (auto &r : rules_)

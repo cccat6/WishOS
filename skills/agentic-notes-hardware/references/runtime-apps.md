@@ -12,7 +12,7 @@ SPI, FreeRTOS, board headers or internal waveform tools.
 `on_start` runs only after replacement; its external effects cannot be rolled back.
 Read the returned running/fault state. `restart` rereads the current file, so it
 includes updated modules. `stop` calls optional `on_stop` with the same limits, then
-releases VM memory. Stop does not erase startup configuration.
+releases VM memory. Stop does not uninstall applications or change the launcher reference in `/sys/apps`.
 
 The callbacks are `on_start()`, `on_event(event)`, and optional `on_stop()`.
 `notes.subscribe(path)` / `notes.unsubscribe(path)` control subscriptions. Returning
@@ -28,9 +28,7 @@ instance identity, independently of its path and payload. The same routing appli
 to rules; a newly installed rule begins with the next event, not the input currently
 executing a rule replacement. The C6 HTTP client/WS/microphone adapter
 also closes or requests cancellation/stop on owner exit, with asynchronous tasks
-retained until safe. Shared persistent driver settings and explicit system services
-(such as NFS and BLE) are not rolled back automatically: stop those deliberately
-through their documented lifecycle if the app owns their intended lifetime.
+retained until safe. Persistent settings are not rolled back on exit. NFS/BLE/Thread sessions started by a runtime instance stop through their native lifecycle when that owner exits; services explicitly started by system control retain system lifetime. An irreversible SDK allocation is reported as retained until reboot, not falsely freed.
 The embedded build limits native parser/call recursion to 32 and reports that limit. Callbacks are bounded work units, not perpetual loops; use events/timers to continue.
 Instruction exhaustion faults that VM, not the entire system. Allocation/conversion failures report errors rather than delivering partial events or successful empty results. If a driver already performed a side effect before response allocation failed, inspect its state before retrying. Lua pattern functions
 `find/match/gmatch/gsub` are unavailable because their native backtracking bypasses
@@ -66,24 +64,12 @@ all carrying the recording ID and owner. Storage receipts also carry `file`,
 `durable`, `complete`, `capture_failed`, `missing_samples` and `bytes`: a durably
 stored partial recording is not a complete recording.
 
-Configure a boot application separately:
-
-```json
-{"path":"/sys/runtime","method":"configure","args":{"startup":{"auto_start":true,"file":"/storage/user/apps/main.lua","memory_bytes":32768,"instruction_budget":20000,"delay_ms":1000},"persist":true}}
-```
-
-The provider must be persistent. Missing media, invalid code or insufficient memory
-produces a boot error while system services remain available. Without `persist`, the
-new startup configuration is not saved for reboot. Reads do not probe files or mount
-media. Disable `auto_start` to cancel pending boot admission. The startup delay is
-configurable and is not a display-refresh delay.
-
-The factory suite is simply the hardware package's default `startup.script`
-reference. Its Lua entrypoint loads page and interaction resources through the same
-interfaces used by a user script. Saved runtime startup configuration takes
-precedence. A successful explicit `load` cancels a pending boot load, so a delayed
-factory start cannot overwrite an already selected user application. It does not
-silently persist the new selection; use `configure` with `persist:true` for that.
+Manage installed application and launcher references through `/sys/apps`; see
+[applications](applications.md). The factory launcher is an ordinary package
+selected by `/applications.json`. Its manifest and user packages share the same
+ScriptHost. Low-level `load` is useful for a temporary script but does not replace
+the selected launcher. The manager defers switching until the current callback
+returns and protects the system home/voice entry.
 
 `/sys/ui app_load {file}` loads a UI/interaction manifest and returns its `entry`.
 It validates the entry UI before replacing bindings; call `open {path: entry}`
@@ -123,18 +109,12 @@ running. `on_start` is still side-effectful and cannot be rolled back globally.
 Application packages can validate their own configuration in this phase. Callbacks reclaim temporary
 coroutines at their bounded VM boundary; app and worker memory remain separate.
 
-For a startup file on a removable volume, explicitly configure a preparation
-step (up to four) alongside the persisted startup file:
-
-```json
-{"startup":{"auto_start":true,"file":"/storage/user/apps/default/main.lua","memory_bytes":null,"prepare":[{"path":"/dev/sd","method":"mount","args":{}}]},"persist":true}
-```
-
-The selected driver's mount operation still respects leases and reports missing,
-unformatted or unsupported media. Discovery does not mount storage. Preparation
-runs at the next boot; failure reports `boot_failed` while system services remain
-available. Install a replacement into a new versioned directory, then activate it;
-do not overwrite files of an active application one by one.
+An explicit application launch may prepare its unavailable volume through the
+provider's declared preparation operation. It respects leases and waits for the
+adapter's completion contract. Listing installed references does not mount or
+format media. Replace packages in a fresh version directory; do not overwrite an
+active application's files one by one. A missing custom home/voice package falls
+back to the device-selected ordinary factory package.
 
 Instance `memory_bytes` is a ceiling, not a preallocated RAM partition. Omission
 (or null for the main runtime) inherits `/sys/resources default_vm_memory_bytes`.
@@ -164,15 +144,16 @@ inside the scripting engine. The low-level on_event entrypoint is still availabl
 
 ## Publishing a runtime reference
 
-`tools/os_client.py` provides `Client.publish_app(directory, mount, entry,
-persist=False, memory_bytes=None)`. It uploads to a fresh version directory,
-round-trip verifies file lengths/SHA-256, writes a package manifest, then loads the
-entry through the ordinary runtime. Only successful activation may update startup.
-Persistent startup uses the selected provider's declared preparation operation.
-No implicit formatting, overwrite of the current version, or automatic old-version
-deletion occurs. A lost activation response is reconciled by reading current
-runtime state, not by repeating `on_start`. Failure during `on_start` may already
-have caused external effects; it is not transactionally rolled back.
+`tools/os_client.py` provides `Client.publish_app(directory, mount, entry='app.json',
+persist=False, launch=True, launcher=False)`. It requires a `wishos-app/1`
+descriptor, uploads a fresh version directory, round-trip verifies lengths/SHA-256,
+and registers the descriptor with `/sys/apps install`. Registration does not execute
+code. Persistence saves the installation reference; selecting it as the launcher
+is a separate explicit option. Lost activation replies are reconciled through
+runtime and application state, never by blindly repeating `on_start`. An install
+or activation failure does not overwrite the previous package's files. Old versions
+are not silently deleted. Use `--publish-app DIR --persist` for the corresponding
+CLI workflow; `--launcher` explicitly selects the installed application as home.
 
 `on_prepare` may call only the resource's advertised `read_methods`. A new compiled
 driver declares these methods in its composition; the VM contains no device-path

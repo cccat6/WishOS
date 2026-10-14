@@ -1,11 +1,13 @@
 ---
 name: wishos-device-api
-description: Discover and operate Notes OS resources, inspect live system state and constraints, configure behavior policies, and build portable UI or device applications. Use for display, audio input/output, buttons, networking, power, files, fonts, jobs and conditional behaviors; discover capabilities rather than assuming a particular MCU, display or storage device.
+description: Discover and operate WishOS resources, inspect live system state and constraints, configure behavior policies, and build portable UI or device applications. Use for display, audio input/output, buttons, networking, power, files, fonts, jobs and conditional behaviors; discover capabilities rather than assuming a particular MCU, display or storage device.
 ---
 
-# Notes OS resource control
+# WishOS resource control
 
 For direct event registration and asynchronous completion functions, read [application callbacks](references/callbacks.md).
+
+For installed packages, launchers, application switching, protected return/voice entry and user guidance, read [applications](references/applications.md).
 
 For script modules, startup/lifecycle, binary data and background compute, read [runtime applications](references/runtime-apps.md). Hardware wiring belongs to the deployment package; runtime applications operate exclusively through system resources.
 
@@ -27,7 +29,7 @@ For network sockets, BLE, Thread/Zigbee boot selection and local/remote executio
 
 Read [driver guide](references/driver-guide.md) for the invocation workflow and [system design](references/runtime-design.md) for layering, configuration, storage and UI integration. Read [dynamic UI](references/dynamic-ui.md) for runtime files, image preparation and limits. The longer design includes future targets; only methods and fields actually advertised by the connected implementation are executable.
 
-Start with capability discovery and current state. Use the available transport/MCP entrypoint; the current prototype bridge exposes hardware_discover and hardware_invoke. Resolve resource instances, interface versions, network/display/audio/input availability and storage mounts. Never require a particular board name, GPIO, three buttons, Wi-Fi or microSD in a portable application.
+Start with capability discovery and current state. Use the available transport/MCP entrypoint; the Hub exposes discover_resources, describe_resource and invoke_resource; the direct-device bridge exposes hardware_discover and hardware_invoke. Resolve resource instances, interface versions, network/display/audio/input availability and storage mounts. Never require a particular board name, GPIO, three buttons, Wi-Fi or microSD in a portable application.
 
 Separate immutable hardware facts, system correctness constraints, build limits, policy defaults and effective settings. Query parameter schemas and current values before changes. Use validate/apply with a configuration revision when implemented. Read deferred/applied results and effective settings. Do not silently clamp an unsupported request or treat a submitted value as applied.
 

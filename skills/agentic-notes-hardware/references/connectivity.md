@@ -15,7 +15,7 @@ registered. Stop storage/network services, finish display/recording work, then u
 `/sys/power reboot` to apply selection. Changing the setting never retargets an active
 interrupt callback. BLE and Wi-Fi have separate lifecycles.
 
-Thread `start` accepts active Operational Dataset TLVs as `dataset_hex`; omit it only
+Thread `start`/`stop` run asynchronously with `operation_id` and operation_completed/operation_failed receipts. Its status snapshot remains readable during initialization/teardown. `start` accepts active Operational Dataset TLVs as `dataset_hex`; omit it only
 to resume an existing dataset. `read` returns role and IPv6 address; `stop` deinitializes.
 Use `/net/udp` with IPv6 for datagrams. Thread membership supplies a network, not an
 ecosystem account or application protocol implementation.
@@ -36,7 +36,7 @@ No ecosystem adapter, account login or vendor appliance schema is built into the
   rather than overwriting an unread result. Pass its `job_id` to `receive`, `cancel`
   and `release`, and to `read` when reading a specific result. A stale ID cannot
   operate on a replacement. A full chunk queue applies backpressure; unattended
-  streams can time out. `cancel` requests cooperative termination; `release`
+  streams can time out. Buffered responses too large to embed set `body_requires_receive`; read them with `receive {job_id,offset,length}` (up to 512 bytes) and follow `next_offset`. `cancel` requests cooperative termination; `release`
   rejects a running task and explicitly discards remaining response data. A script exit cancels its own request and releases it only after task exit. Blocking connection/TLS work can still last until its configured timeout. HTTPS takes `ca_pem`.
 - `/net/tcp status/listen/connect/read/write/close`: four nonblocking IPv4 socket slots.
   `connect` takes a numeric `address`; DNS names are supported by HTTP/WS clients.
@@ -46,7 +46,7 @@ No ecosystem adapter, account login or vendor appliance schema is built into the
 - `/net/udp open/send/receive/close`: numeric IPv4 or IPv6, bounded datagrams. Thread
   uses IPv6. Inspect packet source address/port and consume the readable notification.
 - `/net/ws connect/send/receive/close`: WS/WSS client, bounded messages. Configure
-  host/port/path, TLS CA and reconnect interval. DNS/TLS/reconnect run on a native
+  host/port/path, TLS CA and reconnect interval. Peer verification defaults to enabled; `verify_peer:false` explicitly selects encrypted transport without certificate authentication. DNS/TLS/reconnect run on a native
   transport task. Connect has a `connection_id`; queued sends have a `message_id`
   and a sent/send_failed completion. Close is requested immediately and reaches
   `closed` after the transport task exits. Consume the queue and observe drops.
@@ -64,7 +64,7 @@ No ecosystem adapter, account login or vendor appliance schema is built into the
 
 ## BLE
 
-`/dev/ble start` supports `mode:"gatt"`, `"hid"`, or `"central"`.
+`/dev/ble start`, `restart` and `stop` return operation IDs and complete on the native lifecycle worker. Use `notes.request` before depending on the new service. `start` supports `mode:"gatt"`, `"hid"`, or `"central"`.
 GATT accepts a service UUID and up to four `{uuid,properties}` characteristics;
 property bits are READ=2, WRITE=8, NOTIFY=16. `write` sets a characteristic index and
 optionally notifies. Incoming writes generate events.
@@ -91,20 +91,28 @@ consuming, then `complete` using `expected_boot_id`. Apps read results and expli
 reboot clears volatile requests. Receiving a request is not permission to invent new
 external side effects.
 
-`hub/src/os-remote.ts` supplies a host relay and pluggable handlers. `route:"agent"`
-can use the existing Hub's bound Harness/session; its initial result is an acceptance
-receipt, not task completion. `agent_status` fetches status without running the model.
-Other routes are ordinary host service functions (rendering, transformations, vendor
-integrations) authored by applications. Keep their request IDs idempotent; generic
-handler side effects across host process crashes require application-owned persistence.
+`/services/link` configures a system control connection independently of the
+loaded application. Set `enabled:true` with endpoint fields, or `enabled:false`; this is not a user work mode and does not change Wi-Fi association. The device also serves the same ABI at `/os/invoke` over HTTP.
+When enabled, the connection opens WS/WSS to the configured host/port/path and serves the same
+resource ABI over `wishos-rpc/1`. Read desired/applied revisions, pending activation
+and actual connection separately. Configuration replaces the previous settings;
+`persist:true` saves them. Application replacement does not terminate this link.
 
-Start the relay after building the Hub with `NOTES_OS_URL`, and either
-`NOTES_HUB_URL` + `NOTES_DEVICE_ID` or `NOTES_SERVICE_MODULE`, then `npm run os-bridge`.
-The module exports `handlers`. Optional `NOTES_HUB_TOKEN` authenticates the existing Hub.
-Agent output can use hardware_invoke to push a new UI/file or deliver an application
-result; service execution does not depend on a microphone trigger.
+The separate Hub accepts active devices at `/os/device?id=<device_id>`. A Hub with a direct device address can use `protocol:"wishos"` and `deviceUrl`. Both attach the same
+remote dispatcher and durable host journal. The Hub MCP at `/mcp` discovers
+resource methods; legacy Notes v2 uses an explicit `/mcp/notes` adapter. No E6
+geometry or waveform exists in the WishOS MCP contract.
 
-BLE asynchronous connect/GATT/scan calls carry operation IDs and support `notes.request`.
-Zigbee start/send also carry operation IDs. A failure before starting its worker
-releases admission. After the vendor SDK acquires an unreleasable cluster graph,
-a failed start reports `reboot_required` and rejects repeated allocations.
+Host handlers are ordinary application functions. `route:"agent"` submits to the
+bound Harness; `route:"voice"` collects compressed capture and invokes the selected
+ASR/Harness adapters. A receipt means admission, not final task completion. The
+standalone `npm run os-bridge` also accepts `NOTES_SERVICE_MODULE` for custom routes,
+`NOTES_OS_URL`, `NOTES_HUB_URL`, `NOTES_DEVICE_ID`, optional `NOTES_HUB_TOKEN`, and a
+`NOTES_OS_JOURNAL` SQLite path. Only a handler with an upstream idempotency guarantee
+may declare `replaySafe`. A process crash during another side effect yields an
+unknown-outcome receipt rather than silently repeating it.
+
+Zigbee start/send carry operation IDs. A failure before starting its worker releases
+admission. After the vendor SDK acquires an unreleasable cluster graph, a failed
+start reports `reboot_required` and rejects repeated allocations. Pause is rejected
+while an APS send is in flight so its confirmation cannot be suspended indefinitely.

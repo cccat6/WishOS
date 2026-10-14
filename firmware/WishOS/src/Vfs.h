@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <strings.h>
+#include <mutex>
 namespace notesos {
 struct FileInfo { uint64_t size=0; bool directory=false; };
 inline bool parseOffset(JsonVariantConst v,uint64_t &out){
@@ -63,29 +64,45 @@ public:
 };
 class Vfs {
   FileProvider* providers_[8]{};size_t count_=0;
-  struct Lease{char path[256]{};uint32_t owner=0;};Lease leases_[16];
-public:
-  bool lockRead(const char*path,uint32_t owner){if(!owner||strlen(path)>=256)return false;for(auto&l:leases_)if(l.owner==owner&&!strcmp(l.path,path))return true;for(auto&l:leases_)if(!l.owner){strcpy(l.path,path);l.owner=owner;return true;}return false;}
-  void release(uint32_t owner){for(auto&l:leases_)if(l.owner==owner)l={};}
-  bool hasLeasesUnder(const char*path)const{for(auto&l:leases_)if(l.owner&&(pathWithin(path,l.path)||pathWithin(l.path,path)))return true;return false;}
-  bool canMutate(const char*path,bool folded=false)const{
-    if(!folded)return !hasLeasesUnder(path);
-    const char*relative=nullptr;auto provider=resolve(path,relative);
-    auto within=[&](const char*root,const char*child){
-      if(!strcmp(root,"/"))return true;
-      while(*root&&*child){while(*root=='/')++root;while(*child=='/')++child;char a[256],b[256];size_t n=0,m=0;
-        while(root[n]&&root[n]!='/'){if(n>=255)return false;a[n]=root[n];++n;}a[n]=0;
-        while(child[m]&&child[m]!='/'){if(m>=255)return false;b[m]=child[m];++m;}b[m]=0;
-        if(provider?!provider->sameName(a,b):strcasecmp(a,b))return false;root+=n;child+=m;
+  struct Lease{char path[256]{};uint32_t owner=0;const void*scope=nullptr;bool write=false,folded=false;};Lease leases_[16];
+  mutable std::recursive_mutex leaseMutex_;
+  bool overlap(const char*a,const char*b,bool folded)const{
+    if(!folded)return pathWithin(a,b)||pathWithin(b,a);
+    const char*relative=nullptr;auto provider=resolve(a,relative);
+    auto within=[&](const char*root,const char*child){if(!strcmp(root,"/"))return true;
+      while(*root&&*child){while(*root=='/')++root;while(*child=='/')++child;char x[256],y[256];size_t n=0,m=0;
+        while(root[n]&&root[n]!='/'){if(n>=255)return false;x[n]=root[n];++n;}x[n]=0;
+        while(child[m]&&child[m]!='/'){if(m>=255)return false;y[m]=child[m];++m;}y[m]=0;
+        if(provider?!provider->sameName(x,y):strcasecmp(x,y))return false;root+=n;child+=m;
       }return !*root;
-    };
-    for(auto&l:leases_)if(l.owner&&(within(path,l.path)||within(l.path,path)))return false;return true;
+    };return within(a,b)||within(b,a);
   }
+  const char*scoped(const char*path,const void*scope,bool write,bool folded){
+    std::lock_guard<std::recursive_mutex>lock(leaseMutex_);if(strlen(path)>=256)return "invalid_path";
+    for(auto&l:leases_)if((l.owner||l.scope)&&l.scope!=scope&&(write||l.write)&&overlap(path,l.path,folded||l.folded))return "file_in_use";
+    for(auto&l:leases_)if(l.scope==scope&&!strcmp(l.path,path))return nullptr;
+    for(auto&l:leases_)if(!l.owner&&!l.scope){strcpy(l.path,path);l.scope=scope;l.write=write;l.folded=folded;return nullptr;}return "file_lease_capacity";
+  }
+  void releaseScope(const void*scope){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if(l.scope==scope)l={};}
+public:
+  // Short file operations use unique scope identities; application/driver lease
+  // owner numbers cannot collide with or release them. Never hold this mutex
+  // across physical I/O: only the lease record survives the operation.
+  class Access {Vfs&vfs_;bool write_;public:Access(Vfs&v,bool write):vfs_(v),write_(write){}Access(const Access&)=delete;Access&operator=(const Access&)=delete;~Access(){vfs_.releaseScope(this);}const char*add(const char*path,bool folded=false){return vfs_.scoped(path,this,write_,folded);}};
+  bool lockRead(const char*path,uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);if(!owner||strlen(path)>=256)return false;
+    const char*relative;auto provider=resolve(path,relative);bool folded=provider&&provider->caseInsensitive();
+    for(auto&l:leases_)if(l.write&&overlap(path,l.path,folded||l.folded))return false;
+    for(auto&l:leases_)if(!l.scope&&l.owner==owner&&!strcmp(l.path,path))return true;
+    for(auto&l:leases_)if(!l.owner&&!l.scope){strcpy(l.path,path);l.owner=owner;l.folded=folded;return true;}return false;
+  }
+  void release(uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if(!l.scope&&l.owner==owner)l={};}
+  bool hasLeasesUnder(const char*path)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if((l.owner||l.scope)&&overlap(path,l.path,l.folded))return true;return false;}
+  bool canMutate(const char*path,bool folded=false)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if((l.owner||l.scope)&&overlap(path,l.path,folded||l.folded))return false;return true;}
   struct Pin{FileProvider*provider=nullptr;uint32_t owner=0;};Pin pins[8];
-  bool pin(FileProvider&p,uint32_t owner){if(!owner)return false;for(auto&x:pins)if(!x.owner){x={&p,owner};return true;}return false;}
-  void unpin(uint32_t owner){for(auto&x:pins)if(x.owner==owner)x={};}
-  bool pinned(const FileProvider&p)const{for(auto&x:pins)if(x.provider==&p)return true;return false;}
-  bool pinnedPath(const char*path)const{for(auto&x:pins)if(x.provider&&(pathWithin(path,x.provider->mount)||pathWithin(x.provider->mount,path)))return true;return false;}
+  bool pin(FileProvider&p,uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);if(!owner)return false;for(auto&x:pins)if(!x.owner){x={&p,owner};return true;}return false;}
+  void unpin(uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&x:pins)if(x.owner==owner)x={};}
+  bool pinned(const FileProvider&p)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&x:pins)if(x.provider==&p)return true;return false;}
+  bool pinnedPath(const char*path)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&x:pins)if(x.provider&&(pathWithin(path,x.provider->mount)||pathWithin(x.provider->mount,path)))return true;return false;}
   bool add(FileProvider &p){if(count_==8)return false;for(size_t i=0;i<count_;++i)if(!strcmp(providers_[i]->mount,p.mount)||!strcmp(providers_[i]->id,p.id))return false;providers_[count_++]=&p;return true;}
   FileProvider* resolve(const char* path,const char*&relative)const{
     FileProvider*best=nullptr;size_t longest=0;

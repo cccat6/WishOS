@@ -11,11 +11,11 @@
 #include <iostream>
 using namespace notesos;using namespace notesos::drivers;
 struct BusFixture {
- bool held=false,busy=false;unsigned transfers=0,locks=0,unlocks=0;const char*failure=nullptr;
+ bool held=false,busy=false;unsigned transfers=0,locks=0,unlocks=0,failAt=0;const char*failure=nullptr;
  uint8_t registers[128][256]{};uint8_t env[6]{};std::vector<uint16_t>commands;
  static bool acquire(void*p){auto&s=*static_cast<BusFixture*>(p);if(s.busy)return false;assert(!s.held);s.held=true;++s.locks;return true;}
  static void release(void*p){auto&s=*static_cast<BusFixture*>(p);assert(s.held);s.held=false;++s.unlocks;}
- static const char*transfer(void*p,uint8_t address,const uint8_t*tx,size_t tn,uint8_t*rx,size_t rn){auto&s=*static_cast<BusFixture*>(p);assert(s.held);++s.transfers;if(s.failure)return s.failure;
+ static const char*transfer(void*p,uint8_t address,const uint8_t*tx,size_t tn,uint8_t*rx,size_t rn){auto&s=*static_cast<BusFixture*>(p);assert(s.held);++s.transfers;if(s.failAt==s.transfers)return "i2c_nack";if(s.failure)return s.failure;
   if(address==0x70){if(tn==2)s.commands.push_back(uint16_t(tx[0])<<8|tx[1]);if(rn)memcpy(rx,s.env,rn);return nullptr;}
   if(rn){assert(tn==1);memcpy(rx,s.registers[address]+tx[0],rn);}else if(tn){assert(tn==2);s.registers[address][tx[0]]=tx[1];}return nullptr;
  }
@@ -24,7 +24,21 @@ struct BusFixture {
  void put(uint8_t address,uint8_t reg,int16_t value){registers[address][reg]=uint16_t(value)&255;registers[address][reg+1]=uint16_t(value)>>8;}
 };
 static Core*activeCore;static Sampling*activeSensor;static ScriptHost*activeApp;
+struct ContextDevice {
+ int value;const char*path;
+ const char*invoke(const char*,JsonObjectConst,JsonObject o){o["value"]=value;return nullptr;}
+ void describe(JsonObject o){o["instance"]=path;o["properties"]["value"]["type"]="integer";o["properties"]["value"]["access"]="r";}
+};
 int main(){
+ {Core registry;ContextDevice first{11,"/sensors/first"},second{22,"/sensors/second"};
+  assert(registry.add(Device::bind(first.path,"read","instance",first,"read")));
+  assert(registry.add(Device::bind(second.path,"read","instance",second,"read")));
+  Vfs storage;ScriptHost host(registry,storage);JsonDocument script,status;script["source"]=R"(function on_start() assert(notes.call('/sensors/first','read').result.value==11); assert(notes.call('/sensors/second','read').result.value==22) end)";assert(!host.invoke("load",script.as<JsonObjectConst>(),status.to<JsonObject>()));assert(!host.invoke("stop",JsonObjectConst(),status.to<JsonObject>()));
+  JsonDocument a,o;assert(!registry.invoke(first.path,"read",a.as<JsonObjectConst>(),o.to<JsonObject>())&&o["value"]==11);
+  assert(!registry.invoke(second.path,"read",a.as<JsonObjectConst>(),o.to<JsonObject>())&&o["value"]==22);
+  assert(!registry.describe(second.path,o.to<JsonObject>())&&o["instance"]==second.path&&registry.readOnly(second.path,"read"));
+ }
+
  BusFixture fixture;Core core;activeCore=&core;Gxhtc3 env(fixture.bus);Sampling sensor(core,env,"/sensors/room");activeSensor=&sensor;
  core.add({"/sensors/room",Sampling::Methods,"",[](const char*m,JsonObjectConst a,JsonObject o){return activeSensor->invoke(m,a,o);},[](JsonObject o){activeSensor->describe(o);},"read,describe"});
  core.add({"/sys/capabilities","describe","",[](const char*,JsonObjectConst a,JsonObject o){return activeCore->describe(a["path"]|"",o);},nullptr,"describe"});
@@ -53,6 +67,10 @@ int main(){
  Ft6336 touch(fixture.bus);fixture.registers[0x38][2]=1;fixture.registers[0x38][3]=0;fixture.registers[0x38][4]=123;fixture.registers[0x38][5]=0x21;fixture.registers[0x38][6]=0xc8;assert(!touch.begin(0));assert(touch.poll(0).complete);touch.values(o.to<JsonObject>());assert(o["contacts"][0]["id"]==2&&o["contacts"][0]["x"]==123&&o["contacts"][0]["y"]==456);
  fixture.registers[0x38][2]=3;assert(!touch.begin(1));assert(touch.poll(1).error);fixture.registers[0x38][2]=0;assert(!touch.begin(2));assert(touch.poll(2).complete);touch.values(o.to<JsonObject>());assert(o["contacts"].size()==0);
  Pca9557 expander(fixture.bus);fixture.registers[0x19][1]=0xf0;fixture.registers[0x19][3]=0xff;assert(!expander.configure(1,1,1));assert(fixture.registers[0x19][1]==0xf1&&fixture.registers[0x19][3]==0xfe);assert(!expander.write(2,2));assert(fixture.registers[0x19][1]==0xf3);
+ // Every multi-register configuration failure closes measurement admission.
+ // Invalid settings leave a working configuration intact without any bus I/O.
+ for(unsigned failure=1;failure<=4;++failure){BusFixture f;Qmc5883l d(f.bus);JsonDocument q,r;assert(!d.configure(q.as<JsonObjectConst>(),0));f.failAt=f.transfers+failure;assert(d.configure(q.as<JsonObjectConst>(),1));d.configuration(r.to<JsonObject>());assert(r["configured"]==false);assert(!strcmp(d.begin(2),"sensor_not_configured"));f.failAt=0;assert(!d.configure(q.as<JsonObjectConst>(),3));assert(f.locks==f.unlocks);}
+ for(unsigned failure=2;failure<=8;++failure){BusFixture f;f.registers[0x6a][0]=5;Qmi8658 d(f.bus,Qmi8658::Profile::RevA);JsonDocument q,r;assert(!d.configure(q.as<JsonObjectConst>(),0));f.failAt=f.transfers+failure;assert(d.configure(q.as<JsonObjectConst>(),1));d.configuration(r.to<JsonObject>());assert(r["configured"]==false);assert(!strcmp(d.begin(2),"sensor_not_configured"));f.failAt=0;assert(!d.configure(q.as<JsonObjectConst>(),3));assert(f.locks==f.unlocks);}
  assert(fixture.locks==fixture.unlocks&&!fixture.held&&core.resources().promised()==0);
  std::cout<<"Optional sensors: runtime completion, nonmutating reads, CRC/error preservation, owner cleanup, bus release during conversion, exact ranges, QMI revision scaling, touch contacts and private expander RMW passed\n";
 }

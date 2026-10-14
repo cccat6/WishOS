@@ -5,7 +5,8 @@
 #include <cstring>
 
 namespace notesos {
-static bool cardProtected=false;
+static bool cardProtected=false,cancelProbe=false;
+static bool sdCancellationRequested(){return cancelProbe;}
 struct cid_t {uint8_t bytes[16];};
 struct csd_t {
   uint8_t csd[16]{};
@@ -49,13 +50,6 @@ struct FakeSD {
   FakeCard*card(){return &notesos::card;}
   FakeVolume*vol(){return &volume;}
 } SD;
-struct FakePreferences {
-  uint64_t id=0;uint32_t req=0,profile=0;
-  uint64_t getULong64(const char*,uint64_t){return id;}
-  uint32_t getUInt(const char*key,uint32_t){return !strcmp(key,"sd_profile")?profile:req;}
-  void putULong64(const char*,uint64_t v){id=v;}
-  void putUInt(const char*key,uint32_t v){if(!strcmp(key,"sd_profile"))profile=v;else req=v;}
-} preferences;
 static SdLinkState sdLink;
 Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));
 #include "drivers/esp32-services/SdLinkService.h"
@@ -71,39 +65,40 @@ static void setBus(const char*mode,uint32_t hz,bool experimental=false,bool expe
 int main(){using namespace notesos;
   csd_t csd{};csd.csd[3]=0x32;assert(sdDefaultSpeedHz(csd)==25000000);
   csd.csd[3]=0x5a;assert(sdDefaultSpeedHz(csd)==25000000);
-  assert(sdMountConfigured()&&sdLink.ready&&sdLink.highSpeedEnabled);
+  assert(sdMountConfigured(sdConfiguration(policies))&&sdLink.ready&&sdLink.highSpeedEnabled);
   assert(sdLink.effectiveHz==40000000&&!sdLink.outOfSpec);
   assert(contentReads==0&&!mounted);
-  assert(!sdMountVolume()&&sdLink.ready&&contentReads>0);
-  cardFormatted=true;assert(sdMountVolume(true)&&mounted&&sdLink.partition==2);
+  assert(!sdMountVolume(sdConfiguration(policies))&&sdLink.ready&&contentReads>0);
+  cardFormatted=true;assert(sdMountVolume(sdConfiguration(policies),true)&&mounted&&sdLink.partition==2);
   cardProtected=true;contentReads=0;
-  assert(sdMountConfigured()&&sdLink.readOnly&&!providerWritable&&contentReads==0);
+  assert(sdMountConfigured(sdConfiguration(policies))&&sdLink.readOnly&&!providerWritable&&contentReads==0);
   cardProtected=false;
-  contentReads=0;assert(sdMountConfigured()&&sdLink.cacheHit&&contentReads==0);
+  contentReads=0;assert(sdMountConfigured(sdConfiguration(policies))&&sdLink.cacheHit&&contentReads==0);
   hsSwitchFails=true;
-  assert(sdMountConfigured()&&sdLink.ready&&!sdLink.highSpeedEnabled&&sdLink.effectiveHz==20000000);
+  assert(sdMountConfigured(sdConfiguration(policies))&&sdLink.ready&&!sdLink.highSpeedEnabled&&sdLink.effectiveHz==20000000);
   hsSwitchFails=false;
   setBus("fixed",80000000);
-  assert(!sdMountConfigured()&&!sdLink.ready);
+  assert(!sdMountConfigured(sdConfiguration(policies))&&!sdLink.ready);
   assert(!strcmp(sdLink.error,"card_mode_clock_exceeded"));
   setBus("fixed",80000000,true);
-  assert(sdMountConfigured()&&sdLink.outOfSpec&&sdLink.effectiveHz==80000000);
+  assert(sdMountConfigured(sdConfiguration(policies))&&sdLink.outOfSpec&&sdLink.effectiveHz==80000000);
   assert(contentReads==0);
-  assert(!sdMountVolume()&&!mounted&&contentReads==0);
+  assert(!sdMountVolume(sdConfiguration(policies))&&!mounted&&contentReads==0);
   assert(!strcmp(sdLink.volumeError,"experimental_link_only"));
   setBus("fixed",80000000,true,true);
-  assert(sdMountVolume(true)&&mounted&&contentReads>0);
+  assert(sdMountVolume(sdConfiguration(policies),true)&&mounted&&contentReads>0);
   setBus("auto",20000000);physicalMaxHz=16000000;
-  assert(sdMountConfigured()&&sdLink.effectiveHz==16000000);
+  assert(sdMountConfigured(sdConfiguration(policies))&&sdLink.effectiveHz==16000000);
   physicalMaxHz=80000000;cardHighSpeed=false;cmd6Supported=true;
-  assert(sdMountConfigured()&&!sdLink.highSpeedEnabled&&sdLink.effectiveHz==20000000);
+  assert(sdMountConfigured(sdConfiguration(policies))&&!sdLink.highSpeedEnabled&&sdLink.effectiveHz==20000000);
   assert(!sdLink.cacheHit); // HS-mode cache cannot carry over into standard mode.
   cardHighSpeed=true;csdChangesAfterSwitch=true;
-  assert(sdMountConfigured()&&sdLink.highSpeedEnabled&&sdLink.effectiveHz==40000000);
+  assert(sdMountConfigured(sdConfiguration(policies))&&sdLink.highSpeedEnabled&&sdLink.effectiveHz==40000000);
   assert(!sdLink.cacheHit);
   auto normal=sdConfiguration(policies);auto experimental=normal;experimental.experimental=true;
   assert(normal.cacheProfile(80000000,50000000,true)!=experimental.cacheProfile(80000000,50000000,true));
   assert(normal.cacheProfile(80000000,50000000,true)!=normal.cacheProfile(160000000,50000000,true));
+  cancelProbe=true;contentReads=0;assert(!sdMountConfigured(sdConfiguration(policies))&&!sdLink.ready&&contentReads==0);cancelProbe=false;
   cardPresent=false;contentReads=0;
-  assert(!sdMountConfigured()&&!sdLink.ready&&contentReads==0);
+  assert(!sdMountConfigured(sdConfiguration(policies))&&!sdLink.ready&&contentReads==0);
 }

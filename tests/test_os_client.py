@@ -15,17 +15,29 @@ class Fake(m.Client):
             size=len(json.dumps({'id':'x'*32,'path':path,'method':method,'args':args}).encode());assert size<=4096
             return {'next_offset':args['offset']+len(args['hex'])//2}
         return {'status':'queued','job_id':7}
+def descriptor(path):
+    (path/'app.json').write_text(json.dumps({'format':'wishos-app/1','id':'example','title':'Example','entry':'main.lua','help':{'controls':'Return through the system home entry'}}))
 class Packages(m.Client):
-    def __init__(self):self.calls=[];self.files={};self.loaded='old';self.startup={'file':'old'};self.bad_read=False;self.lost_load=False;self.activation_count=0
+    def __init__(self):self.calls=[];self.files={};self.loaded='old';self.bad_read=False;self.lost_load=False;self.activation_count=0;self.apps={};self.revision=1;self.launcher='factory'
     def call(self,path,method='read',args=None,request_id=None):
         a=args or {};self.calls.append((path,method,a))
+        if path=='/sys/apps':
+            if method=='read':return {'revision':self.revision,'launcher':self.launcher,'pending':'','persisted':True}
+            if method=='install':
+                assert a['expected_revision']==self.revision
+                d=json.loads(self.files[a['manifest']]);self.apps[d['id']]={'id':d['id'],'manifest':a['manifest'],'entry':a['manifest'].rsplit('/',1)[0]+'/'+d['entry']};self.revision+=1;return {'application_id':d['id']}
+            if method=='launch':
+                self.loaded=self.apps[a['id']]['entry'];self.activation_count+=1
+                if self.lost_load:raise TimeoutError('activation reply lost')
+                return {'operation_id':7}
+            if method=='list':return {'applications':list(self.apps.values()),'more':False}
+            if method=='configure':self.launcher=a['launcher'];self.revision+=1;return {'revision':self.revision}
         if path=='/sys/runtime':
-            if method=='read':return {'loaded':True,'file':self.loaded,'fault':False,'configuration_revision':1,'configured_startup':self.startup,'configuration_persisted':True}
+            if method=='read':return {'loaded':True,'file':self.loaded,'fault':False}
             if method=='load':
                 self.loaded=a['file'];self.activation_count+=1
                 if self.lost_load:raise TimeoutError('activation reply lost')
                 return {'file':self.loaded}
-            if method=='configure':self.startup=a['startup'];return {'revision':2}
         if method=='mounts':return {'providers':[{'mount':'/storage/flash','persistent':True,'prepare':{'path':'/dev/flash','method':'mount','args':{}}}]}
         if method=='mkdir':return {}
         file=a.get('file')
@@ -43,20 +55,27 @@ class Tests(unittest.TestCase):
         for lost in (False,True):
             c=Packages();c.lost_load=lost
             with tempfile.TemporaryDirectory() as folder:
-                p=Path(folder);(p/'main.lua').write_text('function on_start() end');(p/'asset.bin').write_bytes(bytes(range(256))*10)
+                p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start() end');(p/'asset.bin').write_bytes(bytes(range(256))*10)
                 result=c.publish_app(p,'/storage/flash',persist=True)
-            self.assertEqual(c.activation_count,1);self.assertEqual(result['verified_files'],2);self.assertEqual(c.startup['file'],result['entry']);self.assertEqual(c.startup['prepare'][0]['path'],'/dev/flash')
-            load=next(i for i,(_,m,_) in enumerate(c.calls) if m=='load');self.assertTrue(all(m!='write' for _,m,_ in c.calls[load:]))
-    def test_package_corruption_preserves_prior_runtime_and_startup(self):
-        c=Packages();c.bad_read=True
-        with tempfile.TemporaryDirectory() as folder:
-            p=Path(folder);(p/'main.lua').write_text('function on_start() end')
-            with self.assertRaisesRegex(IOError,'hash verification'):c.publish_app(p,'/storage/flash',persist=True)
-        self.assertEqual(c.loaded,'old');self.assertEqual(c.startup,{'file':'old'});self.assertEqual(c.activation_count,0)
-    def test_package_rejects_nonpersistent_startup_without_writes(self):
+            self.assertEqual(c.activation_count,1);self.assertEqual(result['verified_files'],3);self.assertEqual(c.apps['example']['entry'],result['entry']);self.assertEqual(c.launcher,'factory')
+            load=next(i for i,(_,m,_) in enumerate(c.calls) if m=='launch');self.assertTrue(all(m!='write' for _,m,_ in c.calls[load:]))
+    def test_installation_does_not_execute_or_replace_the_launcher(self):
         c=Packages()
         with tempfile.TemporaryDirectory() as folder:
-            p=Path(folder);(p/'main.lua').write_text('function on_start() end')
+            p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start() end')
+            c.publish_app(p,'/storage/flash',persist=True,launch=False)
+        self.assertEqual(c.activation_count,0);self.assertEqual(c.loaded,'old');self.assertEqual(c.launcher,'factory');self.assertIn('example',c.apps)
+
+    def test_package_corruption_preserves_prior_runtime_and_launcher(self):
+        c=Packages();c.bad_read=True
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start() end')
+            with self.assertRaisesRegex(IOError,'hash verification'):c.publish_app(p,'/storage/flash',persist=True)
+        self.assertEqual(c.loaded,'old');self.assertEqual(c.activation_count,0)
+    def test_package_rejects_nonpersistent_installation_without_writes(self):
+        c=Packages()
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start() end')
             with self.assertRaises(ValueError):c.publish_app(p,'/storage/ram',persist=True)
         self.assertTrue(all(method in ('read','mounts') for _,method,_ in c.calls))
     def test_stream_exact(self):

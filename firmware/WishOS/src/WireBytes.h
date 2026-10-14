@@ -1,4 +1,5 @@
 #pragma once
+#include <ArduinoJson.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -28,6 +29,13 @@ inline bool unhex(const char *s, uint8_t *out, size_t cap, size_t &n) {
     out[i] = (a << 4) | b;
   }
   return true;
+}
+
+inline const char*wirePayload(JsonObjectConst a,uint8_t*out,size_t capacity,size_t&n){
+ if(a.containsKey("text")==a.containsKey("hex"))return "one_payload_required";
+ const char*key=a.containsKey("hex")?"hex":"text";if(!a[key].is<const char*>())return "payload_type";auto value=a[key].as<JsonString>();
+ if(!strcmp(key,"hex")){if(value.size()!=strlen(value.c_str())||!unhex(value.c_str(),out,capacity,n))return "invalid_hex";}
+ else{n=value.size();if(n>capacity)return "chunk_limit";memcpy(out,value.c_str(),n);}return nullptr;
 }
 
 }

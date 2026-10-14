@@ -11,7 +11,6 @@ class PackageTests(unittest.TestCase):
   b=json.loads((pack.DEFAULT/'board.json').read_text());b['composition']=str((pack.DEFAULT/b['composition']).resolve());b['partition_file']='partitions.csv';(root/'partitions.csv').write_bytes((pack.DEFAULT/'partitions.csv').read_bytes())
   b.pop('runtime',None)
   b['assets']={'/ui/home.json':'home.json','/default-app.json':'app.json'}
-  b['startup']={}
   (root/'home.json').write_text('{"version":"0.1.1","label":"可爱 🐱"}')
   (root/'app.json').write_text('{"format":"notes-app/1","entry":"ui/home.json"}')
   return b
@@ -29,24 +28,35 @@ class PackageTests(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'KEY_A'):pack.load(root)
  def test_missing_assets_and_geometry(self):
   with tempfile.TemporaryDirectory() as folder:
-   root=Path(folder);b=self.fixture(root);b['startup']['script']='/system/missing.lua';self.write(root,b)
-   with self.assertRaisesRegex(ValueError,'startup script'):pack.load(root)
+   root=Path(folder);b=self.fixture(root);b['assets']['/bad.lua']='missing.lua';self.write(root,b)
+   with self.assertRaises((ValueError,FileNotFoundError)):pack.load(root)
    b=self.fixture(root);b['display']['width']=240;self.write(root,b)
    with self.assertRaisesRegex(ValueError,'geometry'):pack.load(root)
  def test_factory_is_only_a_runtime_reference(self):
   _,board,_,_,assets=pack.load(pack.DEFAULT)
-  self.assertLessEqual(set(board['startup']),{'script','memory_bytes'})
-  self.assertIn(board['startup']['script'][7:],assets)
+  catalog=json.loads(assets['/applications.json']);self.assertEqual(catalog['launcher'],'launcher')
+  for application in catalog['applications']:
+   descriptor=json.loads(assets[application['manifest'][7:]]);self.assertEqual(descriptor['format'],'wishos-app/1');self.assertEqual(descriptor['id'],application['id']);self.assertTrue(descriptor['source']['repository'])
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root)
    b['assets']['/custom.lua']='custom.lua';(root/'custom.lua').write_text('function on_start() end')
-   b['startup']={'script':'/system/custom.lua'};self.write(root,b)
-   pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text()
-   self.assertIn('STARTUP_SCRIPT[]="/system/custom.lua"',text);self.assertNotIn('STARTUP_UI',text)
-   b['startup']['memory_bytes']=48000;self.write(root,b);pack.generate(root,root/'generated');self.assertIn('STARTUP_MEMORY_BYTES=48000',(root/'generated/BoardPackage.h').read_text())
-   b['startup']['memory_bytes']='48000';self.write(root,b)
-   with self.assertRaisesRegex(ValueError,'memory ceiling'):pack.load(root)
-   b['startup']={};self.write(root,b);pack.load(root)
+   descriptor={'format':'wishos-app/1','id':'custom','title':'Custom','entry':'custom.lua'}
+   (root/'descriptor.json').write_text(json.dumps(descriptor));b['assets']['/app.json']='descriptor.json'
+   catalog={'launcher':'custom','applications':[{'id':'custom','title':'Custom','manifest':'/system/app.json'}]}
+   (root/'applications.json').write_text(json.dumps(catalog));b['assets']['/applications.json']='applications.json';self.write(root,b)
+   pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text();self.assertNotIn('STARTUP_SCRIPT',text);self.assertIn('/applications.json',text)
+   descriptor['entry']='missing.lua';(root/'descriptor.json').write_text(json.dumps(descriptor))
+   with self.assertRaisesRegex(ValueError,'application entry'):pack.load(root)
+   descriptor['entry']='custom.lua';(root/'descriptor.json').write_text(json.dumps(descriptor));catalog['applications'].append(catalog['applications'][0]);(root/'applications.json').write_text(json.dumps(catalog))
+   with self.assertRaisesRegex(ValueError,'duplicate'):pack.load(root)
+ def test_browser_assets_are_compressed_without_changing_source(self):
+  import gzip
+  _,_,_,_,assets=pack.load(pack.DEFAULT)
+  for path in ('/setup.html','/control/control.js','/control/display.js'):
+   source=pack.asset_sources(pack.DEFAULT,pack.read_json(pack.DEFAULT/'board.json'))[path]
+   self.assertEqual(gzip.decompress(assets[path+'.gz']),source.read_bytes())
+   self.assertNotIn(path,assets)
+
  def test_binary_assets_preserve_nul_and_size(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root);b['assets']['/icons/test.bin']='test.bin';raw=b'\x00\xff\x00data';(root/'test.bin').write_bytes(raw);self.write(root,b)

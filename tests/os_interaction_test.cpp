@@ -62,8 +62,8 @@ int main(){
  assert(!views.close(one,7));assert(!views.active());
  PresentationState repeated;assert(!repeated.create(1,true,true,one));assert(!repeated.create(1,true,true,two));assert(!repeated.activate(one,true,1));assert(!repeated.activate(two,true,1));assert(!repeated.activate(one,true,1));assert(!repeated.back(1,disposed)&&!disposed&&repeated.active()==two);assert(!repeated.back(1,disposed)&&disposed==two&&repeated.active()==one&&repeated.get(one));
  static unsigned effects=0;core.add({"/effect","write","",[](const char*,JsonObjectConst a,JsonObject)->const char*{assert(!a.containsKey("expected_boot_id"));++effects;return nullptr;}});
- auto envelope=parse(R"({"path":"/effect","method":"write","args":{"expected_boot_id":"old"}})");invokeEnvelope(core,envelope.as<JsonObjectConst>(),out.to<JsonObject>(),"new",10);assert(out["ok"]==false&&out["error"]=="boot_changed"&&effects==0);
- envelope["args"]["expected_boot_id"]="new";invokeEnvelope(core,envelope.as<JsonObjectConst>(),out.to<JsonObject>(),"new",11);assert(out["ok"]==true&&effects==1);
- envelope["expected_boot_id"]="old";invokeEnvelope(core,envelope.as<JsonObjectConst>(),out.to<JsonObject>(),"new",12);assert(out["ok"]==false&&effects==1);
+ auto envelope=parse(R"({"path":"/effect","method":"write","args":{"expected_boot_id":"old"}})");invokeEnvelope(core,envelope.as<JsonObjectConst>(),out,"new",10);assert(out["ok"]==false&&out["error"]=="boot_changed"&&effects==0);
+ envelope["args"]["expected_boot_id"]="new";invokeEnvelope(core,envelope.as<JsonObjectConst>(),out,"new",11);assert(out["ok"]==true&&effects==1);
+ envelope["expected_boot_id"]="old";invokeEnvelope(core,envelope.as<JsonObjectConst>(),out,"new",12);assert(out["ok"]==false&&effects==1);
  std::cout<<"Button bounce/multiclick/hold/restore/wrap, orientation hysteresis, NTP offline/retry/schedule passed\n";
 }
