@@ -11,7 +11,8 @@ function on_event(e)
     local r=notes.call('/net/http','request',{url=url,response_limit=4096})
     if r.ok then job=r.result.job_id end
   elseif e.source=='/net/http' and e.data.job_id==job and (e.event=='completed' or e.event=='failed') then
-    local r=notes.call('/net/http','read');job=nil
+    local r=notes.call('/net/http','read',{job_id=job})
+    assert(notes.call('/net/http','release',{job_id=job}).ok);job=nil
     if r.ok and r.result.http_ok then print(r.result.body) end
     -- Application code can decode the response and update a path-addressed UI here.
   end

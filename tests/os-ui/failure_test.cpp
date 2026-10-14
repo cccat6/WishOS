@@ -46,14 +46,14 @@ int main(){
  Event event;copy(event.path,sizeof event.path,"/effect");copy(event.name,sizeof event.name,"changed");copy(event.data,sizeof event.data,"{\"value\":\"test\"}");
  size_t baseline=0;JsonDocument out,empty;
  for(size_t pass=0;pass==0||pass<=baseline+1;++pass){FaultHeap heap;if(pass)heap.failAt=pass-1;
-  {LuaRuntime vm(c,65536,20000);vm.allocationBackend(FaultHeap::resize,&heap);bool loaded=vm.load(script,strlen(script));if(loaded&&vm.start()){vm.event(event);vm.stop();}JsonDocument state;vm.describe(state.to<JsonObject>());assert(state["memory_used"].as<size_t>()<=65536);}
+  {LuaRuntime vm(c,65536,20000);vm.allocationBackend(FaultHeap::resize,&heap);bool loaded=vm.load(script,strlen(script));if(loaded&&vm.start()){event.sequence=c.sequence()+1;vm.event(event);vm.stop();}JsonDocument state;vm.describe(state.to<JsonObject>());assert(state["memory_used"].as<size_t>()<=65536);}
   assert(heap.blocks.empty());c.listTimers(out["timers"].to<JsonArray>());assert(out["timers"].size()==0);if(!pass)baseline=heap.calls;
  }
  std::cout<<"Allocation failure sweep: "<<baseline+1<<" VM allocation boundaries, zero surviving allocations/timers\n";
  // JSON bridge allocation failure must not become a successful empty command or partial event.
  size_t jsonBaseline=0;
  for(size_t pass=0;pass==0||pass<=jsonBaseline+1;++pass){JsonFaultHeap heap;if(pass)heap.heap.failAt=pass-1;
-  {LuaRuntime vm(c,65536,20000);vm.jsonAllocationBackend(&heap);if(vm.load(script,strlen(script))&&vm.start()){vm.event(event);vm.stop();}}
+  {LuaRuntime vm(c,65536,20000);vm.jsonAllocationBackend(&heap);if(vm.load(script,strlen(script))&&vm.start()){event.sequence=c.sequence()+1;vm.event(event);vm.stop();}}
   assert(heap.heap.blocks.empty());c.listTimers(out["timers"].to<JsonArray>());assert(out["timers"].size()==0);if(!pass)jsonBaseline=heap.heap.calls;
  }
  std::cout<<"JSON bridge allocation failure sweep: "<<jsonBaseline+1<<" boundaries recovered\n";

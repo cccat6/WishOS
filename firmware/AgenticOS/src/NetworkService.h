@@ -19,8 +19,8 @@ public:
    uint32_t began=millis();while(xQueueSend(j_.chunks,&chunk,pdMS_TO_TICKS(10))!=pdTRUE){if(j_.cancel.load()||uint32_t(millis()-began)>=j_.timeout)return at;}
    at+=chunk.length;j_.received+=chunk.length;}return n;}if(memchr(p,0,n)){binary=true;return 0;}memcpy(j_.response+j_.received,p,n);j_.received+=n;j_.response[j_.received]=0;return n;}
 };
-static void networkTask(void*){
- auto j=networkJob;
+static void networkTask(void*context){
+ auto j=static_cast<NetworkJob*>(context);
  {
   HTTPClient client;NetworkClient plain;NetworkClientSecure secure;
   bool tls=!strncmp(j->url,"https://",8);if(tls)secure.setCACert(j->ca);
@@ -32,7 +32,7 @@ static void networkTask(void*){
     JsonDocument headers;deserializeJson(headers,j->headers);for(auto p:headers.as<JsonObjectConst>())client.addHeader(p.key().c_str(),p.value().as<const char*>());
     j->status=client.sendRequest(j->method,(uint8_t*)j->body,strlen(j->body));
     if(j->status<=0)copy(j->error,sizeof(j->error),"network_request_failed");
-    else if(strcmp(j->method,"HEAD")){ResponseSink sink(*j);int result=client.writeToStream(&sink);if(sink.binary)copy(j->error,sizeof(j->error),"binary_response_requires_file_transport");else if(sink.overflow)copy(j->error,sizeof(j->error),"response_limit");else if(result<0)copy(j->error,sizeof(j->error),"response_read_failed");}
+    else if(strcmp(j->method,"HEAD")){ResponseSink sink(*j);int result=client.writeToStream(&sink);if(sink.binary)copy(j->error,sizeof(j->error),"binary_response_requires_stream");else if(sink.overflow)copy(j->error,sizeof(j->error),"response_limit");else if(result<0)copy(j->error,sizeof(j->error),"response_read_failed");}
     client.end();
   }
  }
@@ -44,7 +44,7 @@ static void describeNetworkResult(JsonObject o){
  o["transport_ok"]=result.transportOk;o["http_ok"]=result.httpOk;o["ok"]=result.ok;o["error"]=result.error;
 }
 static void pollNetwork(){
- if(networkJob&&!networkJob->busy&&networkJob->reservation){core.resources().release(networkJob->reservation);networkJob->reservation=0;}
+ if(networkJob&&!networkJob->busy)core.resources().releaseUnused(networkJob->reservation);
  if(networkJob&&networkJob->orphan&&!networkJob->busy){delete networkJob;networkJob=nullptr;networkNotified=false;return;}
  if(networkJob&&networkJob->stream&&uxQueueMessagesWaiting(networkJob->chunks)&&!networkJob->readableNotified){networkJob->readableNotified=true;JsonDocument d;d["job_id"]=networkJob->id;d["owner"]=networkJob->owner;emit("/net/http","readable",d.as<JsonObjectConst>(),networkJob->owner);}
  if(!networkJob||networkJob->busy||!networkJob->done||networkNotified)return;networkNotified=true;
@@ -54,17 +54,37 @@ static void pollNetwork(){
  describeNetworkResult(o);emit("/net/http",result.ok?"completed":"failed",o,networkJob->owner);
 }
 static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
+ const bool request=!strcmp(m,"request"),read=!strcmp(m,"read");
+ if(!request&&!read&&strcmp(m,"receive")&&strcmp(m,"cancel")&&strcmp(m,"release"))return "unsupported_method";
+ const char*allowed=request?"url,method,body,headers,stream,response_limit,timeout_ms,ca_pem":"job_id";
+ for(auto f:a)if(!Policies::choice(allowed,f.key().c_str()))return "unknown_http_argument";
+ if(a.containsKey("job_id")&&(!a["job_id"].is<uint32_t>()||!a["job_id"].as<uint32_t>()))return "invalid_job_id";
+ if(!request&&!read&&!a.containsKey("job_id"))return "job_id_required";
  pollNetwork();
- if(networkJob&&strcmp(m,"read")&&core.callerOwner()&&networkJob->owner!=core.callerOwner())return "network_owned_by_other";
- if(!strcmp(m,"cancel")){if(!networkJob)return "network_job_not_found";networkJob->cancel=true;out["status"]="cancel_requested";out["job_id"]=networkJob->id;return nullptr;}
- if(!strcmp(m,"release")){if(networkJob&&networkJob->busy)return "network_job_busy";delete networkJob;networkJob=nullptr;networkNotified=false;return nullptr;}
+ if(a.containsKey("job_id")&&(!networkJob||networkJob->id!=a["job_id"].as<uint32_t>()))return "network_job_not_found";
+ if(networkJob&&(!read||a.containsKey("job_id"))&&core.callerOwner()&&networkJob->owner!=core.callerOwner())return "network_owned_by_other";
+ if(!strcmp(m,"cancel")){if(!networkJob->busy)return "network_job_finished";networkJob->cancel=true;out["status"]="cancel_requested";out["job_id"]=networkJob->id;return nullptr;}
+ if(!strcmp(m,"release")){if(networkJob->busy)return "network_job_busy";delete networkJob;networkJob=nullptr;networkNotified=false;return nullptr;}
  if(!strcmp(m,"receive")){
-   if(!networkJob||!networkJob->stream)return "no_stream_response";
-   NetworkChunk chunk;if(xQueueReceive(networkJob->chunks,&chunk,0)!=pdTRUE){out["available"]=false;out["finished"]=!networkJob->busy;return nullptr;}
-   char data[1025];hex(chunk.data,chunk.length,data);out["available"]=true;out["hex"]=data;out["bytes"]=chunk.length;out["job_id"]=networkJob->id;networkJob->readableNotified=false;return nullptr;
+   if(!networkJob->stream)return "no_stream_response";
+   // Observe producer completion before reading the queue. An empty queue just
+   // before a producer's final enqueue must never be reported as EOF.
+   bool finished=!networkJob->busy.load();out["job_id"]=networkJob->id;
+   NetworkChunk chunk;if(xQueueReceive(networkJob->chunks,&chunk,0)!=pdTRUE){out["available"]=false;out["finished"]=finished;if(finished)describeNetworkResult(out);return nullptr;}
+   char data[1025];hex(chunk.data,chunk.length,data);out["available"]=true;out["hex"]=data;out["bytes"]=chunk.length;
+   out["finished"]=finished&&!uxQueueMessagesWaiting(networkJob->chunks);networkJob->readableNotified=false;return nullptr;
  }
- if(!strcmp(m,"read")){out["active"]=networkActive();out["max_inline_response_bytes"]=4096;out["stream_chunk_bytes"]=512;out["https_trust"]="caller_provided_ca";if(networkJob){out["job_id"]=networkJob->id;out["stream"]=networkJob->stream;out["owner"]=networkJob->owner;out["cancel_requested"]=networkJob->cancel.load();out["buffered_chunks"]=networkJob->chunks?uxQueueMessagesWaiting(networkJob->chunks):0;if(!networkJob->busy){out["status"]=networkJob->status;describeNetworkResult(out);out["body"]=networkJob->response;}}return nullptr;}
- if(strcmp(m,"request"))return "unsupported_method";if(networkActive())return "network_job_busy";if(networkJob&&networkJob->chunks&&uxQueueMessagesWaiting(networkJob->chunks))return "response_chunks_pending";
+ if(read){out["active"]=networkActive();out["response_pending"]=networkJob!=nullptr;out["max_inline_response_bytes"]=4096;out["stream_chunk_bytes"]=512;out["https_trust"]="caller_provided_ca";
+   if(networkJob){out["job_id"]=networkJob->id;out["stream"]=networkJob->stream;out["owner"]=networkJob->owner;out["cancel_requested"]=networkJob->cancel.load();out["buffered_chunks"]=networkJob->chunks?uxQueueMessagesWaiting(networkJob->chunks):0;
+     out["state"]="running";if(!networkJob->busy){out["state"]=httpOutcome(networkJob->status,networkJob->error).ok?"completed":"failed";out["status"]=networkJob->status;describeNetworkResult(out);
+       if(!core.callerOwner()||core.callerOwner()==networkJob->owner)out["body"]=networkJob->response;}}
+   return nullptr;
+ }
+ if(networkJob)return networkJob->busy?"network_job_busy":"network_result_pending";
+ for(auto key:{"url","method","body","ca_pem"})if(a.containsKey(key)&&(!a[key].is<const char*>()||strlen(a[key].as<const char*>())!=a[key].as<JsonString>().size()))return "http_string_required";
+ for(auto key:{"response_limit","timeout_ms"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "http_integer_required";
+ if(a.containsKey("stream")&&!a["stream"].is<bool>())return "http_boolean_required";
+ if(a.containsKey("headers")&&!a["headers"].is<JsonObjectConst>())return "invalid_headers";
  const char*url=a["url"]|"",*method=a["method"]|"GET";bool tls=!strncmp(url,"https://",8);
  if((strncmp(url,"http://",7)&&!tls)||strlen(url)>=1024)return "invalid_url";
  if(!Policies::choice("GET,POST,PUT,DELETE,HEAD",method))return "unsupported_http_method";
@@ -73,14 +93,17 @@ static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
  if(!limit||(!stream&&limit>4096)||!timeout||timeout>60000)return "request_limit";
  const char*ca=a["ca_pem"]|"";if(tls&&!*ca)return "https_ca_required";if(strlen(ca)>8192)return "ca_limit";
  if(!core.resources().canAllocate(tls?65000u:20000u))return "network_memory_budget";
- auto next=new(std::nothrow) NetworkJob;if(!next)return "memory_low";next->reservation=core.resources().acquire(tls?65000u:20000u,core.callerOwner());if(!next->reservation){delete next;return "network_memory_budget";}core.resources().used(next->reservation,sizeof(NetworkJob));
+ auto next=new(std::nothrow) NetworkJob;if(!next)return "memory_low";next->reservation=core.resources().acquire(tls?65000u:20000u,core.callerOwner());if(!next->reservation){delete next;return "network_memory_budget";}
  if(!copy(next->url,sizeof(next->url),url)||!copy(next->method,sizeof(next->method),method)||!copy(next->body,sizeof(next->body),a["body"]|"")){delete next;return "request_body_limit";}
  auto headers=a["headers"].as<JsonObjectConst>();if(measureJson(headers)>=sizeof(next->headers)){delete next;return "header_limit";}
- for(auto p:headers)if(!p.value().is<const char*>()||strchr(p.key().c_str(),'\r')||strchr(p.key().c_str(),'\n')||strchr(p.value().as<const char*>(),'\r')||strchr(p.value().as<const char*>(),'\n')){delete next;return "invalid_header";}
+ for(auto p:headers)if(!p.value().is<const char*>()||strlen(p.value().as<const char*>())!=p.value().as<JsonString>().size()||strchr(p.key().c_str(),'\r')||strchr(p.key().c_str(),'\n')||strchr(p.value().as<const char*>(),'\r')||strchr(p.value().as<const char*>(),'\n')){delete next;return "invalid_header";}
  if(stream){next->chunks=xQueueCreate(4,sizeof(NetworkChunk));if(!next->chunks){delete next;return "memory_low";}next->stream=true;}
  serializeJson(headers,next->headers,sizeof(next->headers));if(tls){next->ca=strdup(ca);if(!next->ca){delete next;return "memory_low";}}
- pollNetwork(); // Completion may arrive during validation; retain its event before replacing the job.
- delete networkJob;networkJob=next;networkNotified=false;next->limit=limit;next->timeout=timeout;next->id=nextJob++;next->owner=core.callerOwner();rememberJob(next->id);
- if(xTaskCreate(networkTask,"notes-http",6144,nullptr,1,nullptr)!=pdPASS){next->busy=false;next->done=true;copy(next->error,sizeof(next->error),"task_allocation_failed");return "task_allocation_failed";}
+ // Result storage remains live until an explicit release or application teardown.
+ // Queue metadata is conservatively included in the native allocation charge.
+ core.resources().used(next->reservation,sizeof(NetworkJob)+(tls?strlen(ca)+1:0)+(stream?4*sizeof(NetworkChunk)+sizeof(StaticQueue_t):0));
+ next->limit=limit;next->timeout=timeout;next->id=nextJob;next->owner=core.callerOwner();
+ if(xTaskCreate(networkTask,"notes-http",6144,next,1,nullptr)!=pdPASS){delete next;return "task_allocation_failed";}
+ networkJob=next;networkNotified=false;++nextJob;rememberJob(next->id);
  out["job_id"]=next->id;out["status"]="accepted";return nullptr;
 }

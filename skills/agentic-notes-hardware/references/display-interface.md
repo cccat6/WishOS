@@ -47,6 +47,11 @@ A timed estimate alone is never upgraded to observed scanout completion.
 The common scheduler owns pending requests, latest/FIFO/reject policy, stale queued
 views, revisions and terminal disposal. The adapter owns encoding, transfer sizes,
 physical timing, bus leases, DMA/source ownership, cancellation points and recovery.
+Queued uploads can be cancelled before adapter admission. An E6 stream abort
+requested during preparation waits for its safe receive boundary, without sending
+commands while BUSY. A successful abort request is not yet its terminal receipt.
+The client cleans up failed preparations/uploads; a lost commit response retains
+the job/view IDs for inspection rather than assuming rejection.
 Newer requests cannot interrupt committed hardware work. E6 waits for BUSY; other
 screens do not inherit that electrical requirement. Input handling during an active
 presentation remains application/system policy, independently of hardware safety.

@@ -33,7 +33,7 @@ private:
   Core &core_;lua_State*state_=nullptr;size_t used_=0,peak_=0,budget_;
   uint32_t steps_=0,stepLimit_,calls_=0,callLimit_;bool loading_=false,preparing_=false,executing_=false,fault_=false,consumed_=false;
   const char*source_=nullptr;size_t sourceSize_=0;const Event*event_=nullptr;int operation_=0;
-  struct Subscription{char path[48]{};bool manual=false,callbacks=false;};
+  struct Subscription{char path[48]{};bool manual=false,callbacks=false;uint32_t manualAfter=0;};
   Subscription subscriptions_[16];unsigned subscriptionCount_=0,callbackCount_=0;int callbacksRef_=LUA_NOREF;bool callbacksPending_=false,legacyEvent_=false;char error_[160]{};
   char*scratch_=nullptr;JsonDocument*input_=nullptr,*output_=nullptr;size_t jsonBudget_=0;
   static LuaRuntime& self(lua_State*L){return **(LuaRuntime**)lua_getextraspace(L);}
@@ -97,7 +97,7 @@ private:
     if(*path!='/'||strlen(path)>=48)luaL_error(L,"event_source_limit");
     unsigned i=0;for(;i<s.subscriptionCount_;++i)if(!strcmp(path,s.subscriptions_[i].path))break;
     if(i==s.subscriptionCount_){if(!enabled)return;if(i==16)luaL_error(L,"subscription_capacity");s.subscriptions_[i]={};copy(s.subscriptions_[i].path,48,path);++s.subscriptionCount_;}
-    auto&entry=s.subscriptions_[i];(managed?entry.callbacks:entry.manual)=enabled;
+    auto&entry=s.subscriptions_[i];if(!managed&&enabled&&!entry.manual)entry.manualAfter=s.core_.sequence();(managed?entry.callbacks:entry.manual)=enabled;
     if(!entry.manual&&!entry.callbacks){for(unsigned j=i+1;j<s.subscriptionCount_;++j)s.subscriptions_[j-1]=s.subscriptions_[j];s.subscriptions_[--s.subscriptionCount_]={};}
   }
   static int subscribe(lua_State*L){setSubscription(L,luaL_checkstring(L,1),true,false);return 0;}
@@ -183,7 +183,7 @@ public:
   bool flushCallbacks(){if(!callbacksPending_||fault_||stopped_)return false;callbacksPending_=false;return execute(6);}
   bool event(const Event&e){if(fault_||stopped_)return false;
     if(e.targetOwner&&e.targetOwner!=owner_)return false;
-    bool match=false;legacyEvent_=false;for(unsigned i=0;i<subscriptionCount_;++i)if(!strcmp(e.path,subscriptions_[i].path)){match=true;legacyEvent_=subscriptions_[i].manual;}if(!match)return false;event_=&e;execute(2);event_=nullptr;return consumed_;}
+    bool match=false;legacyEvent_=false;for(unsigned i=0;i<subscriptionCount_;++i)if(!strcmp(e.path,subscriptions_[i].path)){legacyEvent_=subscriptions_[i].manual&&eventAfter(e.sequence,subscriptions_[i].manualAfter);match=legacyEvent_||subscriptions_[i].callbacks;}if(!match)return false;event_=&e;execute(2);event_=nullptr;return consumed_;}
   bool admitted()const{return reservation_!=0;}
   bool executing()const{return executing_;}const char*error()const{return error_;}
   void describe(JsonObject o)const{o["engine"]="lua-5.4.8";o["native_call_depth_limit"]=LUAI_MAXCCALLS;o["owner"]=owner_;o["modules_loaded"]=moduleCount_;o["subscription_limit"]=16;o["callback_allocation"]="on_demand_vm_budget";o["callbacks"]=callbackCount_;o["callback_flush_pending"]=callbacksPending_;o["base_path"]=base_;o["stopped"]=stopped_;o["memory_used"]=used_;o["memory_peak"]=peak_;o["memory_budget"]=budget_;o["memory_region"]=core_.resources().allocationRegion(reservation_);o["instruction_budget"]=stepLimit_;o["system_call_budget"]=callLimit_;o["last_system_calls"]=calls_;o["last_instructions"]=steps_;o["fault"]=fault_;o["error"]=error_;auto subscriptions=o["subscriptions"].to<JsonArray>();for(unsigned i=0;i<subscriptionCount_;++i)subscriptions.add(subscriptions_[i].path);}

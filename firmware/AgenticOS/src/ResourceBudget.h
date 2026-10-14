@@ -64,6 +64,9 @@ public:
   if(s->elastic&&(!size||next))s->used=s->used.load()-previous+size;return next;
  }
  void used(uint32_t id,size_t bytes){std::lock_guard<std::recursive_mutex> lock(mutex_);auto s=find(id);if(s)s->used=bytes;}
+ // A completed native operation may retain its result but no longer needs its
+ // task/transport headroom. Keep the remaining allocation charged until release.
+ void releaseUnused(uint32_t id){std::lock_guard<std::recursive_mutex> lock(mutex_);auto s=find(id);if(s&&!s->elastic&&s->used<s->limit)s->limit=s->used.load();}
  void release(uint32_t id){std::lock_guard<std::recursive_mutex> lock(mutex_);auto s=find(id);if(s){s->id=0;s->used=0;s->owner=0;s->limit=0;}}
  const char*configure(JsonObjectConst a){std::lock_guard<std::recursive_mutex> lock(mutex_);
   for(auto f:a)if(strcmp(f.key().c_str(),"memory_limit_bytes")&&strcmp(f.key().c_str(),"heap_reserve_bytes")&&strcmp(f.key().c_str(),"external_heap_reserve_bytes")&&strcmp(f.key().c_str(),"default_vm_memory_bytes")&&strcmp(f.key().c_str(),"application_memory"))return "unknown_resource_setting";

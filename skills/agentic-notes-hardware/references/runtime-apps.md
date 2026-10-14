@@ -60,6 +60,11 @@ Lua strings. Conversion chunks are bounded to 4096 input/output bytes; honor the
 smaller chunk limit of the actual driver. `/dev/mic readable` announces queued audio;
 drain `read_chunk`, decode `adpcm_b64` with the independently decodable IMA ADPCM packet codec when binary processing is needed, and retain
 recording/sequence/sample IDs when forwarding. Consumption rearms the notification.
+Pass `recording_id` to `stop` and `read_chunk` to avoid acting on a newer recording.
+Capture `stopped`/`failed` and storage `stored`/`storage_failed` are separate receipts,
+all carrying the recording ID and owner. Storage receipts also carry `file`,
+`durable`, `complete`, `capture_failed`, `missing_samples` and `bytes`: a durably
+stored partial recording is not a complete recording.
 
 Configure a boot application separately:
 

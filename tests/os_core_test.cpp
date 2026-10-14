@@ -109,5 +109,14 @@ int main() {
   assert(!routing.invoke("/rules","write",load.as<JsonObjectConst>(),result.to<JsonObject>(),owner));
   uint32_t routeCursor=0;previousCalls=calls;routing.emit("/button","edit",args.as<JsonObjectConst>(),oldOwner);routing.dispatch(routeCursor);assert(calls==previousCalls);
   routing.emit("/button","edit",args.as<JsonObjectConst>(),owner);routing.dispatch(routeCursor);assert(calls==previousCalls+1);
+  // Rules installed while inputs wait behind a display gate start with future
+  // events, not with the backlog produced for the preceding rule set.
+  Core queued;queued.add({"/button","read","",fake});queued.add({"/output","write","",fake});
+  static bool hold=true;queued.setEventGate([](const Event&){return hold?1:0;});
+  assert(!queued.setRule(load.as<JsonObjectConst>(),result.to<JsonObject>()));uint32_t pendingCursor=0;
+  queued.emit("/button","edit",args.as<JsonObjectConst>());queued.dispatch(pendingCursor);assert(queued.deferredCount()==1);
+  assert(!queued.setRule(load.as<JsonObjectConst>(),result.to<JsonObject>()));previousCalls=calls;
+  hold=false;queued.dispatch(pendingCursor);assert(calls==previousCalls+1); // only the old rule
+  queued.emit("/button","edit",args.as<JsonObjectConst>());queued.dispatch(pendingCursor);assert(calls==previousCalls+3);
   std::cout << "OS registry/rules/predicates/cooldown/cursor gaps/timer coalescing passed\n";
 }

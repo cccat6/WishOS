@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Explicit, identity-checked runtime validation. Never chooses an arbitrary serial port."""
-import argparse,json,time,uuid,urllib.request
+import argparse,json,time,uuid,urllib.request,socket,threading
+from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import serial
 from serial.tools.list_ports import comports
@@ -8,16 +9,20 @@ p=argparse.ArgumentParser();p.add_argument('--serial-mac',required=True);p.add_a
 ports=[p for p in comports() if (p.serial_number or '').upper()==a.serial_mac.upper()]
 assert len(ports)==1,'Expected exactly one matching USB serial identity'
 s=serial.Serial();s.port=ports[0].device;s.baudrate=115200;s.timeout=.2;s.dtr=False;s.rts=False;s.open();time.sleep(1)
-seq=0
+seq=0;boot_id=None
 report={'serial':a.serial_mac,'port':s.port,'checks':[]}
 def rpc(path,method='read',args=None,timeout=12,ok=True):
- global seq
- seq+=1;key=f'test-{seq}';s.write((json.dumps({'id':key,'path':path,'method':method,'args':args or {}},ensure_ascii=False)+'\n').encode());end=time.monotonic()+timeout
+ global seq,boot_id
+ seq+=1;key=f'test-{seq}';request={'id':key,'path':path,'method':method,'args':args or {}}
+ if boot_id:request['expected_boot_id']=boot_id
+ s.write((json.dumps(request,ensure_ascii=False)+'\n').encode());end=time.monotonic()+timeout
  while time.monotonic()<end:
   line=s.readline()
   try:r=json.loads(line)
   except (ValueError,TypeError):continue
   if r.get('id')==key:
+   assert r.get('boot_id') and (boot_id is None or r['boot_id']==boot_id),'Device rebooted during validation'
+   boot_id=r['boot_id'];report['boot_id']=boot_id
    if ok:assert r.get('ok'),(path,method,r.get('error'),r.get('result'))
    return r
  raise TimeoutError(path+' '+method)
@@ -111,6 +116,47 @@ end"""
   assert {'callback_timer_verified','callback_worker_verified'}<=seen,seen
   report['callback_runtime']=rpc('/sys/runtime')['result'];assert not report['callback_runtime']['fault'] and report['callback_runtime']['callbacks']==0
   rpc('/sys/runtime','stop');report['checks'].append('callback_timer_worker_and_auto_release')
+  if report.get('ip'):
+   # A network interface's own address is not necessarily loopback-routable on
+   # embedded lwIP builds. Use a real LAN peer for outbound HTTP validation.
+   route=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);route.connect((report['ip'],80));host=route.getsockname()[0];route.close()
+   class HttpFixture(BaseHTTPRequestHandler):
+    requests=0
+    def do_GET(self):
+     type(self).requests+=1;body=b'retained response';self.send_response(200);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+    def log_message(self,*args):pass
+   server=ThreadingHTTPServer(('0.0.0.0',0),HttpFixture);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+   target=f'http://{host}:{server.server_port}/check'
+   try:
+    http_source="""local count=0
+local function request()
+ local reply=notes.request('/net/http','request',{url='HTTP_TARGET'},function(e)
+  assert(e.event=='completed')
+  local id=e.data.job_id
+  local read=notes.call('/net/http','read',{job_id=id});assert(read.ok and read.result.body=='retained response')
+  local occupied=notes.call('/net/http','request',{url='HTTP_TARGET'})
+  assert(not occupied.ok and occupied.error=='network_result_pending')
+  assert(notes.call('/net/http','release',{job_id=id}).ok)
+  local stale=notes.call('/net/http','read',{job_id=id});assert(not stale.ok)
+  count=count+1
+  if count==2 then print('callback_http_retention_verified') else request() end
+ end);assert(reply.ok,reply.error)
+end
+function on_start() request() end""".replace('HTTP_TARGET',target)
+    rpc('/sys/runtime','load',{'source':http_source,'memory_bytes':49152})
+    verified=False;after=0
+    for _ in range(120):
+     batch=rpc('/sys/events','read',{'after':after,'limit':8})['result'];after=batch['cursor']
+     if any(e.get('event')=='log' and e.get('data',{}).get('message')=='callback_http_retention_verified' for e in batch['events']):verified=True;break
+     state=rpc('/sys/runtime')['result'];assert not state['fault'],state
+     time.sleep(.1)
+    assert verified and HttpFixture.requests==2,'HTTP callbacks did not complete'
+    report['http_callback_runtime']=rpc('/sys/runtime')['result'];assert report['http_callback_runtime']['callbacks']==0
+    assert not rpc('/net/http')['result']['response_pending']
+    rpc('/sys/runtime','stop');report['checks'].append('http_callback_retention_release_and_next_request')
+   finally:
+    try:rpc('/sys/runtime','stop',ok=False)
+    finally:server.shutdown();server.server_close();thread.join()
   for code,expected in [("function on_start() while true do end end",'instruction'),("function on_start() local x=string.rep('x',1000000) end",'memory')]:
    fail=rpc('/sys/runtime','load',{'source':code,'memory_bytes':24576,'instruction_budget':3000},ok=False);assert not fail['ok'];assert rpc('/sys/runtime')['result']['fault'];rpc('/sys/runtime','stop');rpc('/sys/stats');report['checks'].append(expected+'_fault_and_recovery')
   rpc('/services/nfs','start',{'provider':'flash','export_path':'/flash'});assert rpc('/services/nfs')['result']['running'];rpc('/services/nfs','stop');assert rpc('/services/nfs')['result']['owned_heap_bytes']==0;report['checks'].append('nfs_start_stop_release')

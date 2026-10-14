@@ -51,6 +51,12 @@ int main(){
  a=json(R"({"sample_rate":"48000","storage":"history"})");assert(validateMicArguments(a.as<JsonObjectConst>()));
  a=json(R"({"sample_rate":48000,"max_ms":null,"network_queue":true})");assert(!validateMicArguments(a.as<JsonObjectConst>()));
  a=json(R"({"storage":"unknown"})");assert(validateMicArguments(a.as<JsonObjectConst>()));a=json(R"({"max_ms":0})");assert(validateMicArguments(a.as<JsonObjectConst>()));
+ // A delayed stop/read for an earlier recording cannot act on its replacement.
+ a=json(R"({"recording_id":"old"})");for(auto method:{"stop","read","read_chunk"})assert(!strcmp(validateMicControl(method,a.as<JsonObjectConst>(),"current"),"recording_replaced"));
+ a["recording_id"]="current";assert(!validateMicControl("stop",a.as<JsonObjectConst>(),"current"));
+ a["recording_id"]=42;assert(validateMicControl("stop",a.as<JsonObjectConst>(),"current"));
+ a=json(R"({"recording_id":"current","limit":16})");assert(!validateMicControl("read_chunk",a.as<JsonObjectConst>(),"current"));assert(validateMicControl("stop",a.as<JsonObjectConst>(),"current"));
+ a["limit"]=17;assert(validateMicControl("read_chunk",a.as<JsonObjectConst>(),"current"));
  auto outcome=httpOutcome(404,"");assert(outcome.transportOk&&!outcome.httpOk&&!outcome.ok&&!strcmp(outcome.error,"http_status_failed"));
  outcome=httpOutcome(200,"response_read_failed");assert(!outcome.transportOk&&outcome.httpOk&&!outcome.ok);
  outcome=httpOutcome(204,"");assert(outcome.transportOk&&outcome.httpOk&&outcome.ok);

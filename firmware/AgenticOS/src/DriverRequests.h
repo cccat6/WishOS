@@ -42,6 +42,15 @@ inline const char*validateMicArguments(JsonObjectConst a){
   if(a.containsKey("storage")){if(!a["storage"].is<const char*>())return "mic_storage_type";const char*s=a["storage"];if(strcmp(s,"off")&&strcmp(s,"retry")&&strcmp(s,"history"))return "unsupported_audio_storage";}
   return nullptr;
 }
+inline const char*validateMicControl(const char*method,JsonObjectConst a,const char*recording){
+ for(auto f:a)if(strcmp(f.key().c_str(),"recording_id")&&(strcmp(method,"read_chunk")||strcmp(f.key().c_str(),"limit")))return "unknown_mic_argument";
+ if(a.containsKey("recording_id")){
+  if(!a["recording_id"].is<const char*>()||strlen(a["recording_id"].as<const char*>())!=a["recording_id"].as<JsonString>().size())return "recording_id_type";
+  if(strcmp(a["recording_id"],recording))return "recording_replaced";
+ }
+ if(!strcmp(method,"read_chunk")&&a.containsKey("limit")&&(!a["limit"].is<uint32_t>()||!a["limit"].as<uint32_t>()||a["limit"].as<uint32_t>()>16))return "audio_read_limit";
+ return nullptr;
+}
 inline bool httpStatusSuccessful(int status){return status>=200&&status<300;}
 struct HttpOutcome{bool transportOk,httpOk,ok;const char*error;};
 inline HttpOutcome httpOutcome(int status,const char*transportError){

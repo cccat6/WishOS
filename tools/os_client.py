@@ -4,6 +4,9 @@ from __future__ import annotations
 import argparse, hashlib, json, time, urllib.request, urllib.error, uuid
 from pathlib import Path
 
+class RpcError(RuntimeError):
+    """The device explicitly rejected a request; distinct from a lost reply."""
+
 class Client:
     def __init__(self, url=None, port=None, timeout=10):
         self.url=url.rstrip('/') if url else None
@@ -37,7 +40,7 @@ class Client:
             except urllib.error.HTTPError as e: reply=json.load(e)
         if self.boot_id and reply.get('boot_id')!=self.boot_id:raise RuntimeError('Device rebooted; create a new client before reusing handles')
         if reply.get('boot_id'):self.boot_id=reply['boot_id']
-        if not reply.get('ok'): raise RuntimeError(reply.get('error',reply))
+        if not reply.get('ok'): raise RpcError(reply.get('error',reply))
         return reply['result']
     def upload(self, source, destination):
         """Write with bounded chunks. Use a fresh version path to preserve displayed assets."""
@@ -76,32 +79,44 @@ class Client:
         if not profile or not profile.get('streaming'):raise ValueError('This profile requires a replayable source')
         if len(frame)!=profile['frame_bytes']:raise ValueError('Frame size does not match the selected profile')
         created=view_id is None
-        if created:
-            view_id=self.call('/sys/ui','create')['view_id']
-            self.call('/sys/ui','activate',{'view_id':view_id})
-        self.last_view_id=view_id
-        try:r=self.call('/dev/display','begin',{'driver':driver,'force':force,'view_id':view_id})
-        except RuntimeError:
-            if created:self.call('/sys/ui','close',{'view_id':view_id})
-            raise
-        sid=r['stream_id']
-        deadline=time.monotonic()+self.timeout
-        while True:
-            state=self.call('/dev/display','read')
-            if state.get('receiving'):break
-            if state.get('state') in ('fault','failed'):raise RuntimeError(state.get('error','display preparation failed'))
-            if time.monotonic()>=deadline:raise TimeoutError('Display preparation timed out; inspect job before retrying')
-            time.sleep(.02)
+        sid=None;commit_sent=False
         try:
+            if created:
+                view_id=self.call('/sys/ui','create')['view_id']
+                self.last_view_id=view_id
+                self.call('/sys/ui','activate',{'view_id':view_id})
+            else:self.last_view_id=view_id
+            r=self.call('/dev/display','begin',{'driver':driver,'force':force,'view_id':view_id})
+            sid=r['stream_id'];self.last_stream_id=sid;self.last_job_id=r['job_id']
+            deadline=time.monotonic()+self.timeout
+            while True:
+                state=self.call('/dev/display','read')
+                if state.get('stream_id')!=sid:raise RuntimeError('Display stream changed before upload')
+                if state.get('receiving'):break
+                if state.get('state') in ('fault','failed'):raise RuntimeError(state.get('error','display preparation failed'))
+                if time.monotonic()>=deadline:raise TimeoutError('Display preparation timed out')
+                time.sleep(.02)
             chunk_size=min(1024,r['chunk_limit'])
             if chunk_size<=0:raise ValueError('Invalid display chunk limit')
             for offset in range(0,len(frame),chunk_size):
-                chunk=frame[offset:offset+chunk_size]; self.call('/dev/display','chunk',{'stream_id':sid,'offset':offset,'hex':chunk.hex()})
+                chunk=frame[offset:offset+chunk_size]
+                reply=self.call('/dev/display','chunk',{'stream_id':sid,'offset':offset,'hex':chunk.hex()})
+                if reply.get('next_offset')!=offset+len(chunk):raise IOError('Display did not acknowledge the complete chunk')
+            commit_sent=True
             return self.call('/dev/display','commit',{'stream_id':sid,'sha256':hashlib.sha256(frame).hexdigest()})
-        except Exception:
-            # Before commit, abort only this stream. Never abort an active waveform.
-            try: self.call('/dev/display','abort',{'stream_id':sid})
-            except Exception: pass
+        except Exception as error:
+            # A missing commit reply is an unknown outcome, not permission to
+            # discard the view or interrupt hardware that may already be running.
+            if commit_sent and not isinstance(error,RpcError):
+                if hasattr(error,'add_note'):error.add_note(f'Commit outcome unknown; inspect job {self.last_job_id}, view {view_id} before retrying.')
+                raise
+            cleanup=[]
+            if sid is not None:cleanup.append(('/dev/display','abort',{'stream_id':sid}))
+            if created and view_id is not None:cleanup.append(('/sys/ui','close',{'view_id':view_id}))
+            for path,method,args in cleanup:
+                try:self.call(path,method,args)
+                except Exception as failure:
+                    if hasattr(error,'add_note'):error.add_note(f'{method} cleanup failed: {failure}')
             raise
 
 def main():

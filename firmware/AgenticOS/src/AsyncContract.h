@@ -16,6 +16,6 @@ inline void remoteAsyncDescription(JsonObject out){
  auto settled=out["async"]["submit"]["settled"].to<JsonObject>();settled["field"]="state";
  settled["events"]["completed"]="completed";settled["events"]["failed"]="failed";
 }
-inline void httpAsyncDescription(JsonObject out){asyncContract(out,"request","/net/http")["job_id"]="job_id";}
+inline void httpAsyncDescription(JsonObject out){asyncContract(out,"request","/net/http")["job_id"]="job_id";out["job_capacity"]=1;out["result_lifetime"]="explicit_release_or_owner_exit";out["job_id_required_for"]="receive,cancel,release";out["result_lookup"]="read with job_id";}
 inline void uiAsyncDescription(JsonObject out){for(auto method:{"open","update","refresh"}){auto match=asyncContract(out,method,"/dev/display");match["view_id"]="view_id";match["view_revision"]="revision";}}
 }

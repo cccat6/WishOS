@@ -14,7 +14,7 @@ int main(){Core c;c.add({"/sensor","read","",sensor});c.add({"/effect","write","
  notes.subscribe('/sensor')
  function on_start() local r=notes.call('/sensor','read',{}); assert(r.ok and r.result.value==42); notes.call('/effect','write',{value=r.result.value}) end
  function on_event(e) if e.event=='changed' then notes.call('/effect','write',{value=e.data.value}); return true end end)";
- {LuaRuntime vm(c,49152,10000);assert(vm.load(source,strlen(source)));assert(writes==0);assert(vm.start());assert(writes==42);Event e;copy(e.path,sizeof(e.path),"/sensor");copy(e.name,sizeof(e.name),"changed");copy(e.data,sizeof(e.data),"{\"value\":7}");assert(vm.event(e));assert(writes==49);}
+ {LuaRuntime vm(c,49152,10000);assert(vm.load(source,strlen(source)));assert(writes==0);assert(vm.start());assert(writes==42);Event e;e.sequence=c.sequence()+1;copy(e.path,sizeof(e.path),"/sensor");copy(e.name,sizeof(e.name),"changed");copy(e.data,sizeof(e.data),"{\"value\":7}");assert(vm.event(e));assert(writes==49);}
  {LuaRuntime vm(c);const char*s="notes.call('/effect','write',{value=100})";assert(!vm.load(s,strlen(s)));assert(writes==49);}
  for(const char*s:{"function on_start() while true do end end", "function on_start() while true do pcall(function() while true do end end) end end", "function on_start() while true do pcall(function() string.gsub('a','a',function() while true do end end) end) end end"}){
    LuaRuntime vm(c,32768,3000);assert(vm.load(s,strlen(s)));assert(!vm.start());assert(*vm.error());}

@@ -36,6 +36,7 @@ static bool displayInputBusy(){return colorPanel.active()||(panel.active()&&!pan
 static constexpr DisplayComponent displayComponent{"e6-ist7601","electrophoretic","spi",480,720,DisplayEvidence::DeviceReady,"busy_inactive_after_power_off","on_demand"};
 static nm::Stripe renderStripe;
 static char pendingHash[65]{};static bool commitRequested=false,hashLive=false,hashingColor=false;
+static bool streamCancelRequested=false;static uint32_t streamJobId=0;
 static unsigned hashPlane=0;static uint32_t renderedBytes=0;
 static const char*defaultUiDriver(){return "e6.color-fast.v1";}
 static const char*validateUiDriver(const char*id){return e6Profile(id)?nullptr:"unsupported_display_driver";}
@@ -59,7 +60,7 @@ void E6DisplayBinding::completed(Presentation&job,const DisplayOutcome&result,ui
   if(hashLive){mbedtls_sha256_free(&digest);hashLive=false;}
   copy(displayState,sizeof displayState,result.state());copy(displayError,sizeof displayError,result.error);
  }
- if(job.stream)streaming=false;
+ if(job.stream){streaming=false;streamCancelRequested=false;streamJobId=0;}
  if(job.shutdown){if(result.ok())shutdownReady=true;else shutdownRequested=false;}
 }
 static bool unchanged(){return !currentDisplay.force&&currentDisplay.deduplicate&&frameValid&&frameProfile==uint8_t(currentDisplay.profile)&&!strcmp(frameHash,pendingHash)&&esp_clk_rtc_time()-lastRefreshRTC<86220000000ULL;}
@@ -148,11 +149,17 @@ static const char*displayHandler(const char*m,JsonObjectConst a,JsonObject out){
   if(displayActive()||streaming||displayScheduler.pending()||!e6DisplayBinding.available()||shutdownRequested)return "display_busy";
   Presentation job;job.stamp=stamp;job.profile=info->profile;job.stream=true;job.force=a["force"]|false;job.streamTimeout=cfg["stream_timeout_ms"]|15000u;
   if(auto e=admitPresentation(job,out,a["scope"]|appScope))return e;
-  streaming=true;streamId=nextStream++;streamDeadline=millis()+job.streamTimeout;out["stream_id"]=streamId;out["status"]="preparing";out["chunk_limit"]=1024;return nullptr;
+  streaming=true;streamCancelRequested=false;streamJobId=job.id;streamId=nextStream++;streamDeadline=millis()+job.streamTimeout;out["stream_id"]=streamId;out["status"]="preparing";out["chunk_limit"]=1024;return nullptr;
  }
  if(!streaming||a["stream_id"].as<uint32_t>()!=streamId)return "stream_not_found";
+ if(!strcmp(m,"abort")){
+  // An uncommitted upload can be cancelled while preparation is still running.
+  // Native commands continue to their safe receive boundary; BUSY is respected.
+  if(!displayScheduler.cancelQueued(streamJobId))streamCancelRequested=true;
+  out["status"]="cancel_requested";return nullptr;
+ }
  if(!displayActive())return "display_not_receiving";if(!presentationCurrent(currentDisplay))return "view_changed";
- if(!strcmp(m,"abort")){if(!panel.receiving())return "not_cancellable";panel.cancel();displayScheduler.finishCancelled(uptime());return nullptr;}
+ if(streamCancelRequested)return "stream_cancel_requested";
  if(!panel.receiving())return "display_not_receiving";
  if(!strcmp(m,"chunk")){uint8_t b[1024];size_t n;if(!a["offset"].is<uint32_t>()||a["offset"].as<uint32_t>()!=panel.bytes())return "wrong_offset";if(!unhex(a["hex"]|"",b,sizeof b,n))return "invalid_hex";if(!panel.write(b,n))return "chunk_not_accepted";mbedtls_sha256_update(&digest,b,n);streamDeadline=millis()+currentDisplay.streamTimeout;out["next_offset"]=panel.bytes();return nullptr;}
  if(panel.bytes()!=E6Driver::FRAME_BYTES)return "incomplete_frame";finishHash(pendingHash);hashLive=false;
@@ -183,6 +190,7 @@ DisplayOutcome E6DisplayBinding::poll(Presentation&,uint64_t){
  }
  panel.tick(uptime());if(panel.faulted()){return DisplayOutcome::failed(panel.error());}
  if(panel.receiving()){
+  if(streamCancelRequested){panel.cancel();return DisplayOutcome::cancelled();}
   if(!presentationCurrent(currentDisplay)){panel.cancel();return DisplayOutcome::superseded("view_changed");}copy(displayState,sizeof displayState,"receiving");
   if(!streaming&&!commitRequested){size_t bytes=0;if(auto e=readDisplayBand(E6ColorDriver::Frame::High,renderedBytes,bytes)){if(!strcmp(e,"spi_busy"))return {};panel.cancel();return DisplayOutcome::failed(e);}
    if(panel.write(renderStripe.bytes,bytes)){mbedtls_sha256_update(&digest,renderStripe.bytes,bytes);renderedBytes+=bytes;}if(renderedBytes==E6Driver::FRAME_BYTES){finishHash(pendingHash);hashLive=false;commitRequested=true;}

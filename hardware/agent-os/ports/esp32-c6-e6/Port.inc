@@ -539,7 +539,7 @@ static void audioTask(void *) {
     int32_t raw[320];
     size_t got;
     i2s_channel_read(channel, raw, sizeof(raw), &got, 30);
-    {JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;emit("/dev/mic","started",d.as<JsonObjectConst>());}
+    {JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;emit("/dev/mic","started",d.as<JsonObjectConst>(),micOwner);}
     uint64_t sampleAt=0;VoiceCodec codec;
     while (!audioStop && (!micLimit || (uptime() - micStarted) < micLimit)) {
       got = 0;
@@ -578,16 +578,15 @@ static void audioTask(void *) {
   pinMode(pins::MIC_BCLK, OUTPUT);
   pinMode(pins::MIC_WS, OUTPUT);
   audioCaptureFailed=err!=ESP_OK;
-  {JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;d["error"]=esp_err_to_name(err);emit("/dev/mic",err==ESP_OK?"stopped":"failed",d.as<JsonObjectConst>());}
+  {JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;d["error"]=esp_err_to_name(err);emit("/dev/mic",err==ESP_OK?"stopped":"failed",d.as<JsonObjectConst>(),micOwner);}
   audioRunning = false;
   vTaskDelete(nullptr);
 }
 static const char *micHandler(const char *m, JsonObjectConst a, JsonObject out) {
+  if(strcmp(m,"start"))if(auto error=validateMicControl(m,a,recordingId))return error;
   if(strcmp(m,"read")&&strcmp(m,"start")&&core.callerOwner()&&micOwner!=core.callerOwner())return "mic_owned_by_other";
   if (!strcmp(m, "read_chunk")) {
-    if(a.containsKey("limit")&&!a["limit"].is<uint32_t>())return "audio_read_limit";
     uint32_t limit=a["limit"]|4u;if(!limit||limit>16)return "audio_read_limit";
-    if(a.containsKey("recording_id")&&strcmp(a["recording_id"]|"",recordingId))return "recording_replaced";
     audioReadableNotified=false;
     auto arr = out["chunks"].to<JsonArray>();
     AudioChunk c;
@@ -1050,7 +1049,7 @@ void poll() {
   core.clock(uptime());
   if(!pendingPower[0]&&!shutdownRequested)scriptHost.tick(uptime());
   if(!pendingPower[0]&&!shutdownRequested){boardWifi.service();wifiManager.poll(uptime());}
-  if(uxQueueMessagesWaiting(audioQueue)&&!audioReadableNotified){audioReadableNotified=true;JsonDocument d;d["recording_id"]=recordingId;d["buffered_chunks"]=uxQueueMessagesWaiting(audioQueue);emit("/dev/mic","readable",d.as<JsonObjectConst>());}
+  if(uxQueueMessagesWaiting(audioQueue)&&!audioReadableNotified){audioReadableNotified=true;JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;d["buffered_chunks"]=uxQueueMessagesWaiting(audioQueue);emit("/dev/mic","readable",d.as<JsonObjectConst>(),micOwner);}
   workers.poll();timeService.poll(uptime(),WiFi.status()==WL_CONNECTED);
   pollAudioStorage();
   pollPowerSense();pollImu();

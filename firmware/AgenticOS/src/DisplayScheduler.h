@@ -85,6 +85,12 @@ public:
   if(policy==Policy::Latest)while(count_)discardFront(DisplayOutcome::superseded("newer_presentation"));
   pending_[count_]=job;pending_[count_].latestOnly=policy==Policy::Latest;++count_;return nullptr;
  }
+ bool cancelQueued(uint32_t id){
+  for(unsigned i=0;i<count_;++i)if(pending_[i].id==id){
+   adapter_.completed(pending_[i],DisplayOutcome::cancelled(),0);adapter_.dispose(pending_[i]);
+   for(unsigned j=i+1;j<count_;++j)pending_[j-1]=pending_[j];pending_[--count_]={};return true;
+  }return false;
+ }
  void tick(uint64_t now){
   while(count_&&!relevant(pending_[0]))discardFront(DisplayOutcome::superseded("view_changed"));
   if(!active_&&count_&&adapter_.available()){

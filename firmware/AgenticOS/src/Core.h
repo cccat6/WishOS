@@ -22,10 +22,11 @@ struct Event {
 };
 struct Rule {
   bool used = false, enabled = true, once = false, ran = false;
-  uint32_t id = 0, cooldown = 0, owner = 0;
+  uint32_t id = 0, cooldown = 0, owner = 0, afterSequence = 0;
   uint64_t last = 0;
   char source[48]{}, event[40]{}, target[48]{}, method[32]{}, args[768]{}, where[256]{};
 };
+inline bool eventAfter(uint32_t sequence,uint32_t after){uint32_t distance=sequence-after;return distance&&distance<0x80000000u;}
 struct Timer {
   bool used = false;
   uint32_t id = 0, period = 0;
@@ -194,7 +195,7 @@ public:
     if (!r)
       return id ? "rule_not_found" : "rule_limit";
     if(r->used&&invocationOwner_&&r->owner!=invocationOwner_)return "rule_owned_by_other";
-    Rule candidate;candidate.owner=invocationOwner_;
+    Rule candidate;candidate.owner=invocationOwner_;candidate.afterSequence=seq_;
     if (!copy(candidate.source, sizeof(candidate.source), source) ||
         !copy(candidate.event, sizeof(candidate.event), event) ||
         !copy(candidate.target, sizeof(candidate.target), target) ||
@@ -273,7 +274,7 @@ public:
     for(auto&r:rules_)if(r.used&&r.enabled)candidates[count++]=r.id;
     if(observe_&&observe_(e))return;
     for(unsigned i=0;i<count;++i)for(auto&r:rules_)if(r.id==candidates[i])
-        if (r.used && r.enabled && (!e.targetOwner||!r.owner||r.owner==e.targetOwner) && !strcmp(e.path, r.source) && !strcmp(e.name, r.event)) {
+        if (r.used && r.enabled && eventAfter(e.sequence,r.afterSequence) && (!e.targetOwner||!r.owner||r.owner==e.targetOwner) && !strcmp(e.path, r.source) && !strcmp(e.name, r.event)) {
           JsonDocument data, condition;
           deserializeJson(data, e.data);
           deserializeJson(condition, r.where);

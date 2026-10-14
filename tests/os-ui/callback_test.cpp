@@ -61,6 +61,13 @@ end
  end function on_event() error('unsubscribed legacy handler') end)lua";
  {LuaRuntime vm(c,49152);app=&vm;uint32_t cursor=c.sequence();JsonDocument d;assert(c.emit("/x","changed",d.to<JsonObject>()));before=effects;assert(vm.load(ownership,strlen(ownership))&&vm.start());c.dispatch(cursor);assert(effects==before);send(c,cursor,"/x","changed");assert(effects==before+1&&!vm.error()[0]);stats(vm,out);auto owner=out["owner"].as<uint32_t>();send(c,cursor,"/x","changed","{}",owner+1);assert(effects==before+1);}
  app=nullptr;
+ // Raw subscriptions and managed listeners share the same future-event
+ // boundary. Repeating subscribe is idempotent and does not move that boundary.
+ {LuaRuntime vm(c,49152);app=&vm;uint32_t cursor=c.sequence();JsonDocument d;assert(c.emit("/raw","changed",d.to<JsonObject>()));before=effects;
+  const char*s="function on_start() notes.subscribe('/raw') end function on_event(e) notes.subscribe('/raw');notes.call('/effect','write',{}) end";
+  assert(vm.load(s,strlen(s))&&vm.start());c.dispatch(cursor);assert(effects==before);
+  assert(c.emit("/raw","changed",d.to<JsonObject>()));assert(c.emit("/raw","changed",d.to<JsonObject>()));c.dispatch(cursor);assert(effects==before+2);
+ }app=nullptr;
  // Idempotent remote submit may already have completed. Its callback is deferred
  // to a later runtime pump, without re-executing the operation or missing receipt.
  {Core local;kernel=&local;Vfs files;RemoteRequests remote(local);ScriptHost runtime(local,files);

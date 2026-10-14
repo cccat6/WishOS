@@ -42,7 +42,9 @@ suppresses the low-level `on_event` fallback and static rules, not other registe
 listeners. A listener removed by an earlier callback is skipped; a newly registered
 listener starts with future events. One-shot listeners are removed before calling
 user code. Manual subscribe/unsubscribe and registered listeners retain independent
-interest in a source.
+interest in a source. Raw subscriptions and static rules also begin with future
+input: queued events from before registration do not become actions for newly
+loaded code. Repeating an existing subscription is idempotent.
 
 Callbacks share the application's instruction/system-call and memory budgets. Their
 state allocates on demand; there is no fixed per-application callback-memory block

@@ -41,5 +41,9 @@ static void pollAudioStorage(){
  meta["format"]="notes-recording/1";meta["id"]=recordingId;meta["order"]=audioOrder;meta["sample_rate_hz"]=micRate;meta["encoding"]="ima-adpcm-blocks";meta["channels"]=1;meta["bytes"]=audioOffset;meta["blocks"]=audioBlocks;meta["missing_samples"]=audioStorageDrops.load();meta["capture_failed"]=audioCaptureFailed.load();meta["capture"]=synced&&audioStorageOk&&!audioStorageDrops&&!audioCaptureFailed?"finalized":"incomplete";meta["retention"]=recordingRetention;meta["index"]="nai1-le-32";
  char path[256];snprintf(path,sizeof path,"%s.json",recordingFile);auto file=SD.open(path,O_CREAT|O_EXCL|O_WRONLY);bool stored=false;size_t n=measureJson(meta);if(file&&!meta.overflowed()){stored=serializeJson(meta,file)==n&&file.sync()&&synced;file.close();}sdFiles.reserved[0]=0;++sdFiles.revision;sdFiles.freeKnown=false;giveSPI();
  if(stored)recordings->remember(recordingFile,audioOffset+16+uint64_t(audioBlocks)*32+n,audioOrder);else audioStorageError="recording_not_fully_committed";
- event("/dev/mic",stored?"stored":"storage_failed",recordingId);audioSpooling=false;
+ JsonDocument receipt;receipt["recording_id"]=recordingId;receipt["owner"]=micOwner;
+ receipt["file"]=String("/storage/user")+recordingFile;receipt["durable"]=stored;
+ receipt["complete"]=stored&&audioStorageOk&&!audioStorageDrops&&!audioCaptureFailed;
+ receipt["capture_failed"]=audioCaptureFailed.load();receipt["missing_samples"]=audioStorageDrops.load();receipt["bytes"]=audioOffset;
+ receipt["error"]=audioStorageError.load();emit("/dev/mic",stored?"stored":"storage_failed",receipt.as<JsonObjectConst>(),micOwner);audioSpooling=false;
 }

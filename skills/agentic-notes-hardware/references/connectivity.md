@@ -31,8 +31,13 @@ No ecosystem adapter, account login or vendor appliance schema is built into the
 
 - `/net/http request`: bounded inline text response, or `stream:true` with a configurable
   `response_limit`; `receive` drains 512-byte hex chunks. Subscribe to `readable` and
-  completion/failure events. Drain all chunks before replacing the job. A full chunk
-  queue applies backpressure; unattended streams can time out. `cancel` requests cooperative termination; `release` rejects a running task and releases its queued data/receipt after completion. A script exit cancels its own request and releases it only after task exit. Blocking connection/TLS work can still last until its configured timeout. HTTPS takes `ca_pem`.
+  completion/failure events. The current adapter retains one job and its response
+  until `release` or owner exit; a new request returns `network_result_pending`
+  rather than overwriting an unread result. Pass its `job_id` to `receive`, `cancel`
+  and `release`, and to `read` when reading a specific result. A stale ID cannot
+  operate on a replacement. A full chunk queue applies backpressure; unattended
+  streams can time out. `cancel` requests cooperative termination; `release`
+  rejects a running task and explicitly discards remaining response data. A script exit cancels its own request and releases it only after task exit. Blocking connection/TLS work can still last until its configured timeout. HTTPS takes `ca_pem`.
 - `/net/tcp listen/connect/read/write/close`: four nonblocking IPv4 socket slots.
   `connect` takes a numeric `address`; DNS names are supported by HTTP/WS clients.
   `accepted`, `connected`, `readable`, `closed` and `failed` announce state. Binary

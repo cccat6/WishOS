@@ -67,6 +67,13 @@ int main(){
  assert(!q.enqueue(frame(views,other,6),Policy::Fifo,2));adapter.failComplete=true;adapter.done=true;q.tick(20);
  assert(!q.active()&&adapter.leases==0&&q.pending()==1&&views.presented().view==0);auto failed=adapter.receipts.size();
  q.tick(21);assert(adapter.receipts.size()==failed&&q.pending()==1);adapter.failComplete=false;adapter.ready=true;q.tick(22);assert(q.pending()==0&&!q.active()&&views.presented().view==other);
+ // Queued cancellation releases exactly that request, preserves FIFO order,
+ // and never cancels an active DMA/EPD transaction.
+ adapter.done=false;assert(!q.enqueue(frame(views,other,7),Policy::Fifo,2));q.tick(23);assert(q.active());
+ assert(!q.enqueue(frame(views,other,8),Policy::Fifo,2));assert(!q.enqueue(frame(views,other,9),Policy::Fifo,2));
+ assert(!q.cancelQueued(7)&&q.active()&&adapter.nativeReadsSource);assert(q.cancelQueued(8)&&q.pending()==1);
+ assert(adapter.receipts.back()["job_id"]==8&&adapter.receipts.back()["state"]=="cancelled");assert(!q.cancelQueued(8));
+ adapter.done=true;q.tick(24);q.tick(25);assert(!q.active()&&q.pending()==0&&adapter.receipts.back()["job_id"]==9&&adapter.leases==0);
  // A headless runtime can host other resources without constructing a display.
  // Component metadata contains actual geometry/protocol, not an E6 frame contract.
  DisplayComponent mono{"ssd1306","oled","i2c",128,64,DisplayEvidence::TransportComplete,"i2c_transfer","continuous"};JsonDocument description;mono.describe(description.to<JsonObject>());assert(description["width"]==128&&description["completion"]["kind"]=="transport_complete");
