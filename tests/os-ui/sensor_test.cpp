@@ -30,6 +30,7 @@ int main(){
  core.add({"/sys/capabilities","describe","",[](const char*,JsonObjectConst a,JsonObject o){return activeCore->describe(a["path"]|"",o);},nullptr,"describe"});
  JsonDocument a,o,empty;uint32_t owner=core.acquireOwner();unsigned before=fixture.transfers;
  assert(!core.invoke("/sensors/room","describe",empty.to<JsonObject>(),o.to<JsonObject>(),owner));assert(!core.invoke("/sensors/room","read",empty.as<JsonObjectConst>(),o.to<JsonObject>(),owner));assert(!o["valid"].as<bool>()&&fixture.transfers==before);
+ a["low_power"]=true;assert(!sensor.invoke("configure",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["configuration"]["low_power"]==true);a["low_power"]=false;assert(!sensor.invoke("configure",a.as<JsonObjectConst>(),o.to<JsonObject>()));a.clear();
  fixture.environment(26214,32768);core.clock(100);assert(!core.request("/sensors/room","measure",empty.as<JsonObjectConst>(),o.to<JsonObject>(),owner));uint32_t completion=o["completion_id"];
  assert(!fixture.held&&fixture.commands.back()==0x3517);sensor.poll(102);assert(fixture.commands.back()==0x7866);before=fixture.transfers;sensor.poll(103);assert(fixture.transfers==before&&!fixture.held);
  sensor.poll(118);assert(fixture.commands.back()==0xb098);assert(!core.completions().read(completion,owner,o.to<JsonObject>()));assert(o["ready"]==true&&o["event"]=="completed"&&o["data"]["operation_id"]==1);assert(!core.completions().release(completion,owner));
