@@ -1,0 +1,5 @@
+{
+  "format": "notes-driver/1",
+  "id": "energy-activity",
+  "description": "PCM amplitude activity detection; not speech recognition"
+}

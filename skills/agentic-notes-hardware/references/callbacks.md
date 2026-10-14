@@ -53,11 +53,18 @@ through `/sys/runtime read`. Failures follow the runtime's application fault pol
 Stopping, replacing or rebooting an application drops its callback registrations;
 startup code re-registers them. They never execute in a hardware ISR.
 
-Known implementation gap at system revision `62c2843`: ordinary event-ring overflow
-can discard a completion notification and leave its request callback pending. A
-missing callback does not prove the operation failed or did not execute. Inspect
-the driver's advertised result interface before retrying a mutation. Reliable
-completion retention/recovery is planned in [the system plan](../../../docs/agent-os-plan.md#f01-完成通知会被普通事件覆盖); the current wrapper alone does not provide it.
+Accepted requests reserve a completion observation independently of the lossy event
+journal. Ordinary event overflow does not erase their terminal results. The runtime
+recovers retained results on its next pump and releases the observation after the
+one-shot callback. `off` and owner exit release it without cancelling physical work.
+Direct RPC clients can use `/sys/operations request {path,method,args}`, then
+`read {id:completion_id}` and `release {id}`. The ID lasts only for this boot.
+
+The retained observation is bounded by the system resource budget and is admitted
+before the operation. If an exceptional allocation failure prevents correlating a
+concurrent completion before the acceptance reply is bound, `delivery_error`
+reports that observation failure. Inspect the driver's result state; do not treat
+it as evidence that the physical operation failed or repeat the operation blindly.
 
 
 `notes.request` uses `/sys/capabilities describe` metadata:

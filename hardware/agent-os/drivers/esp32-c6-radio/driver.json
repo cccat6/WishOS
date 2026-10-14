@@ -1,0 +1,15 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp32-c6-radio",
+  "description": "C6 Thread/Zigbee callback ownership and native link preparation",
+  "platforms": [
+    "esp32"
+  ],
+  "targets": [
+    "esp32c6"
+  ],
+  "build_hook": "build.py",
+  "build_inputs": [
+    "tools/prepare_radio_sdk.py"
+  ]
+}

@@ -55,6 +55,14 @@ public:
   auto fn=heaps_[index(region)].resize;auto p=static_cast<Allocation*>(fn?fn(nullptr,n):malloc(n));if(!p)return nullptr;
   p->size=n;p->region=region;transient_[index(region)]+=n;return p+1;
  }
+ size_t allocationSize(void*ptr)const{if(!ptr)return 0;auto p=static_cast<Allocation*>(ptr)-1;return p->size-sizeof(Allocation);}
+ void*reallocate(void*ptr,size_t bytes){std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if(!ptr)return allocate(bytes);if(!bytes){freeAllocation(ptr);return nullptr;}if(bytes>SIZE_MAX-sizeof(Allocation))return nullptr;
+  auto p=static_cast<Allocation*>(ptr)-1;size_t n=bytes+sizeof(Allocation),old=p->size;auto region=p->region;
+  if(n>old){size_t growth=n-old,total=promised(),maximum=limit();if(growth>maximum||total>maximum-growth||!fits(growth,region))return nullptr;}
+  auto fn=heaps_[index(region)].resize;auto next=static_cast<Allocation*>(fn?fn(p,n):realloc(p,n));if(!next)return n<=old?ptr:nullptr;
+  next->size=n;next->region=region;if(n>=old)transient_[index(region)]+=n-old;else transient_[index(region)]-=old-n;return next+1;
+ }
  void freeAllocation(void*ptr){std::lock_guard<std::recursive_mutex> lock(mutex_);if(!ptr)return;auto p=static_cast<Allocation*>(ptr)-1;auto r=p->region;transient_[index(r)]-=p->size;auto fn=heaps_[index(r)].resize;if(fn)fn(p,0);else free(p);}
  const char*allocationRegion(uint32_t id)const{std::lock_guard<std::recursive_mutex> lock(mutex_);auto s=find(id);return s?name(s->region):"unallocated";}
  void*resize(uint32_t id,void*ptr,size_t size,size_t previous=0){
@@ -84,9 +92,9 @@ public:
   o["configuration_scope"]="system";o["instance_default_apply_time"]="next_instance";o["default_vm_memory_bytes"]=defaultVm_;o["memory_limit_bytes"]=limit();
   if(configuredLimit_)o["configured_memory_limit_bytes"]=configuredLimit_;else o["configured_memory_limit_bytes"]=nullptr;
   size_t reserved=0,application=0;for(auto&s:slots_)if(s.id){if(s.elastic)application+=s.used.load();else reserved+=s.limit;}
-  o["application_memory"]=name(applicationRegion_);o["heap_reserve_bytes"]=reserves_[0];o["external_heap_reserve_bytes"]=reserves_[1];o["managed_bytes"]=promised();o["application_allocated_bytes"]=application;o["cache_allocated_bytes"]=transient_[0].load()+transient_[1].load();o["reserved_bytes"]=reserved;o["unallocated_reserved_bytes"]=pending();o["admission_failures"]=failures_;
+  o["application_memory"]=name(applicationRegion_);o["heap_reserve_bytes"]=reserves_[0];o["external_heap_reserve_bytes"]=reserves_[1];o["managed_bytes"]=promised();o["application_allocated_bytes"]=application;o["shared_allocated_bytes"]=transient_[0].load()+transient_[1].load();o["reserved_bytes"]=reserved;o["unallocated_reserved_bytes"]=pending();o["admission_failures"]=failures_;
   if(heaps_[0].available)o["heap_free_bytes"]=heaps_[0].available();else o["heap_free_bytes"]=nullptr;o["scheduler"]="native_rtos_with_bounded_lua";
-  auto pools=o["heaps"].to<JsonArray>();for(auto r:{Region::Internal,Region::External})if(present(r)){const auto&h=heaps_[index(r)];auto p=pools.add<JsonObject>();p["id"]=name(r);if(h.capacity)p["capacity_bytes"]=h.capacity();else p["capacity_bytes"]=nullptr;if(h.available)p["free_bytes"]=h.available();else p["free_bytes"]=nullptr;if(h.largest)p["largest_free_block_bytes"]=h.largest();else p["largest_free_block_bytes"]=nullptr;p["reserve_bytes"]=reserves_[index(r)];p["unallocated_reserved_bytes"]=pendingIn(r);p["cache_allocated_bytes"]=transient_[index(r)].load();}
+  auto pools=o["heaps"].to<JsonArray>();for(auto r:{Region::Internal,Region::External})if(present(r)){const auto&h=heaps_[index(r)];auto p=pools.add<JsonObject>();p["id"]=name(r);if(h.capacity)p["capacity_bytes"]=h.capacity();else p["capacity_bytes"]=nullptr;if(h.available)p["free_bytes"]=h.available();else p["free_bytes"]=nullptr;if(h.largest)p["largest_free_block_bytes"]=h.largest();else p["largest_free_block_bytes"]=nullptr;p["reserve_bytes"]=reserves_[index(r)];p["unallocated_reserved_bytes"]=pendingIn(r);p["shared_allocated_bytes"]=transient_[index(r)].load();}
   auto reservations=o["reservations"].to<JsonArray>();for(auto&s:slots_)if(s.id){auto p=reservations.add<JsonObject>();p["id"]=s.id.load();p["owner"]=s.owner;p["region"]=name(s.region);p["allocation_mode"]=s.elastic?"elastic_ceiling":"reservation";p["limit_bytes"]=s.limit;p["used_bytes"]=s.used.load();}
  }
 };

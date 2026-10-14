@@ -8,16 +8,13 @@
   "hardware": {},
   "buttons": [],
   "display": null,
-  "assets": {
-    "/defaults.json": "assets/defaults.json",
-    "/setup.html": "assets/setup.html"
-  },
-  "startup": {},
   "resources": {
     "heap_reserve_bytes": 20000,
     "external_heap_reserve_bytes": 0,
     "default_vm_memory_bytes": 32768,
     "application_memory": "auto",
     "memory_limit_bytes": null
-  }
+  },
+  "runtime": "../../runtime/headless-suite",
+  "drivers": []
 }

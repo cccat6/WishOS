@@ -1,0 +1,8 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp-i2s-output",
+  "description": "ESP-IDF standard I2S PCM output adapter",
+  "platforms": [
+    "esp32"
+  ]
+}

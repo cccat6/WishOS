@@ -111,3 +111,27 @@ Candidate `on_prepare` can validate files and discover capabilities before the o
 runtime is stopped. Failed preparation preserves the running instance. Low memory
 must be an explicit admission/allocation result, not a reason to reinterpret an
 application's configuration or silently remove capabilities.
+
+## Combined buttons and input timing
+
+The driver exposes a debounced `pressed_mask`, per-button index, raw accepted
+`edge_at_ms`, `pressed_at_ms`, observed `captured_at_ms`, gesture identity and held
+duration. GPIO bank sampling commits all accepted levels before delivering events;
+A+B does not depend on iteration order. Discover the adapter's sampling period.
+Debounce, long-press duration, click window and application combination tolerances
+are separate settings. Edge time remains the observed edge, not an invented
+sub-sampling hardware timestamp.
+
+The ordinary `/system/lib/input.lua` runtime module provides `watch(source,
+patterns,callback)`. Patterns support `event`, `button`, `count`, min/max hold,
+`with` held-button conditions, unordered `chord.buttons` with a time window,
+and ordered `steps` with `after_ms`, `within_ms` and `jitter_ms`. `defer_ms` and
+`cancel_pending` let an app postpone a single-key action until a chord window has
+closed. `consume` and the callback result determine application event consumption.
+No chord has an OS-defined action. The watcher can be stopped/replaced at runtime.
+Deferred callbacks carry the original event; re-read button state if the action
+requires the key to remain physically held at execution time.
+
+Example: `{id='both',event='press',chord={buttons={'A','B'},window_ms=75},
+cancel_pending={'single'}}`. A preceding single-key pattern can use
+`defer_ms=100`. Those numbers are application examples, not hardware limits.

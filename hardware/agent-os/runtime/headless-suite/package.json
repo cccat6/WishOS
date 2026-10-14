@@ -1,0 +1,10 @@
+{
+  "format": "notes-runtime-package/1",
+  "id": "headless-suite",
+  "assets": {
+    "/defaults.json": "assets/defaults.json",
+    "/setup.html": "assets/setup.html",
+    "/lib/input.lua": "@runtime/lib/input.lua"
+  },
+  "startup": {}
+}

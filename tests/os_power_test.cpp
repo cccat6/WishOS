@@ -1,5 +1,5 @@
 #include "../firmware/AgenticOS/src/PowerMonitor.h"
-#include "../firmware/AgenticOS/src/Defaults.h"
+#include "ports/esp32-c6-e6/Defaults.h"
 #include <cassert>
 #include <cmath>
 #include <cctype>

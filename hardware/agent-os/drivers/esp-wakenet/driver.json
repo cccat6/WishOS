@@ -1,0 +1,20 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp-wakenet",
+  "description": "ESP-SR compiled wake word engine",
+  "platforms": [
+    "esp32"
+  ],
+  "targets": [
+    "esp32c6"
+  ],
+  "flags": [
+    "-DNOTES_WAKENET=1"
+  ],
+  "build_hook": "build.py",
+  "build_inputs": [
+    "tools/prepare_speech.py",
+    "tools/dependencies/esp-sr.json",
+    "tools/dependencies/dl-fft.json"
+  ]
+}

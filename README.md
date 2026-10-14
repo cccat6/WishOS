@@ -30,7 +30,9 @@ rendering pipeline. E6 waveform research and local credentials/data are not part
 of either public repository.
 
 - System: `firmware/AgenticOS/`
-- Hardware packages: `hardware/agent-os/`
+- Native drivers and SDK adapters: `hardware/agent-os/drivers/`
+- Board composition and wiring: `hardware/agent-os/ports/`, `hardware/agent-os/boards/`
+- Initial runtime suites: `hardware/agent-os/runtime/`
 - Runtime examples: `examples/agent-os/`
 - Agent guidance: `skills/agentic-notes-hardware/`
 - Implemented interfaces and limits: `docs/agent-os-runtime.md`
@@ -47,6 +49,14 @@ For host image compilation, install Pillow and run `npm ci --prefix tools`.
 The current target toolchain is Arduino ESP32 3.3.11; the NFS dependency is pinned
 by commit and acquired from its own source repository. See the firmware README for
 all dependency versions and the unified C6 radio build.
+
+For multi-device contributions and releases, see the [hardware package guide](hardware/agent-os/README.md)
+and [native driver contract](hardware/agent-os/drivers/README.md). GitHub Actions discovers
+boards from manifests and builds affected targets, or one explicitly selected board.
+Each board links its own initial runtime suite. The firmware builder uses locked
+dependency archives; `tools/prepare_arduino.py --host-libraries build/host-libraries`
+prepares matching dependencies for host tests. The workflow is repository source;
+it is not evidence of a published GitHub release.
 
 Recording uses independently decodable IMA ADPCM blocks. Without SD, only bounded
 RAM buffering is used; queue overflow is observable. Persistent recording is optional

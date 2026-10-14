@@ -27,7 +27,7 @@ int main(){
  c.add({"/sys/workers","read,submit,cancel,release","",[](const char*m,JsonObjectConst a,JsonObject o){return pool->invoke(m,a,o);}});
  c.add({"/net/http-server","read,route,respond,release","",[](const char*m,JsonObjectConst a,JsonObject o){return web->invoke(m,a,o);}});
  c.add({"/services/remote","read,peek,submit,complete,release","",[](const char*m,JsonObjectConst a,JsonObject o){return remote->invoke(m,a,o,kernel->now(),"test");}});
- c.add({"/sys/capabilities","list,describe","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"describe"))return kernel->describe(a["path"]|"",o);kernel->list(o["devices"].to<JsonArray>());return nullptr;}});
+ c.add({"/sys/capabilities","list,describe","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"describe"))return kernel->describe(a["path"]|"",o);kernel->list(o["devices"].to<JsonArray>());return nullptr;},nullptr,"list,describe"});
  c.add({"/sys/conditions","read,write,remove","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write"))return watchers->set(a,o);if(!strcmp(m,"remove"))return watchers->remove(a["id"]|"");watchers->list(o);return nullptr;}});
  c.add({"/sensor","read","",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["value"]=42;return nullptr;},[](JsonObject o){o["properties"]["value"]["type"]="number";o["properties"]["value"]["access"]="r";}});
  c.add({"/sys/timers","write,read,remove","",timers});c.add({"/effect","write","",effect});
@@ -86,6 +86,11 @@ function on_stop() notes.call('/effect','write',{stopped=true}) end
  // VM quota is a system resource policy, not a 64/128 KiB hardware boundary.
  auto large=parse(R"({"source":"function on_start() local text=string.rep('x',70000); assert(#text==70000) end","memory_bytes":196608})");if(auto error=h.invoke("load",large.as<JsonObjectConst>(),out.to<JsonObject>())){std::cerr<<error<<" ";serializeJsonPretty(out,std::cerr);assert(false);}assert(out["memory_peak"].as<unsigned>()>65536);assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));
  auto memoryPolicy=parse(R"({"default_vm_memory_bytes":49152})");assert(!c.resources().configure(memoryPolicy.as<JsonObjectConst>()));auto inherited=parse(R"({"source":"function on_start() end"})");assert(!h.invoke("load",inherited.as<JsonObjectConst>(),out.to<JsonObject>()));assert(out["memory_budget"]==49152);assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));
+ c.add({"/custom/readout","sample","",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["value"]=42;return nullptr;},nullptr,"sample"});
+ auto custom=parse(R"({"source":"function on_prepare() local r=notes.call('/custom/readout','sample',{});assert(r.ok and r.result.value==42) end"})");assert(!h.invoke("load",custom.as<JsonObjectConst>(),out.to<JsonObject>()));
+ // Failed candidate diagnostics remain valid after the candidate is destroyed.
+ auto invalidCandidate=parse(R"({"source":"function on_prepare() error('candidate rejected') end"})");
+ assert(h.invoke("load",invalidCandidate.as<JsonObjectConst>(),out.to<JsonObject>()));std::string ownedDiagnostics;serializeJson(out,ownedDiagnostics);assert(ownedDiagnostics.find("candidate rejected")!=std::string::npos);
  // Candidate preparation cannot mutate devices or stop the previous app.
  auto stable=parse(R"({"source":"function on_start() notes.subscribe('/button') end function on_event() return true end"})");assert(!h.invoke("load",stable.as<JsonObjectConst>(),out.to<JsonObject>()));unsigned snapshot=effects;
  auto unsafe=parse(R"({"source":"function on_prepare() notes.call('/effect','write',{}) end"})");assert(h.invoke("load",unsafe.as<JsonObjectConst>(),out.to<JsonObject>()));assert(effects==snapshot);h.invoke("read",empty.as<JsonObjectConst>(),out.to<JsonObject>());assert(out["fault"]==false);

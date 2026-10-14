@@ -1,0 +1,8 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp32-services",
+  "description": "ESP32 SDK adapters and shared native service integration",
+  "platforms": [
+    "esp32"
+  ]
+}

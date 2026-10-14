@@ -1,6 +1,6 @@
 ---
 name: agentic-notes-hardware
-description: Discover and operate Notes OS resources, inspect live system state and constraints, configure behavior policies, and build portable UI or device applications. Use for display, audio input, buttons, networking, power, files, fonts, jobs and conditional behaviors; discover capabilities rather than assuming a particular MCU, display or storage device.
+description: Discover and operate Notes OS resources, inspect live system state and constraints, configure behavior policies, and build portable UI or device applications. Use for display, audio input/output, buttons, networking, power, files, fonts, jobs and conditional behaviors; discover capabilities rather than assuming a particular MCU, display or storage device.
 ---
 
 # Notes OS resource control
@@ -12,6 +12,12 @@ For script modules, startup/lifecycle, binary data and background compute, read 
 The factory suite is a default runtime application reference and its resources. Replace it through the same application loading/startup interfaces as user programs. Preserve necessary system coordination among the runtime, display, power and native services; changing pages or interaction behavior does not require dismantling those services.
 
 For button gestures, contextual navigation, motion/tap events, clock synchronization and presentation state and resource-policy boundaries, read [interaction applications](references/interactions.md).
+
+For microphone sharing, local detection engines, speaker playback and the separation from cloud ASR/TTS, read [audio capabilities](references/audio.md).
+
+For advertised actuators, read [actuation](references/actuation.md). Driver availability and command receipts do not establish physical movement or position feedback.
+
+Hardware contributors use the repository's [native driver contract](../../../hardware/agent-os/drivers/README.md). Board identity may advertise compiled driver ids and its initial runtime package; application code still discovers current resource capabilities instead of branching on those ids. Changing pins, native composition or native read/write limits requires a hardware-package build. Changing pages and interaction rules uses runtime files.
 
 For Wi-Fi profile priorities, manual selection ownership and independent BLE configuration, read [wireless configuration](references/wireless-config.md).
 

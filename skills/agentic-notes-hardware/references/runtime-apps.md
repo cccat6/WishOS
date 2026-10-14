@@ -161,3 +161,20 @@ and `notes.request` as documented in [callbacks](callbacks.md). This is a lazy
 runtime standard library, charged to the existing VM memory/instruction budgets.
 Driver async metadata determines correlation, not hard-coded display or HTTP cases
 inside the scripting engine. The low-level on_event entrypoint is still available.
+
+## Publishing a runtime reference
+
+`tools/os_client.py` provides `Client.publish_app(directory, mount, entry,
+persist=False, memory_bytes=None)`. It uploads to a fresh version directory,
+round-trip verifies file lengths/SHA-256, writes a package manifest, then loads the
+entry through the ordinary runtime. Only successful activation may update startup.
+Persistent startup uses the selected provider's declared preparation operation.
+No implicit formatting, overwrite of the current version, or automatic old-version
+deletion occurs. A lost activation response is reconciled by reading current
+runtime state, not by repeating `on_start`. Failure during `on_start` may already
+have caused external effects; it is not transactionally rolled back.
+
+`on_prepare` may call only the resource's advertised `read_methods`. A new compiled
+driver declares these methods in its composition; the VM contains no device-path
+allowlist. Stream consumption, mounting, detection, recording and playback are
+operations, even when a method name contains “read”.

@@ -34,6 +34,7 @@ public:
   const char *id,*mount,*medium;bool persistent,removable,writable;
   FileProvider(const char*i,const char*m,const char*t,bool p,bool r,bool w):id(i),mount(m),medium(t),persistent(p),removable(r),writable(w){}
   virtual ~FileProvider()=default;
+  virtual const char*operations()const{return "stat,read,list";}
   virtual uint64_t changeRevision()const{return 0;}
   virtual bool caseInsensitive()const{return false;}
   virtual const char*canonicalPath(const char*,char*,size_t,FileInfo&){return "unsupported_operation";}
@@ -87,7 +88,7 @@ public:
     relative=best?(path[longest]?path+longest:"/"):nullptr;return best;
   }
   FileProvider* get(const char*id)const{for(size_t i=0;i<count_;++i)if(!strcmp(providers_[i]->id,id))return providers_[i];return nullptr;}
-  void describe(JsonArray out)const{for(size_t i=0;i<count_;++i){auto p=providers_[i];auto x=out.add<JsonObject>();x["id"]=p->id;x["mount"]=p->mount;x["medium"]=p->medium;x["persistent"]=p->persistent;x["removable"]=p->removable;x["writable"]=p->writable;x["durable_writes"]=p->durableWrites();x["case_insensitive"]=p->caseInsensitive();x["available"]=p->available();p->describe(x);}}
+  void describe(JsonArray out)const{for(size_t i=0;i<count_;++i){auto p=providers_[i];auto x=out.add<JsonObject>();x["id"]=p->id;x["mount"]=p->mount;x["medium"]=p->medium;x["persistent"]=p->persistent;x["removable"]=p->removable;x["writable"]=p->writable;x["durable_writes"]=p->durableWrites();x["case_insensitive"]=p->caseInsensitive();x["available"]=p->available();x["operations"]=p->operations();p->describe(x);}}
 };
 class MemoryFiles:public FileProvider {
 public:
@@ -101,6 +102,7 @@ private:
 public:
   MemoryFiles(const char*id,const char*mount,const char*medium,bool present=true,Allocate a=malloc,Release r=free):FileProvider(id,mount,medium,false,false,true),allocate_(a),release_(r),present_(present){}
   ~MemoryFiles(){for(auto&e:files_)if(e.bytes)release_(e.bytes);}
+  const char*operations()const override{return "stat,read,list,write,create,resize,flush,remove,mkdir,rename";}
   uint64_t changeRevision()const override{return revision_;}
   uint64_t maxFileSize()const override{return budget_;}
   const char*flush(const char*p)override{FileInfo i;return stat(p,i);}
@@ -121,11 +123,14 @@ public:
   const char*write(const char*p,uint64_t at,const uint8_t*b,size_t n,bool trunc,size_t&wrote)override{
     wrote=0;if(!present_)return "provider_unavailable";if(strlen(p)>=192||!parentExists(p)||at>budget_||n>budget_-at|| (trunc&&at))return "invalid_path_or_quota";
     auto e=find(p);if(e&&e->directory)return "is_directory";if(!e)for(auto&x:files_)if(!x.path[0]){e=&x;break;}if(!e)return "entry_capacity";
-    size_t target=size_t(at)+n;size_t old=trunc?0:e->size;size_t cap=target>old?target:old;
-    if(cap>budget_-used_+e->capacity)return "quota_exceeded";
-    uint8_t*next=cap?(uint8_t*)allocate_(cap):nullptr;if(cap&&!next)return "memory_low";
-    if(cap)memset(next,0,cap);if(old)memcpy(next,e->bytes,old);if(n)memcpy(next+at,b,n);
-    if(e->bytes)release_(e->bytes);used_=used_-e->capacity+cap;e->bytes=next;e->capacity=cap;e->size=cap;++revision_;strcpy(e->path,p);wrote=n;return nullptr;
+    size_t target=size_t(at)+n,old=trunc?0:e->size,size=target>old?target:old;
+    size_t ceiling=budget_-used_+e->capacity;if(size>ceiling)return "quota_exceeded";
+    if(size>e->capacity){size_t cap=e->capacity?e->capacity:256;while(cap<size&&cap<=ceiling/2)cap*=2;if(cap<size)cap=size;if(cap>ceiling)cap=ceiling;
+      uint8_t*next=(uint8_t*)allocate_(cap);if(!next&&cap>size){cap=size;next=(uint8_t*)allocate_(cap);}if(!next)return "memory_low";
+      if(old)memcpy(next,e->bytes,old);if(size>old)memset(next+old,0,size-old);if(n)memcpy(next+at,b,n);
+      if(e->bytes)release_(e->bytes);used_=used_-e->capacity+cap;e->bytes=next;e->capacity=cap;
+    }else{if(size>old)memset(e->bytes+old,0,size-old);if(n)memcpy(e->bytes+at,b,n);}
+    e->size=size;++revision_;strcpy(e->path,p);wrote=n;return nullptr;
   }
   const char*list(const char*p,uint32_t cursor,uint32_t limit,JsonObject o)override{
     FileInfo info;if(auto e=stat(p,info))return e;if(!info.directory)return "not_directory";auto arr=o["entries"].to<JsonArray>();uint32_t seen=0,next=cursor;bool more=false;

@@ -1,0 +1,55 @@
+{
+  "format": "notes-hardware-reference/1",
+  "id": "esp-sparkbot",
+  "status": "compatibility_reference_not_a_firmware_port",
+  "sources": [
+    "https://developer.espressif.com/blog/2025/04/esp32-s3-sparkbot/",
+    "https://gitee.com/esp-friends/esp_sparkbot"
+  ],
+  "source_commit": "d42c5b43e25168fa3592a9c3d113ab5631f47023",
+  "processor": {
+    "family": "ESP32-S3",
+    "module": "ESP32-S3-WROOM-1-N16R8"
+  },
+  "display": {
+    "controller": "ST7789",
+    "width": 240,
+    "height": 240
+  },
+  "camera": {
+    "model": "OV2640",
+    "transport": "DVP"
+  },
+  "imu": {
+    "model": "BMI270",
+    "signals": [
+      "acceleration_xyz",
+      "angular_velocity_xyz"
+    ]
+  },
+  "audio": {
+    "input": true,
+    "output": true,
+    "transport": "I2S"
+  },
+  "actuation": {
+    "controller": "separate ESP32-C2 chassis",
+    "transport": "UART",
+    "baud": 115200,
+    "mechanism": "two N20 geared motors and differential tracks",
+    "example_control": "x<float> y<float>",
+    "completion_evidence": "UART echo is receipt only; no encoder/pose feedback in the inspected motion example",
+    "source_files": [
+      "example/tank/c2_tracked_chassis/main/tracked_chassis.c",
+      "example/tank/c2_tracked_chassis/components/motion_control/motion_control.c"
+    ]
+  },
+  "checks": [
+    "Local PWM and remotely controlled actuators share the resource contract; transport stays in the compiled adapter",
+    "Motion plans and choreography remain replaceable runtime code",
+    "Native control expiry does not depend on application or network callbacks",
+    "Bound serial frame parsing, actuator limits and 13-bit PWM endpoints before porting the vendor example",
+    "Do not expose a private actuator bus as an unrestricted raw-register bypass",
+    "Camera streaming and audio processing must not own the actuator scheduling clock"
+  ]
+}

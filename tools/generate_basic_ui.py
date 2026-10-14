@@ -4,7 +4,7 @@ import json,struct
 from pathlib import Path
 from PIL import Image,ImageDraw
 ROOT=Path(__file__).resolve().parents[1]
-PACK=ROOT/'hardware/agent-os/boards/e6-nova-c6'
+PACK=ROOT/'hardware/agent-os/runtime/e6-suite'
 UI=PACK/'assets/ui';ICONS=PACK/'assets/icons'
 UI.mkdir(exist_ok=True);ICONS.mkdir(exist_ok=True)
 for name in ('network','services','storage','status','mic','moon'):
@@ -87,13 +87,14 @@ for name,title in names.items():
   if name not in ('welcome','menu'):nodes[4]['labelProps']['text']='长按 A 返回   长按 B 语音'
   root={'version':'0.1.1','assets':[{'type':'viewScreen','id':name,'style':{'bgColor':'#ffffff','padding':0},'children':nodes}]}
   (UI/(name+('-wide' if wide else '')+'.json')).write_text(json.dumps(root,ensure_ascii=False,indent=2)+'\n')
-board=json.loads((PACK/'board.json').read_text())
+board=json.loads((PACK/'package.json').read_text())
 board['assets']={'/startup.lua':'assets/startup.lua','/defaults.json':'assets/defaults.json','/setup.html':'assets/setup.html'}
 for folder in ('ui','suite','icons'):
  for file in sorted((PACK/'assets'/folder).glob('*')):
   board['assets']['/'+folder+'/'+file.name]=str(file.relative_to(PACK))
 # Keep the ordinary manifest used by application-loader clients.
 board['assets']['/default-app.json']='assets/default-app.json'
+board['assets']['/lib/input.lua']='@runtime/lib/input.lua'
 (PACK/'assets/default-app.json').write_text(json.dumps({'format':'notes-app/1','entry':'ui/home.json','policy_scope':'app:basic','bindings':[]},indent=2)+'\n')
-(PACK/'board.json').write_text(json.dumps(board,ensure_ascii=False,indent=2)+'\n')
+(PACK/'package.json').write_text(json.dumps(board,ensure_ascii=False,indent=2)+'\n')
 print('Generated',len(names)*2,'editable pages and 6 small icons')

@@ -1,0 +1,83 @@
+{
+  "format": "notes-hardware-reference/1",
+  "id": "lckfb-szpi-esp32s3",
+  "status": "compatibility_reference_not_a_firmware_port",
+  "sources": [
+    "https://item.szlcsc.com/43285221.html",
+    "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/introduction.html",
+    "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/audio-input-es7210.html",
+    "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/lcd-display.html",
+    "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/camera.html"
+  ],
+  "processor": {
+    "family": "ESP32-S3",
+    "module": "ESP32-S3-WROOM-1-N16R8",
+    "flash_bytes": 16777216,
+    "psram_bytes": 8388608
+  },
+  "display": {
+    "controller": "ST7789",
+    "width": 240,
+    "height": 320,
+    "transport": "SPI",
+    "completion": "DMA_transfer",
+    "backlight": "separate_native_control",
+    "touch": true
+  },
+  "audio": {
+    "input_codec": "ES7210",
+    "output_codec": "ES8311",
+    "microphones": 2,
+    "capture_roles": [
+      "microphone",
+      "microphone",
+      "playback_reference"
+    ],
+    "amplifier": "NS4150B",
+    "processing": "AEC requires a native signal-processing engine; a reference wire alone does not remove echo"
+  },
+  "imu": {
+    "model": "QMI8658",
+    "signals": [
+      "acceleration_xyz",
+      "angular_velocity_xyz"
+    ],
+    "transport": "I2C"
+  },
+  "camera": {
+    "model": "GC0308",
+    "transport": "DVP",
+    "documented_example_format": "RGB565",
+    "frame_lifetime": "explicit_reference_and_release"
+  },
+  "storage": {
+    "removable": "microSD",
+    "transport": "SDMMC",
+    "width_bits": 1,
+    "filesystem": "provider capability, not determined by bus"
+  },
+  "input": {
+    "application_buttons": 1,
+    "reset_is_application_input": false,
+    "touch": true
+  },
+  "dependencies": [
+    {
+      "native_component": "PCA9557",
+      "controls": [
+        "LCD chip select",
+        "amplifier enable",
+        "camera power-down"
+      ],
+      "transport": "shared I2C"
+    }
+  ],
+  "checks": [
+    "Audio channel roles must survive capture and processing boundaries",
+    "A shared I2C control bus is independent of audio/camera/LCD data transports",
+    "DMA and camera frame buffers retain ownership until completion or explicit release",
+    "PSRAM and internal/DMA memory use separate admission",
+    "USB OTG profiles are advertised by the native adapter, not assumed from USB CDC",
+    "No automatic SD formatting or on-device book indexing"
+  ]
+}

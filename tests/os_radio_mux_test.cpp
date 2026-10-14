@@ -1,4 +1,4 @@
-#include "radio/RadioMux.h"
+#include "drivers/esp32-c6-radio/RadioMux.h"
 #include <esp_ieee802154.h>
 #include <cassert>
 static unsigned threadCalls=0,zigbeeCalls=0;static uint8_t*expected=nullptr;

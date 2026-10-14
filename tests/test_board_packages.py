@@ -9,6 +9,7 @@ pack=importlib.util.module_from_spec(spec);spec.loader.exec_module(pack)
 class PackageTests(unittest.TestCase):
  def fixture(self,root):
   b=json.loads((pack.DEFAULT/'board.json').read_text());b['port']=str((pack.DEFAULT/b['port']).resolve())
+  b.pop('runtime',None)
   b['assets']={'/ui/home.json':'home.json','/default-app.json':'app.json'}
   b['startup']={}
   (root/'home.json').write_text('{"version":"0.1.1","label":"可爱 🐱"}')
@@ -55,6 +56,6 @@ class PackageTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root);port=root/'port';port.mkdir();(port/'Port.inc').write_text('// test port, not firmware\n')
    (port/'port.json').write_text(json.dumps({'format':'notes-port/1','id':'test','mcu':'test-dual-core','entry':'Port.inc','display':{'width':240,'height':280},'required_pins':['KEY','TOUCH_SDA','TOUCH_SCL'],'available_gpios':[1,2,3],'button_count':1}))
-   b.update(port='port',mcu='test-dual-core',pins={'KEY':1,'TOUCH_SDA':2,'TOUCH_SCL':3},hardware={},buttons=['KEY'],display={'width':240,'height':280});self.write(root,b)
+   b.update(drivers=[],port='port',mcu='test-dual-core',pins={'KEY':1,'TOUCH_SDA':2,'TOUCH_SCL':3},hardware={},buttons=['KEY'],display={'width':240,'height':280});self.write(root,b)
    pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text();self.assertIn('buttons[]={KEY}',text);self.assertNotIn('KEY_C',text)
 if __name__=='__main__':unittest.main()

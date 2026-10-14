@@ -38,14 +38,18 @@ No ecosystem adapter, account login or vendor appliance schema is built into the
   operate on a replacement. A full chunk queue applies backpressure; unattended
   streams can time out. `cancel` requests cooperative termination; `release`
   rejects a running task and explicitly discards remaining response data. A script exit cancels its own request and releases it only after task exit. Blocking connection/TLS work can still last until its configured timeout. HTTPS takes `ca_pem`.
-- `/net/tcp listen/connect/read/write/close`: four nonblocking IPv4 socket slots.
+- `/net/tcp status/listen/connect/read/write/close`: four nonblocking IPv4 socket slots.
   `connect` takes a numeric `address`; DNS names are supported by HTTP/WS clients.
+  `status` is side-effect-free; `read {id}` consumes stream bytes.
   `accepted`, `connected`, `readable`, `closed` and `failed` announce state. Binary
   data uses hex, in chunks up to 1024 bytes. Honor partial writes and `would_block`.
 - `/net/udp open/send/receive/close`: numeric IPv4 or IPv6, bounded datagrams. Thread
   uses IPv6. Inspect packet source address/port and consume the readable notification.
 - `/net/ws connect/send/receive/close`: WS/WSS client, bounded messages. Configure
-  host/port/path, TLS CA and reconnect interval. Consume the queue and observe drops.
+  host/port/path, TLS CA and reconnect interval. DNS/TLS/reconnect run on a native
+  transport task. Connect has a `connection_id`; queued sends have a `message_id`
+  and a sent/send_failed completion. Close is requested immediately and reaches
+  `closed` after the transport task exits. Consume the queue and observe drops.
 - `/net/http-server route`: install GET/POST/PUT/DELETE routes at `/` or below `/app/`, either
   static responses or `dynamic:true`. Dynamic requests return HTTP 202 with an ID,
   emit `request`, and can be read/responded/released through this resource. Clients
@@ -99,3 +103,8 @@ Start the relay after building the Hub with `NOTES_OS_URL`, and either
 The module exports `handlers`. Optional `NOTES_HUB_TOKEN` authenticates the existing Hub.
 Agent output can use hardware_invoke to push a new UI/file or deliver an application
 result; service execution does not depend on a microphone trigger.
+
+BLE asynchronous connect/GATT/scan calls carry operation IDs and support `notes.request`.
+Zigbee start/send also carry operation IDs. A failure before starting its worker
+releases admission. After the vendor SDK acquires an unreleasable cluster graph,
+a failed start reports `reboot_required` and rejects repeated allocations.

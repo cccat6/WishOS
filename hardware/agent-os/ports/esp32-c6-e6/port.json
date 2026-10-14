@@ -10,7 +10,6 @@
     "-DWEBSOCKETS_MAX_DATA_SIZE=1024",
     "-DUSE_UTF8_LONG_NAMES=1"
   ],
-  "radio_mux": true,
   "application_bytes": 3997696,
   "partition_file": "partitions.csv",
   "mcu": "ESP32-C6FH4",
@@ -154,5 +153,29 @@
     "crystal_mhz",
     "crystal_load_pf"
   ],
-  "button_count": 3
+  "button_count": 3,
+  "asset_file_limit_bytes": 16384,
+  "asset_budget_bytes": 98304,
+  "platform": "esp32",
+  "target": "esp32c6",
+  "drivers": [
+    "esp32-services",
+    "e6",
+    "energy-activity",
+    "esp32-c6-radio",
+    "sc7a20"
+  ],
+  "optional_drivers": [
+    "esp-wakenet"
+  ],
+  "dependencies": [
+    "ArduinoJson",
+    "WebSockets",
+    "ESP32NFS",
+    "lvgl",
+    "SdFat",
+    "Adafruit_GFX_Library",
+    "Adafruit_BusIO"
+  ],
+  "toolchain": "esp32"
 }

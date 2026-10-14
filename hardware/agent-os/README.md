@@ -1,10 +1,17 @@
 # Hardware packages
 
-The reusable OS is `firmware/AgenticOS/src`: registry, invocation, rules/conditions,
-VFS, policies, application host and Lua runtime. `boards/` owns wiring, electrical
-facts and startup assets. `ports/` owns trusted native driver integration and the
-platform lifecycle. Runtime applications never edit a pin map, load native code,
-create RTOS tasks or access registers.
+The repository has four layers, selected together for one firmware target:
+
+| Location | Responsibility |
+|---|---|
+| `firmware/AgenticOS/src/` | Shared runtime, registry, scheduling, presentation, VFS and resource policy |
+| `hardware/agent-os/drivers/` | Reusable device/protocol engines and SDK adapters; native limits and dependencies |
+| `hardware/agent-os/ports/` + `boards/` | Native composition/lifecycle plus pins, electrical topology, partitions and resource defaults |
+| `hardware/agent-os/runtime/` | Replaceable initial UI, input behavior and startup references, selected by each board |
+
+Runtime applications never edit a pin map, load native code, create RTOS tasks or
+access registers. A native hardware change is compiled; a page or interaction
+change can be loaded through existing runtime interfaces without recompiling.
 
 Build the existing board:
 
@@ -13,7 +20,7 @@ NOTES_OS_BOARD=e6-nova-c6 tools/build_agentic_os.sh
 ```
 
 Copy that board directory to make a wiring/UI variant. Set `port` to the existing
-port's absolute path, edit `board.json` and its assets, then select the directory
+port (relative paths are preferable in repository contributions), edit `board.json` and select its `runtime` package, then select the directory
 with `NOTES_OS_BOARD=/path/to/my-board`. This changes the generated sketch only;
 it never edits core source. `python3 tools/prepare_board_package.py /path/to/my-board`
 validates the package before compiling. Pin conflicts, unavailable pins, required
@@ -22,6 +29,7 @@ Electrical correctness still requires schematic review; passing this check is no
 PCB validation. GPIO8/9 strap loading, USB hardware pins, shared power polarity,
 crystal and peripheral voltage assumptions remain native-port responsibilities.
 
+`runtime` links to a directory with `package.json` (`notes-runtime-package/1`). Its
 `assets` maps VFS paths below `/system` to package text or binary assets. UI documents, Lua
 entry/modules and default policy snapshots are compiled read-only. User apps/assets
 can instead be replaced at runtime on writable providers. `/defaults.json` is a
@@ -35,7 +43,11 @@ resource calls. There is no independent native factory-UI boot step. Explicit
 `/sys/runtime configure` startup settings override that reference, including when
 auto-start is disabled. Inline source is runtime-only; persistent startup requires a
 persistent provider. Package changes take effect in a new firmware deployment;
-user application references and files change through runtime interfaces.
+user application references and files change through runtime interfaces. A board
+may override individual `assets` and the complete `startup` reference; omitted
+values use its selected runtime package. Sharing a driver does not require sharing
+the initial UI. `BoardPackage.h` is generated per target and for host test fixtures;
+no default board identity or factory pages are stored in kernel source.
 
 For a different MCU/display/peripheral combination, add a native port directory
 containing `port.json`, its `entry` include and a partition file. Its entry implements
@@ -43,7 +55,11 @@ containing `port.json`, its `entry` include and a partition file. Its entry impl
 The port declares its FQBN, compile flags, capacity, required pins, supported GPIOs,
 pin constraints, hardware scalar fields, button count and display geometry. A port
 can use its own native headers/sources under its directory. The build stages the
-port under `src/selected`; include reusable OS headers via `../Header.h`. Native
+port under `src/selected`; include reusable OS headers via `../Header.h`. Its
+`drivers` and the board's permitted optional `drivers` select a dependency closure;
+only those directories are staged under `src/drivers`. A driver may declare a
+trusted build hook for native SDK/archive preparation. No board-name branches are
+needed in the builder. See the [driver contribution contract](drivers/README.md). Native
 sources are trusted build inputs, never downloaded and executed by a user app.
 
 The generic package generator does not require C6, E6, three buttons, SPI or an IMU.
@@ -51,7 +67,7 @@ The current `esp32-c6-e6` port does require its particular topology. Its screen 
 still the E6 implementation: naming the PCB “Nova” does not implement a Nova driver.
 Touch, ADC button ladders, rotary input, codec/microphone types, audio output and new
 sensors are additional driver instances, discovered through the same open registry;
-there is no closed device-type enum. Actuators are not implemented in this project.
+there is no closed device-type enum. Actuator adapters are also allowed by this registry; vehicle behavior stays in runtime applications. Reference hardware does not imply an implemented or physically validated port.
 
 The current port uses FreeRTOS: native capture/storage/network tasks, serialized
 resource dispatch and optional isolated compute workers. On an SMP port, workers
@@ -63,7 +79,7 @@ this is not an MMU sandbox against bugs in trusted C/C++ drivers or the SDK.
 `e6-nova-c6` is the product board package. `esp32-c3-runtime` is a headless development-board port using the same kernel, VM, worker, Wi-Fi, VFS and NFS implementations; it declares no absent display/audio devices. Other devices need a
 native port, independently compiled and validated on that hardware. A common OS
 source tree/API is portable; a C6 binary cannot be flashed onto C3/S3 unchanged.
-Use the generated sketch under `build/agentic-os-sketch/AgenticOS` in Arduino IDE.
+Use the generated sketch under `build/agentic-os/<board>/sketch/AgenticOS` in Arduino IDE.
 The build command never flashes a device or copies a reference project's firmware.
 
 The presentation service implements navigation state, view revisions and frame
@@ -97,7 +113,7 @@ battery ADC clamp enabled. The driver conditions the switching/recovery interval
 applications consume `external_power` and valid battery readings through the common
 capability/event interface. External power does not mean charge completion.
 
-`assets/suite/config.lua` selects pages, display profiles, button roles, timer,
+`runtime/e6-suite/assets/suite/config.lua` selects pages, display profiles, button roles, timer,
 rotation and the optional voice route. `assets/suite/main.lua` implements those
 choices through public resource calls. `assets/ui/` has portrait/landscape pages;
 small indexed icons are streamed from the VFS. Copy the suite to a writable provider
@@ -123,7 +139,7 @@ rather than guessing from elapsed time. Driver callbacks set flags or queue nati
 notifications; the service loop delivers application events.
 
 The E6 engine, fixed profiles and palettes reside in
-`firmware/AgenticOS/src/drivers/e6/`. The C6 package binds those engines to GPIO/SPI,
+`hardware/agent-os/drivers/e6/`. The C6 package binds those engines to GPIO/SPI,
 file/scene/UI sources and power in `ports/esp32-c6-e6/E6Display.inc` and
 `E6UiSurface.inc`. All E6 profiles share one scheduler and one physical resource.
 The native binding also provides `displayInputBusy()`; the shared input policy
@@ -147,3 +163,49 @@ describes event evidence and the distinction between a hardware component and it
 presentation profiles. Host fixtures cover immediate transfer, DMA, EPD BUSY and
 frame-latched continuous scanout with the same scheduler. Actual non-E6 panel
 implementations are future adapters, not hidden capabilities of the E6 build.
+
+Compiled component and asset limits belong to `port.json`. A board's optional
+`drivers` selects only components advertised by that port. For example,
+the C6 package selects a pinned WakeNet9s component; another port does not inherit
+that choice automatically. `asset_file_limit_bytes` and `asset_budget_bytes` are
+build admission limits, separate from application VM memory. Asset entries may
+reference `@runtime/` files in the common runtime library tree; the resulting bytes
+and hashes are included in the hardware package like local assets.
+
+`references/` contains source-backed compatibility targets, not executable board
+packages. The SZPI reference adds multichannel capture with a playback-reference
+channel, six-axis sensing, camera frames, touch, SDMMC and private I/O-expander
+dependencies. SparkBot adds a separate UART-connected actuator controller. These
+use the open resource registry; their application workflows are not kernel modes.
+
+## One repository, selected-device builds
+
+`tools/agentic_os_catalog.py` discovers `boards/*/board.json`; no static CI device
+list needs editing for a new board. The same graph drives the local builder and
+`.github/workflows/firmware.yml`:
+
+- Board or board-only runtime changes build that board.
+- A port, reusable driver or shared runtime asset builds its consumers.
+- Portable kernel/build dependency changes build all affected targets.
+- Documentation/reference-only changes run host checks without firmware builds.
+- Workflow dispatch accepts one board id, or `all`; a new board PR needs only its
+  target when it does not change shared code.
+
+Arduino CLI/core and libraries are locked in `tools/dependencies/arduino.json`.
+The builder downloads/verifies snapshots rather than selecting whichever library
+is currently installed. Reviewed LVGL/SdFat changes apply to build-local copies;
+ESP32NFS and speech archives retain their separate pinned manifests.
+
+```sh
+python3 tools/agentic_os_catalog.py --changed hardware/agent-os/boards/my-board/board.json
+python3 tools/prepare_arduino.py --install-core
+python3 tools/build_agentic_os.py --board esp32-c3-runtime
+python3 tools/release_agentic_os.py build/agentic-os/esp32-c3-runtime/firmware --output build/release/esp32-c3-runtime.zip
+```
+
+Each artifact includes the board/MCU, selected drivers, source/dependency hashes,
+partition table and compiler-generated flashing addresses. The workflow uploads
+separate archives; an optional dispatch version creates a **draft** release after
+host checks and selected builds pass. It never flashes hardware. Compilation does
+not promote a reference board to validated support. Physical acceptance and source/
+data redistribution rights remain separate; see the E6 driver's provenance note.

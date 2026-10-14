@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include "ResourceBudget.h"
 #include "AsyncContract.h"
+#include "CompletionStore.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
@@ -13,6 +14,7 @@ struct Device {
   const char *path, *methods, *guide;
   Handler handle;
   void (*describe)(JsonObject)=nullptr;
+  const char *readMethods=""; // Declared side-effect-free calls, also valid during preparation.
 };
 struct Event {
   uint32_t sequence = 0;
@@ -41,6 +43,8 @@ inline bool copy(char *dst, size_t capacity, const char *src) {
 }
 class Core {
   ResourceBudget resources_;
+  CompletionStore<MAX_DEVICES+1> completions_{resources_};
+  mutable std::recursive_mutex eventMutex_;
   Device devices_[MAX_DEVICES]{};
   unsigned count_ = 0;
   Event events_[MAX_EVENTS]{};
@@ -58,6 +62,7 @@ class Core {
 
 public:
   ResourceBudget&resources(){return resources_;}
+  CompletionStore<MAX_DEVICES+1>&completions(){return completions_;}
   const char *replaceRules(JsonArrayConst definitions,const uint32_t*owned,size_t ownedCount,JsonArray ids){
     if(definitions.size()>MAX_RULES)return "rule_limit";
     for(auto definition:definitions)if(definition.as<JsonObjectConst>().containsKey("id"))return "replacement_rule_id_not_supported";
@@ -72,10 +77,10 @@ public:
     free(backup);return error;
   }
   void clock(uint64_t now) {
-    now_ = now;
+    std::lock_guard<std::recursive_mutex>lock(eventMutex_);now_ = now;
   }
   uint64_t now() const {
-    return now_;
+    std::lock_guard<std::recursive_mutex>lock(eventMutex_);return now_;
   }
   bool add(Device d) {
     if (!d.path || !d.handle || count_ == MAX_DEVICES || find(d.path))
@@ -91,10 +96,10 @@ public:
         return &devices_[i];
     return nullptr;
   }
-  bool supports(const Device &d, const char *method) const {
+  static bool containsMethod(const char *methods, const char *method) {
     if (!method || strchr(method, ','))
       return false;
-    const char *p = d.methods;
+    const char *p = methods;
     size_t n = strlen(method);
     while (*p) {
       const char *end = strchr(p, ',');
@@ -107,11 +112,13 @@ public:
     }
     return false;
   }
+  bool supports(const Device&d,const char*method)const{return containsMethod(d.methods,method);}
+  bool readOnly(const char*path,const char*method)const{auto d=find(path);return d&&supports(*d,method)&&containsMethod(d->readMethods,method);}
   uint32_t acquireOwner(){return nextOwner_?nextOwner_++:0;}
   uint32_t callerOwner()const{return invocationOwner_;}
   bool onOwnerRelease(void*context,void(*fn)(void*,uint32_t)){for(auto&h:ownerHooks_)if(!h.release){h={context,fn};return true;}return false;}
   void removeOwnerHook(void*context){for(auto&h:ownerHooks_)if(h.context==context)h={};}
-  void releaseOwner(uint32_t owner){if(!owner)return;for(auto&r:rules_)if(r.owner==owner)r={};for(auto&t:timers_)if(t.owner==owner)t={};for(auto h:ownerHooks_)if(h.release)h.release(h.context,owner);}
+  void releaseOwner(uint32_t owner){if(!owner)return;completions_.releaseOwner(owner);for(auto&r:rules_)if(r.owner==owner)r={};for(auto&t:timers_)if(t.owner==owner)t={};for(auto h:ownerHooks_)if(h.release)h.release(h.context,owner);}
   const char *invoke(const char *path, const char *method, JsonObjectConst args, JsonObject out,uint32_t owner=0) {
     if(out.isNull())return "response_memory_low";
     const Device *d = find(path);
@@ -122,6 +129,26 @@ public:
     if(invokeGate_)if(auto e=invokeGate_(path,method))return e;
     auto previous=invocationOwner_;invocationOwner_=owner;auto result=d->handle(method,args,out);invocationOwner_=previous;return result;
   }
+  const char*request(const char*path,const char*method,JsonObjectConst args,JsonObject out,uint32_t owner=0){
+    JsonDocument description;if(auto error=describe(path,description.to<JsonObject>()))return error;
+    auto spec=description["async"][method].as<JsonObjectConst>();if(spec.isNull())return "async_not_declared";
+    // Producer tasks never wait for a native method to return: a driver may
+    // hold its own lock while publishing. Capture candidates, then bind the reply.
+    uint32_t id=0;
+    auto source=find(spec["source"]|"");
+    if(auto error=completions_.reserve(owner,spec,id,source?size_t(source-devices_):MAX_DEVICES))return error;
+    if(!out["completion_id"].set(id)){completions_.release(id,owner);return "response_memory_low";}
+    auto error=invoke(path,method,args,out,owner);
+    if(!error)error=completions_.bind(id,spec,out,now());
+    if(error){completions_.release(id,owner);out.remove("completion_id");}return error;
+  }
+  const char*operation(const char*method,JsonObjectConst a,JsonObject out){
+    if(!strcmp(method,"request")){if(!a["path"].is<const char*>()||!a["method"].is<const char*>()||(!a["args"].isNull()&&!a["args"].is<JsonObjectConst>()))return "operation_arguments";return request(a["path"],a["method"],a["args"].as<JsonObjectConst>(),out,callerOwner());}
+    if(!a["id"].is<uint32_t>())return "completion_id_required";
+    if(!strcmp(method,"read"))return completions_.read(a["id"],callerOwner(),out);
+    if(!strcmp(method,"release"))return completions_.release(a["id"],callerOwner());
+    return "unsupported_method";
+  }
   unsigned deviceCount()const{return count_;}
   void list(JsonArray out,unsigned start=0,unsigned limit=MAX_DEVICES,bool details=true) const {
     for (unsigned i = start; i < count_ && i-start<limit; i++) {
@@ -130,19 +157,23 @@ public:
       d["version"] = 1;
       d["methods"] = devices_[i].methods;
       d["guide"] = devices_[i].guide;
+      d["read_methods"] = devices_[i].readMethods;
       if(details&&devices_[i].describe)devices_[i].describe(d);
     }
   }
   const char*describe(const char*path,JsonObject out)const {
-    auto d=find(path);if(!d)return "not_found";out["path"]=d->path;out["version"]=1;out["methods"]=d->methods;out["guide"]=d->guide;if(d->describe)d->describe(out);return nullptr;
+    auto d=find(path);if(!d)return "not_found";out["path"]=d->path;out["version"]=1;out["methods"]=d->methods;out["guide"]=d->guide;out["read_methods"]=d->readMethods;if(d->describe)d->describe(out);return nullptr;
   }
-  bool emit(const char *path, const char *name, JsonObjectConst data, uint32_t targetOwner=0) {
+  bool emit(const char *path, const char *name, JsonObjectConst data, uint32_t targetOwner=0,uint64_t timestamp=UINT64_MAX) {
     if (!path || !name || strlen(path) >= 48 || strlen(name) >= 40 ||
         measureJson(data) >= MAX_EVENT)
       return false;
+    if(timestamp==UINT64_MAX)timestamp=now();auto source=find(path);
+    completions_.record(path,name,data,targetOwner,timestamp,source?size_t(source-devices_):MAX_DEVICES);
+    std::lock_guard<std::recursive_mutex>lock(eventMutex_);
     auto &e = events_[seq_ % MAX_EVENTS];
     e.sequence = ++seq_;
-    e.time = now_;
+    e.time = timestamp;
     e.targetOwner = targetOwner;
     copy(e.path, sizeof(e.path), path);
     copy(e.name, sizeof(e.name), name);
@@ -150,9 +181,10 @@ public:
     return true;
   }
   uint32_t sequence() const {
-    return seq_;
+    std::lock_guard<std::recursive_mutex>lock(eventMutex_);return seq_;
   }
   void events(uint32_t after, unsigned limit, JsonObject out) const {
+    std::lock_guard<std::recursive_mutex>lock(eventMutex_);
     if (limit > 8)
       limit = 8;
     uint32_t oldest = seq_ >= MAX_EVENTS ? seq_ - MAX_EVENTS + 1 : 1;
@@ -195,7 +227,7 @@ public:
     if (!r)
       return id ? "rule_not_found" : "rule_limit";
     if(r->used&&invocationOwner_&&r->owner!=invocationOwner_)return "rule_owned_by_other";
-    Rule candidate;candidate.owner=invocationOwner_;candidate.afterSequence=seq_;
+    Rule candidate;candidate.owner=invocationOwner_;candidate.afterSequence=sequence();
     if (!copy(candidate.source, sizeof(candidate.source), source) ||
         !copy(candidate.event, sizeof(candidate.event), event) ||
         !copy(candidate.target, sizeof(candidate.target), target) ||
@@ -265,6 +297,7 @@ public:
   void setInvocationGate(const char*(*fn)(const char*,const char*)){invokeGate_=fn;}
   void setEventGate(int(*gate)(const Event&)){gate_=gate;}
   void setEventObserver(bool(*fn)(const Event&)){observe_=fn;}
+  uint32_t eventOverruns()const{return ruleOverruns_;}
   uint32_t policyDrops()const{return policyDrops_;}
   unsigned deferredCount()const{return deferredCount_;}
   void dispatchOne(const Event&e){
@@ -325,10 +358,10 @@ public:
     for(unsigned i=0;i<deferredCount_;++i){Event e=deferred_[i];int g=gate_?gate_(e):0;
       if(g==1)deferred_[remaining++]=e;else if(g==2)++policyDrops_;else dispatchOne(e);}
     deferredCount_=remaining;
-    const uint32_t end=seq_, oldest=end>=MAX_EVENTS?end-MAX_EVENTS+1:1;
+    const uint32_t end=sequence(), oldest=end>=MAX_EVENTS?end-MAX_EVENTS+1:1;
     uint32_t begin=cursor<oldest?oldest:cursor+1;
     if(cursor+1<oldest)ruleOverruns_+=oldest-cursor-1;
-    for(uint32_t i=begin;i<=end;++i){Event e=events_[(i-1)%MAX_EVENTS];if(e.sequence!=i){++ruleOverruns_;continue;}
+    for(uint32_t i=begin;i<=end;++i){Event e;{std::lock_guard<std::recursive_mutex>lock(eventMutex_);e=events_[(i-1)%MAX_EVENTS];}if(e.sequence!=i){++ruleOverruns_;continue;}
       int g=gate_?gate_(e):0;
       if(g==1){if(deferredCount_<16)deferred_[deferredCount_++]=e;else ++policyDrops_;}
       else if(g==2)++policyDrops_;else dispatchOne(e);

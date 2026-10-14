@@ -15,7 +15,50 @@ class Fake(m.Client):
             size=len(json.dumps({'id':'x'*32,'path':path,'method':method,'args':args}).encode());assert size<=4096
             return {'next_offset':args['offset']+len(args['hex'])//2}
         return {'status':'queued','job_id':7}
+class Packages(m.Client):
+    def __init__(self):self.calls=[];self.files={};self.loaded='old';self.startup={'file':'old'};self.bad_read=False;self.lost_load=False;self.activation_count=0
+    def call(self,path,method='read',args=None,request_id=None):
+        a=args or {};self.calls.append((path,method,a))
+        if path=='/sys/runtime':
+            if method=='read':return {'loaded':True,'file':self.loaded,'fault':False,'configuration_revision':1,'configured_startup':self.startup,'configuration_persisted':True}
+            if method=='load':
+                self.loaded=a['file'];self.activation_count+=1
+                if self.lost_load:raise TimeoutError('activation reply lost')
+                return {'file':self.loaded}
+            if method=='configure':self.startup=a['startup'];return {'revision':2}
+        if method=='mounts':return {'providers':[{'mount':'/storage/flash','persistent':True,'prepare':{'path':'/dev/flash','method':'mount','args':{}}}]}
+        if method=='mkdir':return {}
+        file=a.get('file')
+        if method=='write':
+            data=bytes.fromhex(a['hex']);at=int(a['offset']);old=b'' if a.get('truncate') else self.files.get(file,b'')
+            self.files[file]=old[:at]+data+old[at+len(data):];return {'written':len(data)}
+        if method=='stat':return {'size':str(len(self.files[file]))}
+        if method=='read':
+            at=int(a['offset']);data=self.files[file][at:at+a['length']]
+            if self.bad_read:data=bytes(len(data))
+            return {'hex':data.hex()}
+        raise AssertionError((path,method,a))
 class Tests(unittest.TestCase):
+    def test_package_verified_activation_and_lost_reply(self):
+        for lost in (False,True):
+            c=Packages();c.lost_load=lost
+            with tempfile.TemporaryDirectory() as folder:
+                p=Path(folder);(p/'main.lua').write_text('function on_start() end');(p/'asset.bin').write_bytes(bytes(range(256))*10)
+                result=c.publish_app(p,'/storage/flash',persist=True)
+            self.assertEqual(c.activation_count,1);self.assertEqual(result['verified_files'],2);self.assertEqual(c.startup['file'],result['entry']);self.assertEqual(c.startup['prepare'][0]['path'],'/dev/flash')
+            load=next(i for i,(_,m,_) in enumerate(c.calls) if m=='load');self.assertTrue(all(m!='write' for _,m,_ in c.calls[load:]))
+    def test_package_corruption_preserves_prior_runtime_and_startup(self):
+        c=Packages();c.bad_read=True
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder);(p/'main.lua').write_text('function on_start() end')
+            with self.assertRaisesRegex(IOError,'hash verification'):c.publish_app(p,'/storage/flash',persist=True)
+        self.assertEqual(c.loaded,'old');self.assertEqual(c.startup,{'file':'old'});self.assertEqual(c.activation_count,0)
+    def test_package_rejects_nonpersistent_startup_without_writes(self):
+        c=Packages()
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder);(p/'main.lua').write_text('function on_start() end')
+            with self.assertRaises(ValueError):c.publish_app(p,'/storage/ram',persist=True)
+        self.assertTrue(all(method in ('read','mounts') for _,method,_ in c.calls))
     def test_stream_exact(self):
         c=Fake();r=c.present_native(bytes([0x11])*172800,'e6.ink6.image-v1',True);self.assertEqual(r['job_id'],7)
         chunks=[x[2] for x in c.calls if x[1]=='chunk'];self.assertEqual(sum(len(x['hex'])//2 for x in chunks),172800);self.assertEqual([x['offset'] for x in chunks],list(range(0,172800,1024)));self.assertEqual(c.calls[-1][1],'commit')

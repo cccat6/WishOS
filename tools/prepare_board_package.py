@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT = ROOT / 'hardware/agent-os/boards/e6-nova-c6'
+HARDWARE = ROOT / 'hardware/agent-os'
 
 def read_json(path):
     return json.loads(path.read_text(encoding='utf-8'))
@@ -17,6 +18,43 @@ def inside(root, relative):
     if not p.is_relative_to(root.resolve()):
         raise ValueError('package file escapes its directory')
     return p
+
+def driver_packages(board, port):
+    """Resolve the native dependency closure, once, in dependency-first order."""
+    optional = board.get('drivers', [])
+    if not isinstance(optional,list) or len(set(optional)) != len(optional) or any(d not in port.get('optional_drivers',[]) for d in optional):
+        raise ValueError('unsupported optional driver')
+    result, visiting = {}, set()
+    def visit(name):
+        if not isinstance(name,str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}',name):
+            raise ValueError('invalid driver id')
+        if name in result:return
+        if name in visiting:raise ValueError('driver dependency cycle: '+name)
+        directory=HARDWARE/'drivers'/name
+        spec=read_json(directory/'driver.json')
+        if spec.get('format')!='notes-driver/1' or spec.get('id')!=name:raise ValueError('invalid driver manifest: '+name)
+        if spec.get('platforms') and port.get('platform') not in spec['platforms']:raise ValueError('driver/platform mismatch: '+name)
+        if spec.get('targets') and port.get('target') not in spec['targets']:raise ValueError('driver/target mismatch: '+name)
+        visiting.add(name)
+        for dependency in spec.get('requires',[]):visit(dependency)
+        visiting.remove(name)
+        if spec.get('build_hook') and not inside(directory,spec['build_hook']).is_file():raise ValueError('driver build hook missing: '+name)
+        result[name]=(directory,spec)
+    for name in port.get('drivers',[])+optional:visit(name)
+    return result
+
+def runtime_package(root, board):
+    if not board.get('runtime'):return root,{}
+    directory=(root/board['runtime']).resolve()
+    package=read_json(directory/'package.json')
+    if package.get('format')!='notes-runtime-package/1':raise ValueError('invalid runtime package')
+    return directory,package
+
+def asset_sources(root, board):
+    directory,package=runtime_package(root,board)
+    sources={k:(directory,v) for k,v in package.get('assets',{}).items()}
+    sources.update({k:(root,v) for k,v in board.get('assets',{}).items()})
+    return {k:inside(HARDWARE/'runtime',v[9:]) if isinstance(v,str) and v.startswith('@runtime/') else inside(base,v) for k,(base,v) in sources.items()}
 
 def load(package):
     root = Path(package).resolve()
@@ -31,6 +69,9 @@ def load(package):
         raise ValueError('port entry missing')
     if b.get('display') != p.get('display'):
         raise ValueError('display geometry not supported by selected port')
+    for key in ['asset_file_limit_bytes','asset_budget_bytes']:
+        if key in p and (type(p[key]) is not int or p[key]<1):raise ValueError('invalid port asset budget')
+    driver_packages(b,p)
     pins = b['pins']
     if set(pins) != set(p['required_pins']):
         raise ValueError('pin set does not match selected port')
@@ -53,11 +94,11 @@ def load(package):
     if len(buttons)!=p.get('button_count',len(buttons)) or len(set(buttons))!=len(buttons) or any(k not in pins for k in buttons):
         raise ValueError('invalid button mapping')
     assets = {}
-    for vpath, local in b['assets'].items():
+    for vpath, asset in asset_sources(root,b).items():
         if len(vpath)>=256 or not vpath.startswith('/') or str(Path(vpath)) != vpath or '..' in Path(vpath).parts or '\\' in vpath:
             raise ValueError('invalid asset path')
-        raw = inside(root,local).read_bytes()
-        if len(raw)>16384:
+        raw = asset.read_bytes()
+        if p.get('asset_file_limit_bytes') and len(raw)>p['asset_file_limit_bytes']:
             raise ValueError('system asset limit')
         if Path(vpath).suffix in ('.json','.lua','.html','.js','.css','.svg','.txt'):
             text=raw.decode('utf-8')
@@ -65,7 +106,7 @@ def load(package):
             if vpath.endswith('.json'):text=json.dumps(json.loads(text),ensure_ascii=False,separators=(',',':'))
             assets[vpath]=text
         else:assets[vpath]=raw
-    if sum(len(x.encode()) if isinstance(x,str) else len(x) for x in assets.values())>65536:
+    if p.get('asset_budget_bytes') and sum(len(x.encode()) if isinstance(x,str) else len(x) for x in assets.values())>p['asset_budget_bytes']:
         raise ValueError('compiled asset budget')
     defaults = json.loads(assets.get('/defaults.json','{}'))
     if not isinstance(defaults,dict):
@@ -79,6 +120,8 @@ def load(package):
         elif key=='memory_limit_bytes' and value is None:pass
         elif type(value) is not int or value<0 or value>0xffffffff or (key=='default_vm_memory_bytes' and value<16384) or (key=='memory_limit_bytes' and value==0):
             raise ValueError('invalid resource default: '+key)
+    _,runtime=runtime_package(root,b)
+    b['startup']=b.get('startup',runtime.get('startup',{}))
     if not isinstance(b['startup'], dict) or set(b['startup']) - {'script','memory_bytes'}:
         raise ValueError('startup must reference an optional runtime script')
     memory_hint=b['startup'].get('memory_bytes')
@@ -97,9 +140,14 @@ def generate(package, output):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     port_hashes={str(f.relative_to(port)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(port.rglob('*')) if f.is_file()}
     asset_hashes={k:hashlib.sha256(v.encode() if isinstance(v,str) else v).hexdigest() for k,v in assets.items()}
-    fingerprint=hashlib.sha256(json.dumps({'board':b,'port':p,'assets':asset_hashes,'port_files':port_hashes},sort_keys=True).encode()).hexdigest()
+    drivers=driver_packages(b,p)
+    driver_hashes={name:{str(f.relative_to(directory)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(directory.rglob('*')) if f.is_file() and '__pycache__' not in f.parts} for name,(directory,_) in drivers.items()}
+    fingerprint=hashlib.sha256(json.dumps({'board':b,'port':p,'assets':asset_hashes,'port_files':port_hashes,'drivers':driver_hashes},sort_keys=True).encode()).hexdigest()
     lines=['#pragma once','#include <stddef.h>','#include <stdint.h>',f'#define NOTES_HAS_VBUS_ADC {int(b.get("hardware",{}).get("vbus_clamps_battery_adc",False))}','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};',f'inline constexpr char STARTUP_SCRIPT[]={literal(b["startup"].get("script",""))};','struct Asset {const char*path;const char*data;size_t size;};','inline constexpr Asset ASSETS[]={']
     lines.insert(9,f'inline constexpr size_t STARTUP_MEMORY_BYTES={b["startup"].get("memory_bytes") or 0};')
+    _,runtime=runtime_package(root,b)
+    lines.insert(9,f'inline constexpr char RUNTIME_ID[]={literal(runtime.get("id","board-local"))};')
+    lines.insert(9,f'inline constexpr char DRIVERS[]={literal(",".join(drivers))};')
     for key,value in sorted(assets.items()):
         raw=value.encode() if isinstance(value,str) else value
         encoded=literal(value) if isinstance(value,str) else '"'+''.join(f'\\x{x:02x}' for x in raw)+'"'
@@ -123,6 +171,11 @@ def stage(package, sketch):
     selected=sketch/'src/selected'
     if selected.exists():shutil.rmtree(selected)
     shutil.copytree(port,selected)
+    driver_root=sketch/'src/drivers'
+    if driver_root.exists():shutil.rmtree(driver_root)
+    driver_root.mkdir()
+    for name,(directory,_) in driver_packages(b,p).items():
+        shutil.copytree(directory,driver_root/name,ignore=shutil.ignore_patterns('__pycache__','*.py','driver.json','*.md'))
     (sketch/'src/Hardware.cpp').write_text('#include "Hardware.h"\n#include "selected/'+p['entry']+'"\n')
     shutil.copy2(inside(port,p['partition_file']),sketch/'partitions.csv')
     (sketch/'board-manifest.json').write_text(json.dumps(b,indent=2)+'\n')

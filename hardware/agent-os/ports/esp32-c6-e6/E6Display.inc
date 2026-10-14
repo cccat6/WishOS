@@ -60,6 +60,7 @@ void E6DisplayBinding::completed(Presentation&job,const DisplayOutcome&result,ui
   if(hashLive){mbedtls_sha256_free(&digest);hashLive=false;}
   copy(displayState,sizeof displayState,result.state());copy(displayError,sizeof displayError,result.error);
  }
+ if(!presentationState.active()&&!uiLeaseOwner)resetUiRenderer();
  if(job.stream){streaming=false;streamCancelRequested=false;streamJobId=0;}
  if(job.shutdown){if(result.ok())shutdownReady=true;else shutdownRequested=false;}
 }

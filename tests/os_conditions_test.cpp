@@ -1,5 +1,5 @@
 #include "../firmware/AgenticOS/src/Conditions.h"
-#include "../firmware/AgenticOS/src/Defaults.h"
+#include "ports/esp32-c6-e6/Defaults.h"
 #include "../firmware/AgenticOS/src/PowerMonitor.h"
 #include <cassert>
 #include <cmath>
@@ -42,8 +42,8 @@ static uint64_t clockMs=0;static uint32_t adc=1950;static float batteryGain=1.0f
 struct E{std::string name,id;};static std::vector<E> transitions;
 static uint64_t uptime(){return clockMs;}static uint32_t readBatteryAdcMv(){return adc;}
 static void emit(const char*p,const char*n,JsonObjectConst d){core.emit(p,n,d);}
-#include "../firmware/AgenticOS/src/DriverDescriptions.h"
-#include "../firmware/AgenticOS/src/PowerService.h"
+#include "ports/esp32-c6-e6/DriverDescriptions.h"
+#include "drivers/esp32-services/PowerService.h"
 static const char*noop(const char*,JsonObjectConst,JsonObject){return nullptr;}
 static void advance(unsigned duration,unsigned value){adc=value;for(unsigned i=0;i<duration;i+=100){clockMs+=100;core.clock(clockMs);pollPowerSense();conditions.tick(clockMs);core.dispatch(cursor);}}
 static unsigned count(const char*id,const char*name){unsigned n=0;for(auto&e:transitions)if(e.id==id&&e.name==name)++n;return n;}

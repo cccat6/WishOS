@@ -1,4 +1,4 @@
-#include "Defaults.h"
+#include "ports/esp32-c6-e6/Defaults.h"
 #include "SdClockPlan.h"
 #include "SdConfiguration.h"
 #include <cassert>
@@ -58,7 +58,7 @@ struct FakePreferences {
 } preferences;
 static SdLinkState sdLink;
 Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));
-#include "SdLinkService.h"
+#include "drivers/esp32-services/SdLinkService.h"
 static void setBus(const char*mode,uint32_t hz,bool experimental=false,bool experimentalIo=false){
   JsonDocument input,output;auto a=input.to<JsonObject>();a["scope"]="system";
   auto change=a["changes"].to<JsonArray>().add<JsonObject>();change["resource"]="/sys/bus";

@@ -36,7 +36,7 @@ public:
    else if(!n||(n<0&&!transient())){event(s,"closed");::close(s.fd);s={};}
  }}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
-   if(!strcmp(m,"read")&&!a["id"].is<uint32_t>()){out["active"]=active();auto list=out["sockets"].to<JsonArray>();for(auto&s:sockets_)if(s.fd>=0&&(!core_.callerOwner()||s.owner==core_.callerOwner())){auto o=list.add<JsonObject>();o["id"]=s.id;o["owner"]=s.owner;o["state"]=s.listener?"listening":s.connecting?"connecting":"connected";}out["capacity"]=4;out["address_family"]="ipv4";return nullptr;}
+   if(!strcmp(m,"status")||(!strcmp(m,"read")&&!a["id"].is<uint32_t>())){out["active"]=active();auto list=out["sockets"].to<JsonArray>();for(auto&s:sockets_)if(s.fd>=0&&(!core_.callerOwner()||s.owner==core_.callerOwner())){auto o=list.add<JsonObject>();o["id"]=s.id;o["owner"]=s.owner;o["state"]=s.listener?"listening":s.connecting?"connecting":"connected";}out["capacity"]=4;out["address_family"]="ipv4";return nullptr;}
    if(!strcmp(m,"listen")||!strcmp(m,"connect")){
      if(!registered_)return "owner_hook_capacity";auto slot=vacant();if(!slot)return "socket_capacity";bool listen=!strcmp(m,"listen");
      uint32_t port=a["port"]|0u;const char*address=a["address"]|(listen?"0.0.0.0":"");sockaddr_in addr{};addr.sin_family=AF_INET;addr.sin_port=htons(port);

@@ -4,7 +4,7 @@ Runtime-loadable UI and Lua applications above portable resource, policy and fil
 
 See [runtime/API status](../../docs/agent-os-runtime.md), [agent skill](../../skills/agentic-notes-hardware/SKILL.md) and [example package](../../examples/agent-os/dashboard).
 
-Hardware packages live in [hardware/agent-os](../../hardware/agent-os/README.md). Select wiring, native port and startup assets with `NOTES_OS_BOARD`; runtime apps cannot change native wiring. Build: `tools/build_agentic_os.sh`. Test: `tools/test_agentic_os.sh` from the repository root. Neither command flashes hardware. Do not flash this board profile to the older NotesMonitor PCB.
+Hardware packages live in [hardware/agent-os](../../hardware/agent-os/README.md). Select wiring, native port, reusable drivers and initial runtime references with `NOTES_OS_BOARD`; runtime apps cannot change native wiring. Build: `tools/build_agentic_os.sh`. Test: `tools/test_agentic_os.sh` from the repository root. Neither command flashes hardware. The source directory alone is not a configured sketch: use the generated per-board sketch, with its `BoardPackage.h`, selected native sources and build options. Do not flash this board profile to the older NotesMonitor PCB.
 
 The firmware owns its source tree. It does not compile the legacy NotesMonitor application or any internal waveform/experimental tooling. Third-party licenses are in `licenses/` and the vendored Lua headers; Arduino libraries retain their upstream licenses.
 

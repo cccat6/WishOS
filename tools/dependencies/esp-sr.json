@@ -1,0 +1,199 @@
+{
+  "commit": "25cca72a3bb25b90f9316ee564f4eb0082816c41",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "7d916fb00bc0742c47cafb0d0144b67f826d76779730b1cb8796045ea6ba1b9a"
+    },
+    {
+      "path": "idf_component.yml",
+      "sha256": "4e67dc223de268cbd5219c7665a492118548d9f307dceccd435f1c9d6cbb802a"
+    },
+    {
+      "path": "include/esp32c6/c_speech_features_config.h",
+      "sha256": "905b0469ccfd4f0f97f66566837c85b4470699e624f5c963bd0b2c6736b95394"
+    },
+    {
+      "path": "include/esp32c6/dl_lib.h",
+      "sha256": "8afaa38d0f176eeb53e361bde387669bccacfe08732b1a8a59699ccbdd1c5cfb"
+    },
+    {
+      "path": "include/esp32c6/dl_lib_coefgetter_if.h",
+      "sha256": "558f93ef6393553875d920ac9e1f9dc6c820f40ed99b4ba82626317a43c64d50"
+    },
+    {
+      "path": "include/esp32c6/dl_lib_conv_queue.h",
+      "sha256": "3e8e080d36413f8ef7502a1daceb382d61133bb3d6f7e7ba76b3c3bd3a8ac31d"
+    },
+    {
+      "path": "include/esp32c6/dl_lib_convq8_queue.h",
+      "sha256": "a0b0d7bd343154d9a3974d4ad58c81ada8a5c4cc82d5384d14479f28aaa6809c"
+    },
+    {
+      "path": "include/esp32c6/dl_lib_convq_queue.h",
+      "sha256": "ed3853c2a17a95670b0488ffd46c52b631b46668a8534b244cf8f905e32ab35a"
+    },
+    {
+      "path": "include/esp32c6/dl_lib_matrix.h",
+      "sha256": "e9e31c5c2b27997fe0def78bfdb7ee920875040047dbfa44ace12b7141ea9d7d"
+    },
+    {
+      "path": "include/esp32c6/dl_lib_matrixq.h",
+      "sha256": "7d9d25ed23cda0018d22a1835b6327ff4e742a481d8496f6675e5d7e8ba1f980"
+    },
+    {
+      "path": "include/esp32c6/dl_lib_matrixq8.h",
+      "sha256": "c1e56678d5a65cf1e30a7ce4186513f14e42a76d71a4b779a22ff0c6678d6246"
+    },
+    {
+      "path": "include/esp32c6/esp_aec.h",
+      "sha256": "973cc94833f2797ad5434624f08333d31dbb15213f58faf0a9c9ee3db2a5cd23"
+    },
+    {
+      "path": "include/esp32c6/esp_afe_aec.h",
+      "sha256": "c6af1d3f37e8fce4405e6138122a35e69346384d4562f8eadd674c41af36690a"
+    },
+    {
+      "path": "include/esp32c6/esp_afe_config.h",
+      "sha256": "ad39e358d9874687902132d114729089e08a0676f246825e06ecdf138bc1eb4f"
+    },
+    {
+      "path": "include/esp32c6/esp_afe_doa.h",
+      "sha256": "22d1d290d3b40d449ecaad1455ae9bdb845cda47a563ed0f59582482ce319af5"
+    },
+    {
+      "path": "include/esp32c6/esp_afe_sr_iface.h",
+      "sha256": "065855dbfab09740000c16257ec0e3467b83a9c3bfcb301090c38eab355c613e"
+    },
+    {
+      "path": "include/esp32c6/esp_afe_sr_models.h",
+      "sha256": "96ead6893f831aed6b78c62f2cbd0167c49b0531f5b52f0022cee349d998be3d"
+    },
+    {
+      "path": "include/esp32c6/esp_agc.h",
+      "sha256": "e013b9b2f21cb2c78557e4a60f5671ea4f81033c4eeba8b12bee2efce8c3d4d6"
+    },
+    {
+      "path": "include/esp32c6/esp_doa.h",
+      "sha256": "096958044df9f92a7de235b19ca832110182fee7b994c22967171b38a466f176"
+    },
+    {
+      "path": "include/esp32c6/esp_mase.h",
+      "sha256": "a4e3ad6ee45f30184d9f0949e42bdc2ab8101b0ad1f0b970da10606e46d5608d"
+    },
+    {
+      "path": "include/esp32c6/esp_mfcc_fbank_int16.h",
+      "sha256": "05ebf3588748a24bb431691ad9489a8435a6309b20e3fe98238ee32dca6f3c96"
+    },
+    {
+      "path": "include/esp32c6/esp_mfcc_iface.h",
+      "sha256": "9e82754f83d1b3002615eaa6fb03fdcc3942ad07d0fa61ec89e7e17cafe927ed"
+    },
+    {
+      "path": "include/esp32c6/esp_mfcc_models.h",
+      "sha256": "d2654a4ca11aed7f496b7c438e2ea9bb504b8574d8f71c154c037d113bae788a"
+    },
+    {
+      "path": "include/esp32c6/esp_mn_iface.h",
+      "sha256": "74f031979ac525cfee66e088cc9c856052727d562489b64e3bee6be3b5e05349"
+    },
+    {
+      "path": "include/esp32c6/esp_mn_models.h",
+      "sha256": "87de5c35fce529c735ff93b961bf1643db09647608078fc78a1ac2dfab90d97e"
+    },
+    {
+      "path": "include/esp32c6/esp_ns.h",
+      "sha256": "c027230ab1145cd5eb025e8e5ebc4ea7495597cbc41de94b133c9cc8d6ae99b2"
+    },
+    {
+      "path": "include/esp32c6/esp_nsn_iface.h",
+      "sha256": "66dd501469a9709a343bc4dd93c117d9e9fd19c1a7ff87f2c3014566e19057af"
+    },
+    {
+      "path": "include/esp32c6/esp_nsn_models.h",
+      "sha256": "bb2826d863c149553e406e476a55cf1bfc4ebbee52d57ef1243784442b3206ef"
+    },
+    {
+      "path": "include/esp32c6/esp_speech_features.h",
+      "sha256": "ab20eb789bca9a6d4396fee784d442472d3b97ee7a88fe8d1b5a350385a9331c"
+    },
+    {
+      "path": "include/esp32c6/esp_sr_webrtc.h",
+      "sha256": "1d319609af7904198bc5b4f58d751b5a226897a329dfc0360eba7ea889ebcc7e"
+    },
+    {
+      "path": "include/esp32c6/esp_vad.h",
+      "sha256": "afa170ef12dac8eab504055ba8b38a9bfc9c4f41d6aec8fe3268f8ac0d46cf4b"
+    },
+    {
+      "path": "include/esp32c6/esp_vadn_iface.h",
+      "sha256": "96def58f1b0be11a4826141b35af6f49d6329895224271136048779e1381e79f"
+    },
+    {
+      "path": "include/esp32c6/esp_vadn_models.h",
+      "sha256": "d4fcea705a5a78b57598eb0ebe10a31f7e7a317c6cd8324fade571e1a41df74a"
+    },
+    {
+      "path": "include/esp32c6/esp_wn_iface.h",
+      "sha256": "b80819758d9263a058d5be29339bfeae379355799c84524d518501c5ae151979"
+    },
+    {
+      "path": "include/esp32c6/esp_wn_models.h",
+      "sha256": "893806a239865bd1a42bea5c9b26823340eb9f163a6f193382693de8898fc5c8"
+    },
+    {
+      "path": "include/esp32c6/flite_g2p.h",
+      "sha256": "6b1b018272ee6e3946aec6c0c7c7f45d02cb6885fe71fa8b16c08123f1a8c25e"
+    },
+    {
+      "path": "lib/esp32c6/libc_speech_features.a",
+      "sha256": "051ea69fa35beea7e60f0f3066a78b0e205200617a13ce12d9d8417621859df2"
+    },
+    {
+      "path": "lib/esp32c6/libdl_lib.a",
+      "sha256": "db54a4670935665303f36b9e84b6ee6c977735a2136fc731c6696a5dee25ec71"
+    },
+    {
+      "path": "lib/esp32c6/libesp_audio_processor.a",
+      "sha256": "ed796703ec253befa720cba6707c9865450427e3dd23a684980359af02aa0673"
+    },
+    {
+      "path": "lib/esp32c6/libhufzip.a",
+      "sha256": "9be2436fff9a14f5d6690582203bd38d5b5a47b553a25135d60e8b8b191dbdcf"
+    },
+    {
+      "path": "lib/esp32c6/libwakenet.a",
+      "sha256": "c2107239bc2fa6ad1c47b0eddb3f46a625bea98ad3fa985a3f6b48909ecb0632"
+    },
+    {
+      "path": "model/wakenet_model/wn9s_hiesp/_MODEL_INFO_",
+      "sha256": "a11245dd91f92c73ed3a57c3acd02e0d5c333b8b75c2f10aeda53d29cd8b4dd8"
+    },
+    {
+      "path": "model/wakenet_model/wn9s_hiesp/wn9_data",
+      "sha256": "15eb816e94f73c95d122eee01808824ea93f06f1a03bd0d55a955b29a4294ce2"
+    },
+    {
+      "path": "model/wakenet_model/wn9s_hiesp/wn9_index",
+      "sha256": "6260eb6cbab109db5823399c301059f9b805abca34db8c7b2b6c399820ada1d4"
+    },
+    {
+      "path": "src/include/model_path.h",
+      "sha256": "3820bc0d563feadcadfcdfd64c785b1e072cad297e1a08ba3cb81737c7aa3888"
+    },
+    {
+      "path": "src/model_path.c",
+      "sha256": "d6f9282ea87a621d26deeb78dc11e9b9ea6bb5f00ac7646fe8a15274976a8853"
+    },
+    {
+      "path": "src/esp_sr_debug.c",
+      "sha256": "df7c18bb7852fcb7433c2eccda5e29b79db09f196af8f5c46b0f0ddf823b15c5"
+    },
+    {
+      "path": "src/include/esp_sr_debug.h",
+      "sha256": "c9ca7a369773218d616446db0e9a09c8405eecb14a15ed385f0de8f5267c9e9e"
+    }
+  ],
+  "version": "2.4.2",
+  "repository": "https://github.com/espressif/esp-sr"
+}

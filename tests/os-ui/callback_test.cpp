@@ -4,6 +4,7 @@
 #include <cstring>
 #include <iostream>
 #include <unordered_map>
+#include <thread>
 using namespace notesos;
 static Core*kernel;static LuaRuntime*app;static unsigned invoked=0,effects=0;static uint32_t nextId=1;
 static const char*effect(const char*,JsonObjectConst a,JsonObject){effects+=a["amount"]|1u;return nullptr;}
@@ -77,6 +78,31 @@ end
   local.add({"/cached","submit","",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["id"]=77;o["state"]="completed";o["ok"]=true;return nullptr;},[](JsonObject o){auto match=asyncContract(o,"submit","/cached");match["id"]="id";o["async"]["submit"]["settled"]["field"]="state";o["async"]["submit"]["settled"]["events"]["completed"]="completed";}});
   JsonDocument a;a["source"]="local returned=false function on_start() local r=notes.request('/cached','submit',{},function(e) assert(returned and e.data.id==77);notes.call('/effect','write',{amount=7}) end);assert(r.ok);returned=true end";a["memory_bytes"]=65536;before=effects;assert(!runtime.invoke("load",a.as<JsonObjectConst>(),out.to<JsonObject>()));assert(effects==before);runtime.tick(1);assert(effects==before+7);runtime.tick(2);assert(effects==before+7);
  }kernel=&c;
+ // A completed request survives an overflowing ordinary event journal.
+ {LuaRuntime vm(c,65536,200000);app=&vm;const char*s="function on_start() assert(notes.request('/work','begin',{value=9},function(e) assert(e.data.value==9);notes.call('/effect','write',{amount=9}) end).ok);for i=1,48 do print('noise') end end";
+  uint32_t cursor=c.sequence();before=effects;assert(vm.load(s,strlen(s))&&vm.start());c.dispatch(cursor);assert(effects==before);assert(vm.flushCallbacks());assert(effects==before+9);stats(vm,out);assert(out["callbacks"]==0);vm.flushCallbacks();assert(effects==before+9);
+ }app=nullptr;
+ // A native producer can retain the receipt even if its ordinary RTOS queue is
+ // full and no Core journal event is delivered at all.
+ c.add({"/native","begin","",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["ticket"]=111;return nullptr;},contract});
+ {LuaRuntime vm(c,65536);app=&vm;const char*s="function on_start() assert(notes.request('/native','begin',{},function(e) assert(e.data.operation==111);notes.call('/effect','write',{}) end).ok) end";
+  assert(vm.load(s,strlen(s))&&vm.start());stats(vm,out);auto owner=out["owner"].as<uint32_t>();JsonDocument event;event["operation"]=111;
+  before=effects;c.completions().record("/result","ready",event.as<JsonObjectConst>(),owner,123);assert(vm.flushCallbacks());assert(effects==before+1);
+ }app=nullptr;
+ // A producer thread races with journal readers/dispatch. The registered
+ // source uses the same retained completion path as the target FreeRTOS tasks.
+ c.add({"/result","read","",[](const char*,JsonObjectConst,JsonObject)->const char*{return nullptr;}});
+ {LuaRuntime vm(c,65536);app=&vm;const char*s="function on_start() assert(notes.request('/native','begin',{},function(e) assert(e.data.operation==111);notes.call('/effect','write',{}) end).ok) end";
+  assert(vm.load(s,strlen(s))&&vm.start());stats(vm,out);auto owner=out["owner"].as<uint32_t>();before=effects;uint32_t cursor=c.sequence();
+  std::thread producer([&]{JsonDocument event;event["operation"]=111;c.emit("/result","ready",event.as<JsonObjectConst>(),owner);for(unsigned i=0;i<1000;++i)c.emit("/noise","changed",event.as<JsonObjectConst>());});
+  for(unsigned i=0;i<100;++i){JsonDocument journal;c.events(cursor,8,journal.to<JsonObject>());c.dispatch(cursor);vm.flushCallbacks();}
+  producer.join();c.dispatch(cursor);vm.flushCallbacks();assert(effects==before+1);stats(vm,out);assert(out["callbacks"]==0);
+ }app=nullptr;
+ // Reject before invoking when there is no room to retain its result.
+ {JsonDocument args,result,config;config["memory_limit_bytes"]=1;assert(!c.resources().configure(config.as<JsonObjectConst>()));operations=invoked;
+  assert(!strcmp(c.request("/work","begin",args.to<JsonObject>(),result.to<JsonObject>(),123),"completion_memory_budget"));assert(invoked==operations);
+  config["memory_limit_bytes"]=nullptr;assert(!c.resources().configure(config.as<JsonObjectConst>()));assert(c.resources().promised()==0);
+ }
  // Source-subscription exhaustion is detected before an async operation begins.
  {LuaRuntime vm(c,131072);app=&vm;const char*s="function on_start() for i=1,16 do notes.on('/s/'..i,'changed',function()end) end local ok=pcall(function() notes.request('/work','begin',{},function()end) end);assert(not ok) end";operations=invoked;assert(vm.load(s,strlen(s))&&vm.start());assert(invoked==operations);}
  app=nullptr;

@@ -4,8 +4,8 @@ namespace notesos {
 // Lazy runtime library. Its closures live in the VM budget, not a native fixed
 // handler array; simple/isolated programs do not instantiate it.
 inline constexpr char CALLBACK_LIBRARY[]=R"lua(
-local listen,call,schedule,null=...
-local handlers,sources,pending={},{},{}
+local listen,call,schedule,null,request,receipt=...
+local handlers,sources={},{}
 local count,serial=0,0
 local M={}
 local function scalar(v)
@@ -36,7 +36,8 @@ function M.on(source,event,fn,options)
 end
 function M.off(id)
  local h=handlers[id];if not h then return false end
- handlers[id]=nil;pending[id]=nil;count=count-1
+ if h.receipt then receipt(h.receipt,true) end
+ handlers[id]=nil;count=count-1
  local n=sources[h.source]-1;sources[h.source]=n>0 and n or nil
  listen(h.source,n>0,count)
  return true
@@ -70,27 +71,25 @@ function M.request(path,method,args,fn)
  local where={};for k in pairs(spec.match) do where[k]=false end
  local token=M.on(spec.source,spec.events,fn,{once=true,where=where})
  -- Reserve notification state before the operation can have side effects.
- local ok,r=pcall(call,path,method,args)
+ local ok,r=pcall(request,path,method,args)
  if not ok then M.off(token);error(r) end
  if not r.ok then M.off(token);return r end
- local h=handlers[token]
+ local h=handlers[token];h.receipt=r.result.completion_id
  for k,field in pairs(spec.match) do
   local value=r.result[field]
   assert(value~=nil and scalar(value),'async_reply_missing_correlation:'..field)
   h.where[k]=value
  end
- local settled=spec.settled
- if settled then
-  local event=settled.events[r.result[settled.field]]
-  if event then local at=schedule();pending[token]={source=spec.source,event=event,data=r.result,replayed=true,at_ms=at} end
- end
+ schedule()
  return r,token
 end
 function M.flush()
- local batch=pending;pending={}
- local ids={};for id in pairs(batch) do ids[#ids+1]=id end;table.sort(ids)
- for _,id in ipairs(ids) do local h=handlers[id];if h then invoke(h,batch[id]) end end
+ local batch={}
+ for _,h in pairs(handlers) do if h.receipt then local e=receipt(h.receipt,false);if e.ready then batch[#batch+1]={h=h,e=e} end end end
+ table.sort(batch,function(a,b)return a.e.completion_order<b.e.completion_order end)
+ for _,item in ipairs(batch) do invoke(item.h,item.e) end
 end
+
 return M
 )lua";
 inline constexpr uint64_t callbackSourceHash(){uint64_t value=14695981039346656037ULL;for(unsigned i=0;i<sizeof(CALLBACK_LIBRARY)-1;++i)value=(value^uint8_t(CALLBACK_LIBRARY[i]))*1099511628211ULL;return value;}

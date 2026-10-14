@@ -7,7 +7,6 @@
     "-DSPI_DRIVER_SELECT=3",
     "-DUSE_SD_CRC=1"
   ],
-  "radio_mux": false,
   "application_bytes": 2097152,
   "partition_file": "partitions.csv",
   "mcu": "ESP32-C3",
@@ -42,6 +41,21 @@
   "button_count": 0,
   "exclude_sources": [
     "Content.cpp",
-    "display"
-  ]
+    "display",
+    "UiMemory.cpp"
+  ],
+  "asset_file_limit_bytes": 16384,
+  "asset_budget_bytes": 32768,
+  "platform": "esp32",
+  "target": "esp32c3",
+  "drivers": [
+    "esp32-services"
+  ],
+  "optional_drivers": [],
+  "dependencies": [
+    "ArduinoJson",
+    "WebSockets",
+    "ESP32NFS"
+  ],
+  "toolchain": "esp32"
 }

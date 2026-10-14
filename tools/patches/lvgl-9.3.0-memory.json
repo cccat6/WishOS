@@ -1,0 +1,49 @@
+{
+  "version": "9.3.0",
+  "source_sha256": "ec944a9be2582b375b1de2c9dab0045b17c7ac016119731e6649e96a1779eda8",
+  "patch_version": 1,
+  "changes": [
+    {
+      "file": "src/core/lv_obj_style.c",
+      "sha256": "cfcb34056b22fbcdfe4655247019bdb32ccaa12dda416a3691d898a19c4ba52a",
+      "replacements": [
+        {
+          "old": "static lv_style_t * get_local_style(lv_obj_t * obj, lv_style_selector_t selector)\n{\n    uint32_t i;\n    for(i = 0; i < obj->style_cnt; i++) {\n        if(obj->styles[i].is_local &&\n           obj->styles[i].selector == selector) {\n            return (lv_style_t *)obj->styles[i].style;\n        }\n    }\n\n    obj->style_cnt++;\n    LV_ASSERT(obj->style_cnt != 0);\n    obj->styles = lv_realloc(obj->styles, obj->style_cnt * sizeof(lv_obj_style_t));\n    LV_ASSERT_MALLOC(obj->styles);\n\n    for(i = obj->style_cnt - 1; i > 0 ; i--) {\n        /*Copy only normal styles (not local and transition).\n         *The new local style will be added as the last local style*/\n        if(obj->styles[i - 1].is_local || obj->styles[i - 1].is_trans) break;\n        obj->styles[i] = obj->styles[i - 1];\n    }\n\n    lv_memzero(&obj->styles[i], sizeof(lv_obj_style_t));\n    obj->styles[i].style = lv_malloc_zeroed(sizeof(lv_style_t));\n    lv_style_init((lv_style_t *)obj->styles[i].style);\n\n    obj->styles[i].is_local = 1;\n    obj->styles[i].selector = selector;\n    return (lv_style_t *)obj->styles[i].style;\n}\n",
+          "new": "static lv_style_t * get_local_style(lv_obj_t * obj, lv_style_selector_t selector)\n{\n    uint32_t i;\n    for(i = 0; i < obj->style_cnt; i++) {\n        if(obj->styles[i].is_local &&\n           obj->styles[i].selector == selector) {\n            return (lv_style_t *)obj->styles[i].style;\n        }\n    }\n\n    lv_style_t * local = lv_malloc_zeroed(sizeof(lv_style_t));\n    if(local == NULL) return NULL;\n    lv_obj_style_t * resized = lv_realloc(obj->styles, (obj->style_cnt + 1) * sizeof(lv_obj_style_t));\n    if(resized == NULL) { lv_free(local); return NULL; }\n    obj->styles = resized;\n    obj->style_cnt++;\n\n    for(i = obj->style_cnt - 1; i > 0 ; i--) {\n        /*Copy only normal styles (not local and transition).\n         *The new local style will be added as the last local style*/\n        if(obj->styles[i - 1].is_local || obj->styles[i - 1].is_trans) break;\n        obj->styles[i] = obj->styles[i - 1];\n    }\n\n    lv_memzero(&obj->styles[i], sizeof(lv_obj_style_t));\n    obj->styles[i].style = local;\n    lv_style_init((lv_style_t *)obj->styles[i].style);\n\n    obj->styles[i].is_local = 1;\n    obj->styles[i].selector = selector;\n    return (lv_style_t *)obj->styles[i].style;\n}\n",
+          "count": 1
+        },
+        {
+          "old": "    obj->style_cnt++;\n    LV_ASSERT(obj->style_cnt != 0);\n    obj->styles = lv_realloc(obj->styles, obj->style_cnt * sizeof(lv_obj_style_t));\n    LV_ASSERT_MALLOC(obj->styles);\n",
+          "new": "    lv_obj_style_t * resized = lv_realloc(obj->styles, (obj->style_cnt + 1) * sizeof(lv_obj_style_t));\n    if(resized == NULL) return;\n    obj->styles = resized;\n    obj->style_cnt++;\n",
+          "count": 1
+        },
+        {
+          "old": "    lv_style_t * style = get_local_style(obj, selector);",
+          "new": "    lv_style_t * style = get_local_style(obj, selector);\n    if(style == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/core/lv_obj_class.c",
+      "sha256": "5c33b982c91c13cd7a2baa26b5bb523af51f9c81ff18cd83c80828735eeb7e1f",
+      "replacements": [
+        {
+          "old": "        parent->spec_attr->child_cnt++;\n        parent->spec_attr->children = lv_realloc(parent->spec_attr->children,\n                                                 sizeof(lv_obj_t *) * parent->spec_attr->child_cnt);\n        parent->spec_attr->children[parent->spec_attr->child_cnt - 1] = obj;",
+          "new": "        if(parent->spec_attr == NULL) { lv_free(obj); return NULL; }\n        lv_obj_t ** children = lv_realloc(parent->spec_attr->children,\n                                          sizeof(lv_obj_t *) * (parent->spec_attr->child_cnt + 1));\n        if(children == NULL) { lv_free(obj); return NULL; }\n        parent->spec_attr->children = children;\n        parent->spec_attr->children[parent->spec_attr->child_cnt++] = obj;",
+          "count": 1
+        },
+        {
+          "old": "    obj->class_p = class_p;\n    obj->parent = parent;",
+          "new": "    obj->class_p = class_p;\n    obj->parent = parent;\n    /* Optional attributes are assumed present by later style/layout setters.\n       Admit them with the object so a retained tree is transactional on OOM. */\n    lv_obj_allocate_spec_attr(obj);\n    if(obj->spec_attr == NULL) { lv_free(obj); return NULL; }",
+          "count": 1
+        },
+        {
+          "old": "lv_free(obj);",
+          "new": "lv_free(obj->spec_attr); lv_free(obj);",
+          "count": 5
+        }
+      ]
+    }
+  ]
+}

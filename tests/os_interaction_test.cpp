@@ -1,5 +1,5 @@
 #include "ButtonGestures.h"
-#include "MotionInput.h"
+#include "drivers/sc7a20/MotionInput.h"
 #include "TimeSync.h"
 #include "PresentationState.h"
 #include "RpcEnvelope.h"
@@ -9,9 +9,9 @@
 #include <iostream>
 using namespace notesos;
 static JsonDocument parse(const char*s){JsonDocument d;assert(!deserializeJson(d,s));return d;}
-struct Captured{std::string name;unsigned count,gesture;bool longPress;};
+struct Captured{std::string name;unsigned count,gesture;bool longPress;unsigned mask,edge,held;};
 static std::vector<Captured> events;
-static void receive(void*,const char*n,JsonObjectConst d){events.push_back({n,d["count"]|0u,d["gesture_id"]|0u,d["long"]|false});}
+static void receive(void*,const char*n,JsonObjectConst d){events.push_back({n,d["count"]|0u,d["gesture_id"]|0u,d["long"]|false,d["pressed_mask"]|0u,d["edge_at_ms"]|0u,d["held_ms"]|0u});}
 static unsigned count(const char*n){unsigned out=0;for(auto&e:events)out+=e.name==n;return out;}
 struct TimeBackend:TimeSyncBackend{unsigned starts=0,stops=0;int64_t seconds=0;const char*start(const TimeSyncConfig&)override{++starts;return nullptr;}void stop()override{++stops;}int64_t completion()override{auto t=seconds;seconds=0;return t;}};
 int main(){
@@ -37,6 +37,11 @@ int main(){
  // A single and double resolve at the window, and uint32 clock wrap is safe.
  ButtonGestures wrap({"one"},nullptr,receive);events.clear();wrap.sample(0,true,0xfffffff0);wrap.sample(0,true,20);wrap.sample(0,false,60);wrap.sample(0,false,90);wrap.sample(0,false,391);assert(count("click")==1&&events.back().count==1);
  events.clear();wrap.sample(0,true,500);wrap.sample(0,true,530);wrap.sample(0,false,560);wrap.sample(0,false,590);wrap.sample(0,true,650);wrap.sample(0,true,680);wrap.sample(0,false,710);wrap.sample(0,false,740);wrap.sample(0,false,1041);assert(count("click")==1&&events.back().count==2);
+ // Coherent bank snapshots contain both accepted keys, independent of loop
+ // iteration order. Edge timestamps retain observed debounce/polling latency.
+ ButtonGestures bank({"A","B"},nullptr,receive);events.clear();c=parse(R"({"defaults":{"debounce_ms":10}})");assert(!bank.configure(c.as<JsonObjectConst>(),out.to<JsonObject>()));
+ bool down[]={true,true};bank.sampleAll(down,2,1000);bank.sampleAll(down,2,1017);assert(events.size()==2&&events[0].mask==3&&events[1].mask==3);assert(events[0].edge==1000&&events[0].held==17);
+ down[0]=false;bank.sampleAll(down,2,1110);down[0]=true;bank.sampleAll(down,2,1114);down[0]=false;bank.sampleAll(down,2,1117);bank.sampleAll(down,2,1130);assert(events.back().name=="release"&&events.back().mask==2&&events.back().held==117);
  OrientationInput orientation;MotionConfig motion;int changes=0;
  for(unsigned t=0;t<=480;t+=80)if(orientation.sample(0,1000,0,t,motion)==0)++changes;assert(changes==1);
  for(unsigned t=560;t<1000;t+=80)assert(orientation.sample(1,1,1000,t,motion)==-1);

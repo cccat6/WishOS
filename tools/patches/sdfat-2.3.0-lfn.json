@@ -1,0 +1,57 @@
+{
+  "name": "SdFat",
+  "version": "2.3.0",
+  "source_sha256": "18ebaa898a6ec2c435bda42c7e27e1b3e4f0ab11100376d2df69d2cc0be67e70",
+  "patch_version": 1,
+  "changes": [
+    {
+      "file": "src/FatLib/FatFileLFN.cpp",
+      "sha256": "2bd9580c353c3a61f28824884e70bcec4e4e638ab8070e89724c2bcb8bf801e8",
+      "replacements": [
+        {
+          "old": "    hex += millis();",
+          "new": "    // Name-based seeds and the retry index remain distinct even when many\n    // creations finish in the same millisecond (millis-only retries repeat).\n    hex = 0x811c;\n    for (const char* p = fname->begin; p < fname->end; ++p) {\n      hex = (hex ^ uint8_t(*p)) * 0x0193;\n    }\n    hex += uint16_t(seq) * 0x9e37;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/ExFatLib/ExFatDbg.cpp",
+      "sha256": "b797a4ffa011d82f13c8a84084fa8bd63abd195943221a8e581314d9a54c6fdb",
+      "replacements": [
+        {
+          "old": "(checksum << 15)",
+          "new": "(uint32_t(checksum) << 15)",
+          "count": 1
+        },
+        {
+          "old": "(hash << 15)",
+          "new": "(uint32_t(hash) << 15)",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "src/ExFatLib/ExFatName.cpp",
+      "sha256": "407bb61240f7cd94931935480fdcdab54ecd52ce010011cffad0fd5f6878e56c",
+      "replacements": [
+        {
+          "old": "(hash << 15)",
+          "new": "(uint32_t(hash) << 15)",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "src/ExFatLib/ExFatFileWrite.cpp",
+      "sha256": "dd640e854268fc5fb73f43acb59442a0af6cf2d124baaf6c2d7e49df8602fd62",
+      "replacements": [
+        {
+          "old": "(checksum << 15)",
+          "new": "(uint32_t(checksum) << 15)",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

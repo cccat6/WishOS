@@ -1,0 +1,62 @@
+{
+  "version": "0.2.0",
+  "commit": "e371b319a3f50bebb54f03b54b91a780a8c35c4d",
+  "files": [
+    {
+      "path": "tools/dl_fft/base/dl_fft2r_fc32_ansi.c",
+      "sha256": "d41e48229ba05e2aeb07057ca56016525f8344cce00f2e38de4dd41305478590"
+    },
+    {
+      "path": "tools/dl_fft/base/dl_fft2r_sc16_ansi.c",
+      "sha256": "30e62e058832ce77cb1f94d587ceb99342824deca8c287fe931274d51d4906e4"
+    },
+    {
+      "path": "tools/dl_fft/base/dl_fft4r_fc32_ansi.c",
+      "sha256": "2cf9d2acbd80e4acd69601545baaef72a67924df1aacd7476530d01926ee3d7b"
+    },
+    {
+      "path": "tools/dl_fft/base/dl_fft_base.c",
+      "sha256": "25caaeecf1a7d6ba5387292fd448a0da0884615af1d95159f093ee93b701746f"
+    },
+    {
+      "path": "tools/dl_fft/base/dl_fft_base.h",
+      "sha256": "a28f0e60e4c5bdae7c3aa70e39920cef17ed6d8e3f425abc85922689b798d493"
+    },
+    {
+      "path": "tools/dl_fft/base/dl_fft_dtype.h",
+      "sha256": "209a8da6f977565f2bbf80d8d8726afb1d3c9a6dbf1e48e342c1db6023066306"
+    },
+    {
+      "path": "tools/dl_fft/base/isa/dl_fft_platform.h",
+      "sha256": "f5d76981793e26cdbf549d25faaae589d8e1776519a84315da4d733cef190087"
+    },
+    {
+      "path": "tools/dl_fft/dl_fft.h",
+      "sha256": "f2cca68876cce36d24d5e0e1b9fe8bac3e09f65c5d065c5451b43713cada65c0"
+    },
+    {
+      "path": "tools/dl_fft/dl_fft_f32.c",
+      "sha256": "895ea2322a0740cf02bd6075453a247b5144aefceb8f31b6717248e6eeaf79ee"
+    },
+    {
+      "path": "tools/dl_fft/dl_fft_s16.c",
+      "sha256": "fb9168e0a6e2b798b88a8e06d5482610db9070a5b3c5e66f32ed8dcf514a0649"
+    },
+    {
+      "path": "tools/dl_fft/dl_rfft.h",
+      "sha256": "0219466a0cfc4ab218b22af3cf7954c975a0f4e05dd7fc947ab98c3bc3f76796"
+    },
+    {
+      "path": "tools/dl_fft/dl_rfft_f32.c",
+      "sha256": "1d87595dfe93be1e6ad63e2decd0b04c94f8414da8ccff96a4a9068a1128baaa"
+    },
+    {
+      "path": "tools/dl_fft/dl_rfft_s16.c",
+      "sha256": "7449d35f33c2acc30c4d4d09e9557c8a9e1ca9c7d5964047d248b35a8e756e63"
+    },
+    {
+      "path": "tools/dl_fft/idf_component.yml",
+      "sha256": "cea002e7786a071148b0a7e98e236e28ca9fe58e6596cfac5885b70b44c48767"
+    }
+  ]
+}

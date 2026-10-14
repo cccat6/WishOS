@@ -1,13 +1,23 @@
+#include "drivers/energy-activity/EnergyActivity.h"
+#include "../FileService.h"
+#include "../UiMemory.h"
+#include "drivers/esp32-services/LittleFsProvider.h"
+#include <esp_littlefs.h>
+#include "../WireBytes.h"
+#include "../audio/Speech.h"
+#ifdef NOTES_WAKENET
+#include "drivers/esp-wakenet/EspWakeNet.h"
+#endif
 #include "../DisplayScheduler.h"
 #include "PackedFont.h"
 #include <lvgl_private.h>
 #include "../Hardware.h"
 #include "../ButtonGestures.h"
-#include "../MotionInput.h"
+#include "drivers/sc7a20/MotionInput.h"
 #include "../TimeSync.h"
 #include <esp_sntp.h>
 #include "../Core.h"
-#include "../EspMemory.h"
+#include "drivers/esp32-services/EspMemory.h"
 #include "../RpcEnvelope.h"
 #include "../PresentationState.h"
 #include "../Conditions.h"
@@ -21,7 +31,7 @@
 #include "../PowerMonitor.h"
 #include "../drivers/e6/E6Driver.h"
 #include "../drivers/e6/E6Profiles.h"
-#include "../Defaults.h"
+#include "Defaults.h"
 #include "../DriverRequests.h"
 #include "../WifiManager.h"
 #include "../BleConfiguration.h"
@@ -40,7 +50,7 @@
 #include <BLEHIDDevice.h>
 #include <BLESecurity.h>
 #include <OThread.h>
-#include "../radio/RadioMux.h"
+#include "drivers/esp32-c6-radio/RadioMux.h"
 #include <openthread/dataset.h>
 #include <Zigbee.h>
 #include <transports/SocketTransport.h>
@@ -50,7 +60,7 @@
 #include <esp_heap_caps.h>
 #include <esp_partition.h>
 #include <SdFat.h>
-#include "../BoardSdSpi.h"
+#include "drivers/esp32-services/BoardSdSpi.h"
 #include <lvgl.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -79,7 +89,7 @@ static SdFs SD;
 static BoardSdSpi boardSdSpi(SPI);
 static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));
 static bool policyRestoreOk=true;
-#include "../DriverDescriptions.h"
+#include "DriverDescriptions.h"
 static Preferences preferences;static ConnectionProfiles connections;
 static Vfs vfs;static esp32_nfs::SocketTransport nfsTransport;static NfsService nfsService(vfs,core.resources());static SystemFiles systemFiles;
 static void* allocateRAM(size_t n){return core.resources().allocate(n,ResourceBudget::Region::Internal);}
@@ -87,6 +97,7 @@ static void freeMemoryFile(void*p){core.resources().freeAllocation(p);}
 static MemoryFiles ramFiles("ram","/storage/ram","ram",true,allocateRAM,freeMemoryFile);
 static void* allocatePSRAM(size_t n){return core.resources().allocate(n,ResourceBudget::Region::External);}
 static MemoryFiles psramFiles("psram","/storage/psram","psram",false,allocatePSRAM,freeMemoryFile);
+static bool flashMounted=false;static LittleFsProvider flashFiles(LittleFS,flashMounted,"/notes-flash");
 static bool panelReady();static void panelReset(bool);
 static bool panelCommand(uint8_t,const uint8_t*,size_t);static bool panelData(const uint8_t*,size_t);
 static E6Driver panel({panelReady,panelReset,panelCommand,panelData});
@@ -94,11 +105,7 @@ static E6ColorDriver colorPanel({panelReady,panelReset,panelCommand,panelData});
 static E6MonoCache monoCache(core.resources());
 static bool spiStarted=false;
 static SemaphoreHandle_t spiLease;
-static QueueHandle_t eventQueue, audioQueue, spoolQueue;
-struct PendingEvent {
-  char path[48], name[40], data[MAX_EVENT];
-  uint32_t targetOwner=0;
-};
+static QueueHandle_t audioQueue, spoolQueue;
 struct AudioChunk {
   uint32_t sequence;
   uint16_t samples,bytes;
@@ -126,6 +133,7 @@ static void sdVolumeSnapshot(bool);
 static SdLinkState sdLink;
 static uint32_t panelSpiHz=16000000;
 static uint8_t imuAddress = 0x19;
+static std::atomic<bool>captureRunning{false};
 static std::atomic<bool> audioRunning{false}, audioStop{false}, streaming{false};
 static bool displayActive();
 static bool displayInputBusy();
@@ -175,35 +183,8 @@ static bool lastImu = false, lastBusy = false;
 static uint64_t uptime() {
   return uint64_t(esp_timer_get_time()) / 1000;
 }
-static void emit(const char *path, const char *event, JsonObjectConst data,uint32_t targetOwner=0) {
-  PendingEvent e{};
-  e.targetOwner=targetOwner;
-  if (!copy(e.path, sizeof(e.path), path) || !copy(e.name, sizeof(e.name), event) ||
-      measureJson(data) >= sizeof(e.data))
-    return;
-  serializeJson(data, e.data, sizeof(e.data));
-  if (xQueueSend(eventQueue, &e, 0) != pdTRUE)
-    ++eventDrops;
-}
-static void drainEvents() {
-  PendingEvent e;
-  for (int i = 0; i < 32 && xQueueReceive(eventQueue, &e, 0) == pdTRUE; i++) {
-    JsonDocument d;
-    deserializeJson(d, e.data);
-    if (!strcmp(e.path, "/dev/display") &&
-        (!strcmp(e.name, "completed") || !strcmp(e.name, "failed"))) {
-      uint32_t id = d["job_id"] | 0;
-      if (jobs[id % 8].id == id) {
-        auto &j = jobs[id % 8];
-        j.complete = true;
-        j.ok = d["success"] | false;
-        j.total = d["total_ms"] | 0;
-        copy(j.error, sizeof(j.error), d["error"] | "none");
-      }
-    }
-    core.clock(uptime());
-    core.emit(e.path, e.name, d.as<JsonObjectConst>(),e.targetOwner);
-  }
+static void emit(const char *path,const char *name,JsonObjectConst data,uint32_t owner=0){
+ if(!core.emit(path,name,data,owner,uptime()))++eventDrops;
 }
 static void event(const char *path, const char *name, const char *value = nullptr) {
   JsonDocument d;
@@ -229,7 +210,7 @@ static void spiIdle() {
   pinMode(pins::MISO, INPUT);
   gpio_set_pull_mode(gpio_num_t(pins::MISO), GPIO_FLOATING);
 }
-#include "../SdLinkService.h"
+#include "drivers/esp32-services/SdLinkService.h"
 // Caller owns SPI lease. Shared-rail users only put a card in SPI mode here;
 // filesystem tuning is deferred until storage is actually requested.
 static const char *ensureRail() {
@@ -257,16 +238,16 @@ static const char *ensureSdReady(){
 }
 static const char *railOff() {
   if(vfs.hasLeasesUnder("/storage/user")||vfs.pinnedPath("/storage/user"))return "storage_in_use";
-  if (audioRunning || audioSpooling || displayActive() || streaming)
+  if (captureRunning || audioSpooling || displayActive() || streaming)
     return "resource_busy";
   if (!takeSPI())
     return "spi_busy";
   if(!panel.safeToIdle()||!colorPanel.safeToIdle()){giveSPI();return "display_not_safe_to_idle";}
+  sdVolumeSnapshot(false);
   if (cardProbed) {
     SD.end();
   }
   mounted=false;cardProbed=false;sdTuned=false;
-  sdVolumeSnapshot(false);
   sdVolumeAttempted=false;
   sdCanWrite=true;sdSetWritable(true);
   sdLink.requestedHz=sdLink.effectiveHz=0;
@@ -320,33 +301,6 @@ static void pollImu(){
   if(wake.imu&&imuRead(0x31,&source,1)&&(source&0x40)){JsonDocument d;d["axes"]=source&63;d["captured_at_ms"]=now;emit("/dev/imu","motion",d.as<JsonObjectConst>());}
  }
 }
-static void hex(const uint8_t *p, size_t n, char *out) {
-  static const char a[] = "0123456789abcdef";
-  for (size_t i = 0; i < n; i++) {
-    out[2 * i] = a[p[i] >> 4];
-    out[2 * i + 1] = a[p[i] & 15];
-  }
-  out[2 * n] = 0;
-}
-static bool unhex(const char *s, uint8_t *out, size_t cap, size_t &n) {
-  if (!s || strlen(s) % 2 || strlen(s) / 2 > cap)
-    return false;
-  n = strlen(s) / 2;
-  auto nib = [](char c) {
-    return c >= '0' && c <= '9'   ? c - '0'
-           : c >= 'a' && c <= 'f' ? c - 'a' + 10
-           : c >= 'A' && c <= 'F' ? c - 'A' + 10
-                                  : -1;
-  };
-  for (size_t i = 0; i < n; i++) {
-    int a = nib(s[2 * i]), b = nib(s[2 * i + 1]);
-    if (a < 0 || b < 0)
-      return false;
-    out[i] = (a << 4) | b;
-  }
-  return true;
-}
-
 static const char *common(const char *method, JsonObjectConst a, JsonObject out) {
   if (!strcmp(method, "list")) {
     unsigned cursor=a["cursor"]|0u,limit=a["limit"]|MAX_DEVICES;
@@ -405,7 +359,7 @@ static const char *jobsHandler(const char *, JsonObjectConst a, JsonObject out) 
 static const char *boardHandler(const char *, JsonObjectConst, JsonObject out) {
   out["board"] = boardpack::ID;
   out["boot_id"] = bootId;
-  out["mcu"] = boardpack::MCU;out["package_fingerprint"]=boardpack::FINGERPRINT;
+  out["mcu"] = boardpack::MCU;out["package_fingerprint"]=boardpack::FINGERPRINT;out["native_drivers"]=boardpack::DRIVERS;out["initial_runtime"]=boardpack::RUNTIME_ID;
   out["clock_crystal_mhz"] = boardpack::CRYSTAL_MHZ;
   out["clock_load_pf"] = boardpack::CRYSTAL_LOAD_PF;
   auto mapping = out["pins"].to<JsonArray>();
@@ -421,11 +375,11 @@ static const char *boardHandler(const char *, JsonObjectConst, JsonObject out) {
   out["wake_cause"] = int(esp_sleep_get_wakeup_cause());
   return nullptr;
 }
-#include "../EspTimeService.h"
+#include "drivers/esp32-services/EspTimeService.h"
 static const char *clockHandler(const char *m, JsonObjectConst a, JsonObject out) {
   if (!strcmp(m, "write")) {
     ClockChange change;if(auto e=validateClockChange(a,change,{80,160}))return e;
-    if(change.cpu&&(audioRunning||audioSpooling||displayActive()||streaming||networkActive()))return "resource_busy";
+    if(change.cpu&&(captureRunning||audioSpooling||displayActive()||streaming||networkActive()))return "resource_busy";
     uint32_t previous=getCpuFrequencyMhz();
     if(change.cpu&&!setCpuFrequencyMhz(change.cpuMhz))return "clock_failed";
     if(change.wall){timeval t{time_t(change.unixSeconds),0};
@@ -448,7 +402,7 @@ static const char* policyHandler(const char*,JsonObjectConst,JsonObject);
 static ButtonGestures buttonGestures({"A","B","C"},nullptr,[](void*,const char*n,JsonObjectConst o){emit("/dev/buttons",n,o);});
 static bool persistButtons(const char*s,size_t n){return preferences.putString("buttons",s)==n;}
 static const char*buttonHandler(const char*m,JsonObjectConst a,JsonObject o){
- if(!strcmp(m,"describe")){ButtonGestures::describe(o);return nullptr;}
+ if(!strcmp(m,"describe")){ButtonGestures::describe(o);o["sampling_period_ms"]=5;return nullptr;}
  if(!inputMutex)return "input_unavailable";
  if(xSemaphoreTake(inputMutex,pdMS_TO_TICKS(20))!=pdTRUE)return "input_busy";
  if(!strcmp(m,"read")){buttonGestures.read(o);xSemaphoreGive(inputMutex);return nullptr;}
@@ -499,7 +453,7 @@ static const char *wakeHandler(const char *m, JsonObjectConst a, JsonObject out)
   out["timer_ms"] = wake.timerMs;
   return nullptr;
 }
-#include "../WifiService.h"
+#include "drivers/esp32-services/WifiService.h"
 static const char *usbHandler(const char *m, JsonObjectConst a, JsonObject out) {
   if (!strcmp(m, "write"))
     usbEvents = a["events"] | false;
@@ -509,78 +463,63 @@ static const char *usbHandler(const char *m, JsonObjectConst a, JsonObject out) 
   out["line_limit"] = MAX_WIRE;
   return nullptr;
 }
-#include "../StorageService.h"
-#include "../PowerService.h"
-#include "../AudioStorage.h"
-#include "../NetworkService.h"
+#include "drivers/esp32-services/StorageService.h"
+#include "drivers/esp32-services/PowerService.h"
+#include "drivers/esp32-services/AudioStorage.h"
+#include "drivers/esp32-services/NetworkService.h"
+static std::mutex captureMutex;
+static std::atomic<unsigned>captureUsers{0};static bool captureStopping=false;static unsigned captureRate=16000;static uint32_t captureReservation=0;
+static const char*acquireCapture(unsigned user,unsigned rate);static void releaseCapture(unsigned user){captureUsers.fetch_and(~user);}
+static const char*speechAcquire(unsigned rate,const char*roles){if(strcmp(roles,"M"))return "capture_layout_unavailable";return acquireCapture(2,rate);}static void speechRelease(){releaseCapture(2);}
+static audio::EnergyActivity activityDetector;
+#ifdef NOTES_WAKENET
+static audio::EspWakeNet wakeDetector("wakenet9s.hiesp","wn9s_hiesp","Hi ESP",65536);
+static audio::SpeechBackend*speechBackends[]={&activityDetector,&wakeDetector};
+#else
+static audio::SpeechBackend*speechBackends[]={&activityDetector};
+#endif
+static audio::SpeechService speechService(core,"/dev/speech",speechBackends,sizeof(speechBackends)/sizeof(speechBackends[0]),speechAcquire,speechRelease);
+static void recordingStopped(esp_err_t err){
+ if(!audioRunning)return;audioCaptureFailed=err!=ESP_OK;
+ JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;d["error"]=esp_err_to_name(err);emit("/dev/mic",err==ESP_OK?"stopped":"failed",d.as<JsonObjectConst>(),micOwner);
+ releaseCapture(1);audioRunning=false;
+}
 static void audioTask(void *) {
-  i2s_chan_handle_t channel = nullptr;
-  i2s_chan_config_t cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-  cfg.dma_desc_num = 4;
-  cfg.dma_frame_num = 160;
-  esp_err_t err = i2s_new_channel(&cfg, nullptr, &channel);
-  if (err == ESP_OK) {
-    i2s_std_config_t s{};
-    s.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(micRate);
-    s.slot_cfg =
-        I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
-    s.gpio_cfg.mclk = I2S_GPIO_UNUSED;
-    s.gpio_cfg.bclk = gpio_num_t(pins::MIC_BCLK);
-    s.gpio_cfg.ws = gpio_num_t(pins::MIC_WS);
-    s.gpio_cfg.dout = I2S_GPIO_UNUSED;
-    s.gpio_cfg.din = gpio_num_t(pins::MIC_DATA);
-    err = i2s_channel_init_std_mode(channel, &s);
-  }
-  if (err == ESP_OK) {
-    gpio_set_pull_mode(gpio_num_t(pins::MIC_DATA), GPIO_PULLDOWN_ONLY);
-    err = i2s_channel_enable(channel);
-  }
-  if (err == ESP_OK) {
-    int32_t raw[320];
-    size_t got;
-    i2s_channel_read(channel, raw, sizeof(raw), &got, 30);
-    {JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;emit("/dev/mic","started",d.as<JsonObjectConst>(),micOwner);}
-    uint64_t sampleAt=0;VoiceCodec codec;
-    while (!audioStop && (!micLimit || (uptime() - micStarted) < micLimit)) {
-      got = 0;
-      err = i2s_channel_read(channel, raw, sizeof(raw), &got, 50);
-      if (err != ESP_OK)
-        break;
-      // Each bounded event is <= 160 PCM16 samples (10 ms at 16 kHz).
-      if(got<8)continue;
-      AudioChunk chunk{};
-      chunk.sequence = audioSequence++;chunk.sampleStart=sampleAt;
-      chunk.samples = got / 8;
-      if (chunk.samples > 160)
-        chunk.samples = 160;
-      chunk.bytes=11+(chunk.samples+1)/2;chunk.data[0]=0x42;
-      for(int n=0;n<4;++n)chunk.data[n+1]=uint8_t(chunk.sequence>>(8*n));
-      chunk.data[5]=uint8_t(codec.predictor);chunk.data[6]=uint8_t(uint16_t(codec.predictor)>>8);chunk.data[7]=codec.index;chunk.data[8]=0;chunk.data[9]=uint8_t(chunk.samples);chunk.data[10]=uint8_t(chunk.samples>>8);
-      for (unsigned i = 0; i < chunk.samples; i++) {
-        int32_t x = raw[i * 2] >> 14;
-        if (x > 32767)
-          x = 32767;
-        if (x < -32768)
-          x = -32768;
-        uint8_t nibble=codec.encode(int16_t(x));if(i&1)chunk.data[11+i/2]|=nibble<<4;else chunk.data[11+i/2]=nibble;
-      }
-      sampleAt+=chunk.samples;producedSamples=sampleAt;
-      if(audioToNetwork&&xQueueSend(audioQueue,&chunk,0)!=pdTRUE){audioDrops+=chunk.samples;if(audioStopOnOverflow)audioStop=true;}
-      if(audioToDisk&&xQueueSend(spoolQueue,&chunk,0)!=pdTRUE){audioStorageDrops+=chunk.samples;if(audioStopOnOverflow)audioStop=true;}
-    }
-  }
-  if (channel) {
-    i2s_channel_disable(channel);
-    i2s_del_channel(channel);
-  }
-  digitalWrite(pins::MIC_BCLK, LOW);
-  digitalWrite(pins::MIC_WS, LOW);
-  pinMode(pins::MIC_BCLK, OUTPUT);
-  pinMode(pins::MIC_WS, OUTPUT);
-  audioCaptureFailed=err!=ESP_OK;
-  {JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;d["error"]=esp_err_to_name(err);emit("/dev/mic",err==ESP_OK?"stopped":"failed",d.as<JsonObjectConst>(),micOwner);}
-  audioRunning = false;
-  vTaskDelete(nullptr);
+ i2s_chan_handle_t channel=nullptr;i2s_chan_config_t cfg=I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0,I2S_ROLE_MASTER);cfg.dma_desc_num=4;cfg.dma_frame_num=160;
+ esp_err_t err=i2s_new_channel(&cfg,nullptr,&channel);
+ if(err==ESP_OK){i2s_std_config_t s{};s.clk_cfg=I2S_STD_CLK_DEFAULT_CONFIG(captureRate);s.slot_cfg=I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT,I2S_SLOT_MODE_STEREO);
+  s.gpio_cfg.mclk=I2S_GPIO_UNUSED;s.gpio_cfg.bclk=gpio_num_t(pins::MIC_BCLK);s.gpio_cfg.ws=gpio_num_t(pins::MIC_WS);s.gpio_cfg.dout=I2S_GPIO_UNUSED;s.gpio_cfg.din=gpio_num_t(pins::MIC_DATA);err=i2s_channel_init_std_mode(channel,&s);}
+ if(err==ESP_OK){gpio_set_pull_mode(gpio_num_t(pins::MIC_DATA),GPIO_PULLDOWN_ONLY);err=i2s_channel_enable(channel);}
+ uint32_t currentRecording=0;VoiceCodec codec;uint64_t sampleAt=0;
+ while(err==ESP_OK){
+  {std::lock_guard<std::mutex>lock(captureMutex);if(!captureUsers.load()){captureStopping=true;break;}}
+  int32_t raw[320];int16_t pcm[160];size_t got=0;err=i2s_channel_read(channel,raw,sizeof raw,&got,50);if(err!=ESP_OK)break;
+  size_t count=std::min<size_t>(got/8,160);for(size_t i=0;i<count;++i)pcm[i]=std::max<int32_t>(-32768,std::min<int32_t>(32767,raw[i*2]>>14));
+  if(captureUsers.load()&2)speechService.process({pcm,count,captureRate,"M"});
+  if(!(captureUsers.load()&1))continue;
+  if(audioStop||(micLimit&&(uptime()-micStarted)>=micLimit)){recordingStopped(ESP_OK);continue;}
+  if(currentRecording!=nextRecording){currentRecording=nextRecording;codec={};sampleAt=0;JsonDocument d;d["recording_id"]=recordingId;d["owner"]=micOwner;emit("/dev/mic","started",d.as<JsonObjectConst>(),micOwner);}
+  if(!count)continue;AudioChunk chunk{};chunk.sequence=audioSequence++;chunk.sampleStart=sampleAt;chunk.samples=count;chunk.bytes=11+(count+1)/2;chunk.data[0]=0x42;
+  for(int n=0;n<4;++n)chunk.data[n+1]=uint8_t(chunk.sequence>>(8*n));chunk.data[5]=uint8_t(codec.predictor);chunk.data[6]=uint8_t(uint16_t(codec.predictor)>>8);chunk.data[7]=codec.index;chunk.data[9]=uint8_t(count);chunk.data[10]=uint8_t(count>>8);
+  for(size_t i=0;i<count;++i){uint8_t code=codec.encode(pcm[i]);if(i&1)chunk.data[11+i/2]|=code<<4;else chunk.data[11+i/2]=code;}
+  sampleAt+=count;producedSamples=sampleAt;
+  if(audioToNetwork&&xQueueSend(audioQueue,&chunk,0)!=pdTRUE){audioDrops+=count;if(audioStopOnOverflow)audioStop=true;}
+  if(audioToDisk&&xQueueSend(spoolQueue,&chunk,0)!=pdTRUE){audioStorageDrops+=count;if(audioStopOnOverflow)audioStop=true;}
+ }
+ if(channel){i2s_channel_disable(channel);i2s_del_channel(channel);}digitalWrite(pins::MIC_BCLK,LOW);digitalWrite(pins::MIC_WS,LOW);pinMode(pins::MIC_BCLK,OUTPUT);pinMode(pins::MIC_WS,OUTPUT);
+ if(err!=ESP_OK){recordingStopped(err);speechService.inputFailed(esp_err_to_name(err));}
+ {std::lock_guard<std::mutex>lock(captureMutex);captureUsers=0;captureRunning=false;captureStopping=false;core.resources().release(captureReservation);captureReservation=0;}
+ vTaskDelete(nullptr);
+}
+static const char*acquireCapture(unsigned user,unsigned rate){
+ std::lock_guard<std::mutex>lock(captureMutex);if(captureStopping)return "capture_stopping";
+ if(captureRunning){if(rate!=captureRate)return "capture_format_conflict";captureUsers.fetch_or(user);return nullptr;}
+ if(shutdownRequested||pendingPower[0])return "power_transition";
+ if(!rail||!cardProbed){if(!takeSPI())return "spi_busy";auto e=ensureRail();giveSPI();if(e)return e;}
+ captureReservation=core.resources().acquire(16384,0);if(!captureReservation)return "audio_memory_budget";
+ captureRate=rate;captureUsers=user;captureRunning=true;
+ if(xTaskCreate(audioTask,"notes-input",6144,nullptr,3,nullptr)!=pdPASS){captureRunning=false;captureUsers=0;core.resources().release(captureReservation);captureReservation=0;return "task_allocation_failed";}
+ return nullptr;
 }
 static const char *micHandler(const char *m, JsonObjectConst a, JsonObject out) {
   if(strcmp(m,"start"))if(auto error=validateMicControl(m,a,recordingId))return error;
@@ -627,8 +566,6 @@ static const char *micHandler(const char *m, JsonObjectConst a, JsonObject out) 
       if (e)
         return e;
     }
-    if (ESP.getFreeHeap() < 45000 || ESP.getMaxAllocHeap() < 16000)
-      return "audio_memory_low";
     const char*storageFallback=nullptr;
     audioToDisk=disk;audioToNetwork=network;
     if(audioToDisk&&!mounted){
@@ -653,10 +590,7 @@ static const char *micHandler(const char *m, JsonObjectConst a, JsonObject out) 
     producedSamples=0;audioRunning = true;
     audioSequence = 0;
     if(audioToDisk){if(auto error=beginAudioStorage(config.as<JsonObjectConst>())){audioStorageError=error;if(audioToNetwork&&!audioStopOnStorageError)audioToDisk=false;else{audioRunning=false;return error;}}}
-    if (xTaskCreate(audioTask, "notes-mic", 6144, nullptr, 3, nullptr) != pdPASS) {
-      audioCaptureFailed=true;audioRunning = false;
-      return "task_allocation_failed";
-    }
+    if(auto error=acquireCapture(1,r)){audioCaptureFailed=true;audioRunning=false;return error;}
     out["status"] = "starting";out["recording_id"]=recordingId;out["storage_active"]=audioToDisk;out["storage_error"]=audioStorageError.load();out["encoding"]="ima-adpcm";
     return nullptr;
   }
@@ -679,9 +613,9 @@ static void finishHash(char *out) {
   mbedtls_sha256_free(&digest);
   hex(hash, 32, out);
 }
-#include "../BleService.h"
-#include "../WebSocketService.h"
-#include "../MeshService.h"
+#include "drivers/esp32-services/BleService.h"
+#include "drivers/esp32-services/WebSocketService.h"
+#include "drivers/esp32-services/MeshService.h"
 static bool applicationNetworkActive(){return tcpService.active()||udpService.active()||httpApps.active()||wsClient;}
 static const char*tcpHandler(const char*m,JsonObjectConst a,JsonObject o){return tcpService.invoke(m,a,o);}
 static const char*udpHandler(const char*m,JsonObjectConst a,JsonObject o){return udpService.invoke(m,a,o);}
@@ -708,7 +642,7 @@ static const char *powerHandler(const char *m, JsonObjectConst a, JsonObject out
   }
   if (!strcmp(m, "peripherals_off"))
     return railOff();
-  if (audioRunning || audioSpooling || displayActive() || streaming || networkActive() || workers.active() || pendingPower[0] || shutdownRequested)
+  if (captureRunning || audioSpooling || displayActive() || streaming || networkActive() || workers.active() || pendingPower[0] || shutdownRequested)
     return "resource_busy";
   if (!strcmp(m, "write")) {
     const char *mode = a["mode"] | "";
@@ -796,7 +730,7 @@ static void sendHTTP() {
 static void commitPower() {
   if (!pendingPower[0] || int32_t(millis() - powerAt) < 0)
     return;
-  if (audioRunning || audioSpooling || displayActive() || streaming || networkActive() || workers.active()) {
+  if (captureRunning || audioSpooling || displayActive() || streaming || networkActive() || workers.active()) {
     pendingPower[0] = 0;shutdownRequested=false;
     event("/sys/power", "aborted", "activity_started");
     return;
@@ -874,7 +808,7 @@ static void commitPower() {
   }
 }
 static void inputTask(void *) {
- while(true){if(inputMutex&&xSemaphoreTake(inputMutex,0)==pdTRUE){for(size_t i=0;i<3;++i)buttonGestures.sample(i,!digitalRead(pins::buttons[i]),millis(),presentedJob.load());xSemaphoreGive(inputMutex);}vTaskDelay(pdMS_TO_TICKS(5));}
+ while(true){if(inputMutex&&xSemaphoreTake(inputMutex,0)==pdTRUE){bool levels[sizeof(pins::buttons)/sizeof(pins::buttons[0])];for(size_t i=0;i<sizeof(levels)/sizeof(levels[0]);++i)levels[i]=!digitalRead(pins::buttons[i]);buttonGestures.sampleAll(levels,sizeof(levels)/sizeof(levels[0]),millis(),presentedJob.load());xSemaphoreGive(inputMutex);}vTaskDelay(pdMS_TO_TICKS(5));}
 }
 static const char*invocationGate(const char*,const char*method){
  if(!pendingPower[0]&&!shutdownRequested)return nullptr;
@@ -893,7 +827,7 @@ void begin() {
   resourceStartupError=configureEspMemory(core.resources());
   core.setInvocationGate(invocationGate);
   core.setEventGate(inputGate);core.setEventObserver(scriptEvent);
-  vfs.add(ramFiles);if(psramFiles.available())vfs.add(psramFiles);vfs.add(sdFiles);vfs.add(systemFiles);
+  vfs.add(ramFiles);if(psramFiles.available())vfs.add(psramFiles);vfs.add(sdFiles);vfs.add(systemFiles);vfs.add(flashFiles);
   policies.setValidator(validatePlatformPolicy);
   const char*factory="{}";for(auto asset:boardpack::ASSETS)if(!strcmp(asset.path,"/defaults.json"))factory=asset.data;
   String restored=preferences.getString("policy", factory);policyRestoreOk=policies.restore(restored.c_str());
@@ -910,11 +844,10 @@ void begin() {
            static_cast<unsigned long>(esp_random()));
   spiLease = xSemaphoreCreateBinary();
   giveSPI();
-  eventQueue = xQueueCreate(32, sizeof(PendingEvent));
   audioQueue = xQueueCreate(144, sizeof(AudioChunk));
   spoolQueue = xQueueCreate(48,sizeof(AudioChunk));
 
-  if (!spiLease || !eventQueue || !audioQueue || !spoolQueue) {
+  if (!spiLease || !audioQueue || !spoolQueue) {
     Serial.println("{\"error\":\"allocation_failed\"}");
     while (true)
       delay(1000);
@@ -959,9 +892,10 @@ void begin() {
       {"/sys/connections","read,configure","application service endpoints",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{return connections.invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("connections",s)==n;});}},
       {"/sys/resources","read,configure","shared memory reservations and native scheduling",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure")){if(core.callerOwner())return "system_policy_required";if(auto e=core.resources().configure(a))return e;}core.resources().read(o);return nullptr;}},
       {"/sys/workers","read,submit,cancel,release","isolated background Lua compute, bounded memory and core affinity",workerHandler,workerDescription},
-      {"/sys/runtime","read,load,restart,stop,configure","runtime-loaded Lua applications with memory and execution budgets",scriptHandler,runtimeDescription},
+      {"/sys/operations","request,read,release","retained asynchronous completion observations",[](const char*m,JsonObjectConst a,JsonObject o){return core.operation(m,a,o);}},
+ {"/sys/runtime","read,load,restart,stop,configure","runtime-loaded Lua applications with memory and execution budgets",scriptHandler,runtimeDescription},
       {"/services/nfs","read,start,stop,memory","on-demand NFSv3 TCP storage export",nfsHandler,nfsDescription},
-      {"/net/tcp","read,listen,connect,write,close","bounded nonblocking TCP sockets",tcpHandler,tcpDescription},
+      {"/net/tcp","read,status,listen,connect,write,close","bounded nonblocking TCP sockets",tcpHandler,tcpDescription},
       {"/net/udp","read,open,send,receive,close","IPv4 and IPv6 datagrams",udpHandler,udpDescription},
       {"/net/ws","read,connect,send,receive,close","WS/WSS client messages",wsHandler,wsDescription},
       {"/net/http-server","read,route,remove,respond,release,stop","application HTTP routes and deferred responses",httpAppsHandler,httpServerDescription},
@@ -973,7 +907,13 @@ void begin() {
       {"/net/http","read,request,receive,cancel,release","bounded asynchronous HTTP operations; HTTPS with explicit CA",networkHandler,httpDescription},
       {"/sys/ui","read,capabilities,create,open,update,activate,close,refresh,back,app_load,fonts,font_register,font_unregister","LVGL UI from VFS, configurable input bindings and SD fonts",uiHandler,uiAsyncDescription},
       {"/sys/cache","resolve,prepare","resolve a cache path without I/O; explicitly prepare its directory",cacheHandler},
-      {"/fs", "mounts,stat,list,read,write,remove,mkdir,rename", "virtual file providers; byte offsets as decimal strings",fsHandler},
+      {"/fs", FileService::Methods, "virtual file providers; byte offsets as decimal strings",fsHandler},
+      {"/dev/flash","read,mount,format","internal LittleFS volume; formatting is explicit",[](const char*m,JsonObjectConst,JsonObject o)->const char*{
+        if(strcmp(m,"read")){if(vfs.hasLeasesUnder("/storage/flash")||vfs.pinnedPath("/storage/flash"))return "storage_in_use";
+          if(!strcmp(m,"format")){LittleFS.end();flashMounted=false;if(esp_littlefs_format("spiffs")!=ESP_OK)return "format_failed";}
+          else if(strcmp(m,"mount"))return "unsupported_method";
+          if(!flashMounted){flashMounted=LittleFS.begin(false,"/notes-flash",4,"spiffs");if(!flashMounted)return "mount_failed";}}
+        flashFiles.describe(o);return nullptr;},nullptr,"read"},
       {"/sys/storage","read,list","providers, volumes, quotas and physical capacity",storageHandler},
       {"/sys/bus","read,speeds","physical bus clocks and attainable SD clock ladder; settings under /sys/config",busHandler,busDescription},
       {"/sys/config","read,describe,validate,apply","revisioned policy settings; hardware constraints remain read-only",policyHandler},
@@ -1001,13 +941,17 @@ void begin() {
       {"/dev/usb", "read,write", "USB Serial/JTAG CDC control", usbHandler,usbDescription},
       {"/dev/sd", "read,probe,mount,off",
        "content-blind card link handshake, separate filesystem mount and per-card SPI clock", sdHandler,sdDescription},
+      {"/dev/speech","read,describe,start,stop","compiled audio activity and keyword engines sharing microphone input",[](const char*m,JsonObjectConst a,JsonObject o){return speechService.invoke(m,a,o);},[](JsonObject o){speechService.describe(o);},"read,describe"},
       {"/dev/mic", "read,start,stop,read_chunk", "compressed audio queue; high performance core only",
        micHandler,micDescription},
 
       {"/dev/display", "read,drivers,present,scene,clear,begin,chunk,commit,abort,recover",
        "discovered display drivers; streaming; non-preemptible physical presentation", displayHandler,displayDescription},
   };
-  for (auto d : devices) {
+
+  const struct {const char*path;const char*methods;} reads[]={{"/dev/battery","read"},{"/dev/ble","read,scan_results"},{"/dev/buttons","read,describe"},{"/dev/display","read,drivers"},{"/dev/imu","read,describe"},{"/dev/mic","read"},{"/dev/sd","read"},{"/dev/usb","read"},{"/dev/wifi","read,describe,profiles,scan_results"},{"/fs","mounts,stat,list,read"},{"/net/default","read,describe,profiles,scan_results"},{"/net/http","read"},{"/net/http-server","read"},{"/net/tcp","status"},{"/net/thread","read"},{"/net/udp","read"},{"/net/ws","read"},{"/net/zigbee","read"},{"/services/nfs","read"},{"/services/remote","read,peek"},{"/services/time","read,describe"},{"/sys/board","read"},{"/sys/bus","read,speeds"},{"/sys/cache","resolve"},{"/sys/capabilities","list,describe"},{"/sys/clock","read"},{"/sys/conditions","read"},{"/sys/config","read,describe,validate"},{"/sys/events","read"},{"/sys/jobs","read"},{"/sys/operations","read"},{"/sys/power","read"},{"/sys/radio","read"},{"/sys/resources","read"},{"/sys/rules","read"},{"/sys/runtime","read"},{"/sys/stats","read"},{"/sys/storage","read,list"},{"/sys/timers","read"},{"/sys/ui","read,capabilities,fonts"},{"/sys/wake","read"},{"/sys/workers","read"}};
+for (auto d : devices) {
+    for(auto r:reads)if(!strcmp(d.path,r.path))d.readMethods=r.methods;
     if(!strcmp(d.path,"/dev/imu")&&!imuFound)continue;
     if(!strcmp(d.path,"/net/thread")&&notes_radio_boot_mode()!=1)continue;
     if(!strcmp(d.path,"/net/zigbee")&&notes_radio_boot_mode()!=2)continue;
@@ -1055,9 +999,8 @@ void poll() {
   pollPowerSense();pollImu();
   pollDisplay();
   sampleStats();
-  pollNetwork();tcpService.poll();udpService.poll();httpApps.tick(uptime());remoteRequests.tick(uptime());pollBle();pollMesh();if(wsClient)wsClient->loop();
+  pollNetwork();tcpService.poll();udpService.poll();httpApps.tick(uptime());remoteRequests.tick(uptime());pollBle();pollMesh();pollWebSocket();
   if(nfsService.poll(millis()))event("/services/nfs","handles_invalidated","local_storage_changed");
-  drainEvents();
   dns.processNextRequest();
   http.handleClient();
   static char line[MAX_WIRE + 1];
@@ -1120,7 +1063,7 @@ void poll() {
   conditions.tick(uptime());
   auto powerReading=powerMonitor.read(uptime());
   if(powerReading.valid&&conditions.active("system:low-battery")&&shutdownOnLowBattery()&&
-     !pendingPower[0]&&!audioRunning&&!audioSpooling&&!displayActive()&&!streaming&&!networkActive()&&!shutdownRequested&&!bleOperation&&!zbStarting&&!workers.active()&&
+     !pendingPower[0]&&!captureRunning&&!audioSpooling&&!displayActive()&&!streaming&&!networkActive()&&!shutdownRequested&&!bleOperation&&!zbStarting&&!workers.active()&&
      (!shutdownAttemptAt||uptime()-shutdownAttemptAt>=1000)){
     tcpService.closeAll();udpService.stop();httpApps.clear();stopWebSocket();stopBle();
     if(meshOwner==MeshOwner::Thread){OThread.end();meshOwner=MeshOwner::None;}
@@ -1128,7 +1071,7 @@ void poll() {
     if(nfsService.active()){if(auto error=nfsService.stop()){event("/services/nfs","stop_failed",error);serviceStopped=false;}else event("/services/nfs","stopped","low_battery_shutdown");}
     if(serviceStopped){JsonDocument a,r;powerHandler("shutdown",a.as<JsonObjectConst>(),r.to<JsonObject>());}
   }
-  if (!audioRunning && !audioSpooling && !displayActive() && !streaming && !displayScheduler.pending() &&
+  if (!captureRunning && !audioSpooling && !displayActive() && !streaming && !displayScheduler.pending() &&
       esp_clk_rtc_time() - lastRefreshRTC >= 86220000000ULL) {
     JsonDocument a, r;
     a["force"]=true;
@@ -1140,7 +1083,7 @@ void poll() {
       event("/dev/display", "maintenance_clear");
   }
   core.tick();
-  // Only the main loop touches Core; task producers feed a bounded queue.
+  // Native producers only post events/results; application dispatch stays here.
   if (!pendingPower[0])
     core.dispatch(ruleCursor);
   if (usbEvents) {

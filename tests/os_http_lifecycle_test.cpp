@@ -38,7 +38,7 @@ static Core core;static uint32_t nextJob=1;
 struct Receipt{uint32_t id=0;bool complete=false,ok=false;char state[48]{},error[80]{};};static Receipt jobs[8];static void rememberJob(uint32_t id){jobs[id%8]={};jobs[id%8].id=id;}
 static void emit(const char*p,const char*e,JsonObjectConst d,uint32_t targetOwner=0){core.emit(p,e,d,targetOwner);}
 static void hex(const uint8_t*p,size_t n,char*out){for(size_t i=0;i<n;++i)sprintf(out+i*2,"%02x",p[i]);out[n*2]=0;}
-#include "NetworkService.h"
+#include "drivers/esp32-services/NetworkService.h"
 static void join(){for(auto&t:tasks)t.join();tasks.clear();}
 int main(){JsonDocument a,out,empty,handle;a["url"]="http://test/";a["stream"]=true;a["response_limit"]=8192;a["timeout_ms"]=2000;
  core.add({"/net/http","read,request,receive,cancel,release","",networkHandler});auto owner=core.acquireOwner(),other=core.acquireOwner();

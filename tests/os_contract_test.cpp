@@ -1,4 +1,4 @@
-#include "Defaults.h"
+#include "ports/esp32-c6-e6/Defaults.h"
 #include "CachePath.h"
 #include "DriverRequests.h"
 #include <cassert>

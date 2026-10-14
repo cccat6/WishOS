@@ -157,6 +157,38 @@ function on_start() request() end""".replace('HTTP_TARGET',target)
    finally:
     try:rpc('/sys/runtime','stop',ok=False)
     finally:server.shutdown();server.server_close();thread.join()
+  if report.get('ip'):
+   # A LAN peer accepts TCP but never completes the WebSocket handshake.
+   # Native transport waiting must not hold the OS loop or the result journal.
+   listener=socket.socket();listener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);listener.bind(('0.0.0.0',0));listener.listen(1);listener.settimeout(5)
+   accepted=threading.Event();done=threading.Event();peers=[]
+   def stall():
+    try:
+     peer,_=listener.accept();peers.append(peer);accepted.set();done.wait(8)
+    except OSError:pass
+    finally:
+     for peer in peers:peer.close()
+   worker=threading.Thread(target=stall,daemon=True);worker.start()
+   observation=None
+   try:
+    result=rpc('/sys/operations','request',{'path':'/net/ws','method':'connect','args':{'host':host,'port':listener.getsockname()[1],'path':'/stalled'}})['result'];observation=result['completion_id']
+    assert accepted.wait(4),'WS transport did not connect to fixture'
+    latencies=[]
+    for _ in range(20):
+     begin=time.monotonic();rpc('/sys/stats');latencies.append(time.monotonic()-begin);time.sleep(.05)
+    assert max(latencies)<1.0,latencies
+    rpc('/net/ws','close');done.set();worker.join(2);listener.close()
+    for _ in range(80):
+     state=rpc('/net/ws')['result']
+     if not state['started']:break
+     time.sleep(.1)
+    assert not state['started'],'WebSocket transport did not release after close'
+    receipt=rpc('/sys/operations','read',{'id':observation})['result'];assert receipt['ready'],receipt
+    report['ws_stalled_main_loop']={'queries':len(latencies),'max_response_ms':max(latencies)*1000,'mean_response_ms':sum(latencies)*1000/len(latencies),'completion':receipt['event']}
+    report['checks'].append('websocket_stalled_handshake_nonblocking_completion_release')
+   finally:
+    done.set();listener.close();worker.join(2);rpc('/net/ws','close',ok=False)
+    if observation:rpc('/sys/operations','release',{'id':observation},ok=False)
   for code,expected in [("function on_start() while true do end end",'instruction'),("function on_start() local x=string.rep('x',1000000) end",'memory')]:
    fail=rpc('/sys/runtime','load',{'source':code,'memory_bytes':24576,'instruction_budget':3000},ok=False);assert not fail['ok'];assert rpc('/sys/runtime')['result']['fault'];rpc('/sys/runtime','stop');rpc('/sys/stats');report['checks'].append(expected+'_fault_and_recovery')
   rpc('/services/nfs','start',{'provider':'flash','export_path':'/flash'});assert rpc('/services/nfs')['result']['running'];rpc('/services/nfs','stop');assert rpc('/services/nfs')['result']['owned_heap_bytes']==0;report['checks'].append('nfs_start_stop_release')

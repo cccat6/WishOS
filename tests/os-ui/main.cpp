@@ -1,3 +1,4 @@
+#include "UiMemory.h"
 #include "PackedFont.h"
 #include <lvgl_private.h>
 #ifdef NDEBUG
@@ -10,13 +11,15 @@
 #include "drivers/e6/E6Profiles.h"
 #include "ScriptHost.h"
 #include "Vfs.h"
-#include "Defaults.h"
+#include "ports/esp32-c6-e6/Defaults.h"
 #include "SystemFiles.h"
 #include "display/Content.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
 #include <vector>
+static size_t uiAllocCalls=0,uiFailAt=SIZE_MAX;
+static void*uiFaultResize(void*p,size_t n){if(!n){free(p);return nullptr;}if(uiAllocCalls++==uiFailAt)return nullptr;return realloc(p,n);}
 uint32_t millis(){static uint32_t t=0;return ++t;}
 namespace notesos {
 static Core core;static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));static char appScope[48]="system";static Vfs vfs;static SystemFiles systemFiles;class CountedFiles:public MemoryFiles {public:bool failOnce=false;size_t largestRead=0,totalRead=0,readOps=0;CountedFiles():MemoryFiles("ram","/storage/ram","ram"){}const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{if(failOnce){failOnce=false;got=0;return "spi_busy";}++readOps;largestRead=std::max(largestRead,n);auto e=MemoryFiles::read(p,at,b,n,got);totalRead+=got;return e;}};
@@ -86,10 +89,37 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  assert(!files.write("/broken.png",0,brokenPng,sizeof brokenPng,true,wrote));
  const char*brokenUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"image","imageProps":{"src":"broken.png"}}]}]})";
  assert(!files.write("/broken-ui.json",0,(const uint8_t*)brokenUi,strlen(brokenUi),true,wrote));assert(prepareUi("/storage/ram/broken-ui.json"));assert(!renderUiBand(0,stripe));assert(!strcmp(uiError,"image_decode_failed"));assert(prepareUi("/system/ui/home.json"));
+ // Decoder admission follows the bytes, including upper-case and unrelated
+ // extensions. All three files exceed the same declared decoded-image budget.
+ std::ifstream pngInput("tests/os-ui/oversize.png",std::ios::binary);
+ std::vector<uint8_t> pngBytes((std::istreambuf_iterator<char>(pngInput)),{});assert(!pngBytes.empty());
+ for(auto extension:{"png","PNG","bin"}){
+  std::string path=std::string("/oversize.")+extension;
+  assert(!files.write(path.c_str(),0,pngBytes.data(),pngBytes.size(),true,wrote));
+  std::string page=std::string(R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"image","imageProps":{"src":"oversize.)")+extension+R"("}}]}]})";
+  assert(!files.write("/oversize-ui.json",0,(const uint8_t*)page.data(),page.size(),true,wrote));
+  assert(!prepareUi("/storage/ram/oversize-ui.json"));assert(!strcmp(uiError,"large_png_requires_streamable_asset"));
+ }
+ assert(renderUiBand(0,stripe));
+ JsonDocument pngPolicy,pngReply;deserializeJson(pngPolicy,R"({"changes":[{"resource":"/sys/ui","settings":{"png_decode_budget_bytes":65536}}]})");
+ assert(!policies.apply(pngPolicy.as<JsonObjectConst>(),pngReply.to<JsonObject>()));assert(prepareUi("/storage/ram/oversize-ui.json"));if(!renderUiBand(0,stripe)){std::cerr<<"PNG error: "<<uiError<<std::endl;abort();}
+ pngPolicy["changes"][0]["settings"]["png_decode_budget_bytes"]=16384;assert(!policies.apply(pngPolicy.as<JsonObjectConst>(),pngReply.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));
  // Registration does not trust glyph offsets in a runtime-provided font.
  put(16+('?' -32)*16+12,0xffffffff,4);assert(!files.write("/bad-font.nmf",0,fontData.data(),fontData.size(),true,wrote));a.clear();a["id"]="invalid";a["file"]="/storage/ram/bad-font.nmf";a["size"]=22;assert(!strcmp(uiHandler("font_register",a.as<JsonObjectConst>(),r.to<JsonObject>()),"font_glyph_range"));assert(vfs.canMutate("/storage/ram/bad-font.nmf"));
+ // Inject a genuine allocator failure at each retained-tree allocation. The
+ // current tree survives every rejected candidate and can still be rendered.
+ core.resources().heap(ResourceBudget::Region::Internal,{nullptr,nullptr,nullptr,uiFaultResize});
+ size_t allocationBoundaries=0;
+ for(size_t pass=0;pass==0||pass<=allocationBoundaries;++pass){
+  uiFailAt=SIZE_MAX;assert(prepareUi("/storage/ram/updated.json"));auto previousRoot=uiRoot;
+  uiAllocCalls=0;uiFailAt=pass?pass-1:SIZE_MAX;bool accepted=prepareUi("/system/ui/home.json");
+  if(!pass)allocationBoundaries=uiAllocCalls;uiFailAt=SIZE_MAX;
+  if(!accepted){assert(uiRoot==previousRoot);assert(!strcmp(uiError,"ui_memory_budget"));}
+  assert(renderUiBand(0,stripe));
+ }
+ std::cout<<"UI retained-tree allocation boundaries "<<allocationBoundaries<<" passed\n";
  JsonDocument resources;resources["memory_limit_bytes"]=uint32_t(core.resources().promised()+1);assert(!core.resources().configure(resources.as<JsonObjectConst>()));assert(!prepareUi("/system/ui/home.json"));assert(!strcmp(uiError,"ui_memory_budget"));resources["memory_limit_bytes"]=nullptr;assert(!core.resources().configure(resources.as<JsonObjectConst>()));assert(prepareUi("/system/ui/home.json"));
- for(;;){JsonDocument state;presentationState.describe(state.to<JsonObject>());if(!state["views"].size())break;uint32_t id=state["views"][0]["id"];unsigned slot=presentationState.slot(id);assert(!presentationState.close(id,0));freeUiDocument(slot);}assert(core.resources().promised()==0);
+ for(;;){JsonDocument state;presentationState.describe(state.to<JsonObject>());if(!state["views"].size())break;uint32_t id=state["views"][0]["id"];unsigned slot=presentationState.slot(id);assert(!presentationState.close(id,0));freeUiDocument(slot);}resetUiRenderer();assert(core.resources().promised()==0);
  // The real factory entrypoint uses the exact runtime/GUI loader used by a user
  // replacement. No special native boot path or system-owned button bindings.
  core.add({"/sys/ui","read,app_load,open,update,refresh,back,close", "",uiHandler,uiAsyncDescription});
