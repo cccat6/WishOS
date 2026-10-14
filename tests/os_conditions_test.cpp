@@ -1,6 +1,6 @@
-#include "../firmware/AgenticOS/src/Conditions.h"
+#include "../firmware/WishOS/src/Conditions.h"
 #include "compositions/agentic-notes-e6/Defaults.h"
-#include "../firmware/AgenticOS/src/PowerMonitor.h"
+#include "../firmware/WishOS/src/PowerMonitor.h"
 #include <cassert>
 #include <cmath>
 #include <cctype>

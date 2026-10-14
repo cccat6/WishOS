@@ -1,7 +1,7 @@
 #include "compositions/agentic-notes-e6/Defaults.h"
-#include "../firmware/AgenticOS/src/Vfs.h"
+#include "../firmware/WishOS/src/Vfs.h"
 #include "drivers/e6/E6Driver.h"
-#include "../firmware/AgenticOS/src/PowerSense.h"
+#include "../firmware/WishOS/src/PowerSense.h"
 #include <cassert>
 #include <iostream>
 #include <vector>

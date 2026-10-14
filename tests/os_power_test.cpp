@@ -1,4 +1,4 @@
-#include "../firmware/AgenticOS/src/PowerMonitor.h"
+#include "../firmware/WishOS/src/PowerMonitor.h"
 #include "compositions/agentic-notes-e6/Defaults.h"
 #include <cassert>
 #include <cmath>
