@@ -53,6 +53,13 @@ through `/sys/runtime read`. Failures follow the runtime's application fault pol
 Stopping, replacing or rebooting an application drops its callback registrations;
 startup code re-registers them. They never execute in a hardware ISR.
 
+Known implementation gap at system revision `62c2843`: ordinary event-ring overflow
+can discard a completion notification and leave its request callback pending. A
+missing callback does not prove the operation failed or did not execute. Inspect
+the driver's advertised result interface before retrying a mutation. Reliable
+completion retention/recovery is planned in [the system plan](../../../docs/agent-os-plan.md#f01-完成通知会被普通事件覆盖); the current wrapper alone does not provide it.
+
+
 `notes.request` uses `/sys/capabilities describe` metadata:
 
 ```json

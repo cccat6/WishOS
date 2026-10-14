@@ -34,6 +34,7 @@ of either public repository.
 - Runtime examples: `examples/agent-os/`
 - Agent guidance: `skills/agentic-notes-hardware/`
 - Implemented interfaces and limits: `docs/agent-os-runtime.md`
+- Current requirements, audit gaps and completion gates: [system plan](docs/agent-os-plan.md)
 
 Build using `tools/build_agentic_os.sh`; select a board with `NOTES_OS_BOARD`.
 The default board is `e6-nova-c6`. `esp32-c3-runtime` is a headless development port
