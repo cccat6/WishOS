@@ -1,12 +1,13 @@
 # Hardware packages
 
-The repository has four layers, selected together for one firmware target:
+The repository has five source areas, selected together for one firmware target:
 
 | Location | Responsibility |
 |---|---|
 | `firmware/AgenticOS/src/` | Shared runtime, registry, scheduling, presentation, VFS and resource policy |
 | `hardware/agent-os/drivers/` | Reusable device/protocol engines and SDK adapters; native limits and dependencies |
-| `hardware/agent-os/ports/` + `boards/` | Native composition/lifecycle plus pins, electrical topology, partitions and resource defaults |
+| `hardware/agent-os/platforms/` | MCU/SDK/toolchain capabilities; no assumed device peripheral set |
+| `hardware/agent-os/compositions/` + `boards/` | A particular device design: native composition/lifecycle, pins, topology, partitions and resource defaults |
 | `hardware/agent-os/runtime/` | Replaceable initial UI, input behavior and startup references, selected by each board |
 
 Runtime applications never edit a pin map, load native code, create RTOS tasks or
@@ -19,8 +20,8 @@ Build the existing board:
 NOTES_OS_BOARD=e6-nova-c6 tools/build_agentic_os.sh
 ```
 
-Copy that board directory to make a wiring/UI variant. Set `port` to the existing
-port (relative paths are preferable in repository contributions), edit `board.json` and select its `runtime` package, then select the directory
+Copy that board directory to make a wiring/UI variant. Select its MCU `platform`, reuse its native `composition` when the topology matches,
+then edit `board.json` and select its `runtime` package, then select the directory
 with `NOTES_OS_BOARD=/path/to/my-board`. This changes the generated sketch only;
 it never edits core source. `python3 tools/prepare_board_package.py /path/to/my-board`
 validates the package before compiling. Pin conflicts, unavailable pins, required
@@ -49,27 +50,41 @@ values use its selected runtime package. Sharing a driver does not require shari
 the initial UI. `BoardPackage.h` is generated per target and for host test fixtures;
 no default board identity or factory pages are stored in kernel source.
 
-For a different MCU/display/peripheral combination, add a native port directory
-containing `port.json`, its `entry` include and a partition file. Its entry implements
-`notesos::begin/poll` through `Hardware.h` and registers native drivers in `Core`.
-The port declares its FQBN, compile flags, capacity, required pins, supported GPIOs,
-pin constraints, hardware scalar fields, button count and display geometry. A port
-can use its own native headers/sources under its directory. The build stages the
-port under `src/selected`; include reusable OS headers via `../Header.h`. Its
-`drivers` and the board's permitted optional `drivers` select a dependency closure;
-only those directories are staged under `src/drivers`. A driver may declare a
-trusted build hook for native SDK/archive preparation. No board-name branches are
-needed in the builder. See the [driver contribution contract](drivers/README.md). Native
-sources are trusted build inputs, never downloaded and executed by a user app.
+A chip model is not a device model. Two devices using ESP32-C6FH4 can have
+unrelated displays, input devices, pin assignments, power circuits and startup UIs.
+The platform does not select E6, an IMU, three buttons, a microphone or an SD slot.
 
-The generic package generator does not require C6, E6, three buttons, SPI or an IMU.
-The current `esp32-c6-e6` port does require its particular topology. Its screen is
-still the E6 implementation: naming the PCB “Nova” does not implement a Nova driver.
-Touch, ADC button ladders, rotary input, codec/microphone types, audio output and new
-sensors are additional driver instances, discovered through the same open registry;
-there is no closed device-type enum. Actuator adapters are also allowed by this registry; vehicle behavior stays in runtime applications. Reference hardware does not imply an implemented or physically validated port.
+A device's `board.json` independently references:
 
-The current port uses FreeRTOS: native capture/storage/network tasks, serialized
+- `platform`: MCU family/SDK target, supported chip variants and silicon GPIO facts.
+- `composition`: compiled native service/driver instances and initialization, bus,
+  power and error-recovery coordination for that device topology.
+- `pins` and `hardware`: wiring and electrical parameters for that composition.
+- `fqbn`, `partition_file`, `application_bytes`: this device's memory/build layout.
+- `runtime`: its initial UI/interaction package, independent of MCU and drivers.
+
+A new design using an existing MCU reuses its platform and the applicable drivers.
+When its peripheral combination differs, add a native `composition.json` and entry
+implementing `notesos::begin/poll` and registering the actual resource instances.
+When only wiring/electrical parameters or initial UI differ, reuse the composition
+and change the device manifest. A new MCU needs a platform adapter and validated
+SDK/toolchain support; it does not require a new copy of the portable kernel.
+
+The native composition declares required signals, device-specific constraints,
+geometry and optional compiled drivers. The platform supplies silicon GPIO facts;
+it does not prescribe the signal names or application behavior. Only selected
+native sources are staged under `src/selected` and `src/drivers`. A driver may
+provide a trusted native build hook; see the [contribution contract](drivers/README.md).
+
+`compositions/agentic-notes-e6` describes our particular Notes design, not all C6
+hardware. Its implemented panel backend is E6; the PCB name does not imply a Nova
+adapter exists. Touch, codecs, cameras, six-axis sensors, different button counts
+and other combinations can register their own resources through the same kernel.
+The same-MCU/different-topology host fixture verifies that unrelated hardware and
+UI can be selected without inheriting the E6 device's pins, drivers or CI build scope.
+It is a schema/build-selection test, not an implemented or validated LCD product.
+
+The current device compositions use FreeRTOS: native capture/storage/network tasks, serialized
 resource dispatch and optional isolated compute workers. On an SMP port, workers
 can request an allowed core through `/sys/workers`; drivers/RTOS own scheduling and
 bus locks. No application sets task priority above system work or touches a shared
@@ -140,7 +155,7 @@ notifications; the service loop delivers application events.
 
 The E6 engine, fixed profiles and palettes reside in
 `hardware/agent-os/drivers/e6/`. The C6 package binds those engines to GPIO/SPI,
-file/scene/UI sources and power in `ports/esp32-c6-e6/E6Display.inc` and
+file/scene/UI sources and power in `compositions/agentic-notes-e6/E6Display.inc` and
 `E6UiSurface.inc`. All E6 profiles share one scheduler and one physical resource.
 The native binding also provides `displayInputBusy()`; the shared input policy
 uses that state without referencing an E6 phase or GPIO.
@@ -150,7 +165,7 @@ required to use E6's column bands or keep a full frame in RAM.
 
 To port another screen, implement/compose its native engine and binding in a new
 port, describe its actual profiles/formats/completion conditions, and select that
-port from `board.json` when compiling. No hot driver loading or runtime GPIO editing
+composition from `board.json` when compiling. No hot driver loading or runtime GPIO editing
 is provided. The portable Core, scheduler and runtime application ABI remain the
 same. The binding must retain buffers until native I/O has finished reading them;
 continuous scanout buffers remain owned by the driver after a presentation receipt.
@@ -164,8 +179,8 @@ presentation profiles. Host fixtures cover immediate transfer, DMA, EPD BUSY and
 frame-latched continuous scanout with the same scheduler. Actual non-E6 panel
 implementations are future adapters, not hidden capabilities of the E6 build.
 
-Compiled component and asset limits belong to `port.json`. A board's optional
-`drivers` selects only components advertised by that port. For example,
+Compiled component and asset limits belong to each `composition.json`. A board's optional
+`drivers` selects only components admitted by its native composition. For example,
 the C6 package selects a pinned WakeNet9s component; another port does not inherit
 that choice automatically. `asset_file_limit_bytes` and `asset_budget_bytes` are
 build admission limits, separate from application VM memory. Asset entries may
@@ -185,7 +200,7 @@ list needs editing for a new board. The same graph drives the local builder and
 `.github/workflows/firmware.yml`:
 
 - Board or board-only runtime changes build that board.
-- A port, reusable driver or shared runtime asset builds its consumers.
+- A device composition, MCU platform, reusable driver or shared runtime asset builds its consumers.
 - Portable kernel/build dependency changes build all affected targets.
 - Documentation/reference-only changes run host checks without firmware builds.
 - Workflow dispatch accepts one board id, or `all`; a new board PR needs only its

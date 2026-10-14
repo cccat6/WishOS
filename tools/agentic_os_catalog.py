@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from prepare_board_package import ROOT, HARDWARE, load, driver_packages, runtime_package, asset_sources
+from prepare_board_package import ROOT, HARDWARE, load, driver_packages, runtime_package, asset_sources, platform_package
 from prepare_arduino import lock as dependency_lock
 
 def catalog():
@@ -15,7 +15,7 @@ def catalog():
         if board['id']!=file.parent.name or board['id'] in result:raise ValueError('catalog directory/id mismatch')
         drivers=driver_packages(board,port)
         runtime,_=runtime_package(directory,board)
-        paths={directory,port_directory,runtime,*asset_sources(directory,board).values()}
+        paths={directory,port_directory,platform_package(board)[0],runtime,*asset_sources(directory,board).values()}
         paths.update(path for path,_ in drivers.values())
         dependencies=set(port.get('dependencies',[]))
         for _,driver in drivers.values():
@@ -26,7 +26,7 @@ def catalog():
             if spec.get('patch'):paths.add((ROOT/'tools/dependencies'/spec['patch']).resolve())
         result[board['id']]={
             'directory':directory,'board':board,'port':port,'drivers':drivers,
-            'dependencies':sorted(dependencies),'paths':paths,
+            'dependencies':sorted(dependencies),'paths':{path.resolve() for path in paths},
         }
     return result
 

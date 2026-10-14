@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and materialize a board/port package without editing the OS source."""
+"""Compose MCU platform, device wiring/native composition and runtime assets."""
 import argparse
 import hashlib
 import json
@@ -50,6 +50,15 @@ def runtime_package(root, board):
     if package.get('format')!='notes-runtime-package/1':raise ValueError('invalid runtime package')
     return directory,package
 
+def platform_package(board):
+    name=board['platform']
+    if not isinstance(name,str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}',name):raise ValueError('invalid platform id')
+    directory=HARDWARE/'platforms'/name
+    spec=read_json(directory/'platform.json')
+    if spec.get('format')!='notes-platform/1' or spec.get('id')!=name:raise ValueError('invalid MCU platform')
+    if board.get('mcu') not in spec['mcu_variants']:raise ValueError('platform/MCU mismatch')
+    return directory,spec
+
 def asset_sources(root, board):
     directory,package=runtime_package(root,board)
     sources={k:(directory,v) for k,v in package.get('assets',{}).items()}
@@ -61,20 +70,29 @@ def load(package):
     b = read_json(root / 'board.json')
     if b.get('format') != 'notes-board/1' or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', b.get('id','')):
         raise ValueError('invalid board format/id')
-    port = (root / b['port']).resolve()
-    p = read_json(port / 'port.json')
-    if p.get('format') != 'notes-port/1' or b.get('mcu') != p.get('mcu'):
-        raise ValueError('port/MCU mismatch')
+    _,platform=platform_package(b)
+    port = (root / b['composition']).resolve()
+    composition = read_json(port / 'composition.json')
+    if composition.get('format')!='notes-composition/1' or b['platform'] not in composition['platforms']:
+        raise ValueError('composition/platform mismatch')
+    # MCU capabilities do not define peripherals. A concrete device combines the
+    # MCU with its own native composition, signal names, partition layout and UI.
+    p={**composition,'platform_id':platform['id'],'platform':platform['family'],
+       'target':platform['target'],'toolchain':platform['toolchain'],
+       'available_gpios':platform['available_gpios'],'package_pins':platform.get('package_pins',{}),
+       'drivers':platform.get('drivers',[])+composition.get('drivers',[])}
+    p.update({k:b[k] for k in ('fqbn','application_bytes','partition_file')})
+    if not inside(root,b['partition_file']).is_file():raise ValueError('device partition table missing')
     if not inside(port, p['entry']).is_file():
-        raise ValueError('port entry missing')
+        raise ValueError('native composition entry missing')
     if b.get('display') != p.get('display'):
-        raise ValueError('display geometry not supported by selected port')
+        raise ValueError('display geometry not supported by selected composition')
     for key in ['asset_file_limit_bytes','asset_budget_bytes']:
         if key in p and (type(p[key]) is not int or p[key]<1):raise ValueError('invalid port asset budget')
     driver_packages(b,p)
     pins = b['pins']
     if set(pins) != set(p['required_pins']):
-        raise ValueError('pin set does not match selected port')
+        raise ValueError('pin set does not match selected hardware composition')
     if any(not re.fullmatch(r'[A-Z][A-Z0-9_]*', k) for k in pins):
         raise ValueError('invalid pin signal')
     if any(type(v) is not int or v not in p['available_gpios'] for v in pins.values()):
@@ -86,7 +104,7 @@ def load(package):
             raise ValueError(f'{signal} incompatible with required hardware capability')
     h = b.get('hardware',{})
     if set(h) != set(p.get('hardware_fields',[])):
-        raise ValueError('hardware fields do not match port')
+        raise ValueError('hardware fields do not match hardware composition')
     for k,v in h.items():
         if not re.fullmatch(r'[a-z][a-z0-9_]*',k) or type(v) not in (bool,int,float) or (type(v) is not bool and not 0 < v < 1_000_001):
             raise ValueError('invalid hardware scalar: '+k)
@@ -142,12 +160,16 @@ def generate(package, output):
     asset_hashes={k:hashlib.sha256(v.encode() if isinstance(v,str) else v).hexdigest() for k,v in assets.items()}
     drivers=driver_packages(b,p)
     driver_hashes={name:{str(f.relative_to(directory)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(directory.rglob('*')) if f.is_file() and '__pycache__' not in f.parts} for name,(directory,_) in drivers.items()}
-    fingerprint=hashlib.sha256(json.dumps({'board':b,'port':p,'assets':asset_hashes,'port_files':port_hashes,'drivers':driver_hashes},sort_keys=True).encode()).hexdigest()
+    _,platform=platform_package(b)
+    partition_hash=hashlib.sha256(inside(root,b['partition_file']).read_bytes()).hexdigest()
+    fingerprint=hashlib.sha256(json.dumps({'board':b,'composition':p,'platform':platform,'partitions':partition_hash,'assets':asset_hashes,'composition_files':port_hashes,'drivers':driver_hashes},sort_keys=True).encode()).hexdigest()
     lines=['#pragma once','#include <stddef.h>','#include <stdint.h>',f'#define NOTES_HAS_VBUS_ADC {int(b.get("hardware",{}).get("vbus_clamps_battery_adc",False))}','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};',f'inline constexpr char STARTUP_SCRIPT[]={literal(b["startup"].get("script",""))};','struct Asset {const char*path;const char*data;size_t size;};','inline constexpr Asset ASSETS[]={']
     lines.insert(9,f'inline constexpr size_t STARTUP_MEMORY_BYTES={b["startup"].get("memory_bytes") or 0};')
     _,runtime=runtime_package(root,b)
     lines.insert(9,f'inline constexpr char RUNTIME_ID[]={literal(runtime.get("id","board-local"))};')
     lines.insert(9,f'inline constexpr char DRIVERS[]={literal(",".join(drivers))};')
+    lines.insert(9,f'inline constexpr char PLATFORM_ID[]={literal(b["platform"])};')
+    lines.insert(9,f'inline constexpr char COMPOSITION_ID[]={literal(p["id"])};')
     for key,value in sorted(assets.items()):
         raw=value.encode() if isinstance(value,str) else value
         encoded=literal(value) if isinstance(value,str) else '"'+''.join(f'\\x{x:02x}' for x in raw)+'"'
@@ -177,7 +199,7 @@ def stage(package, sketch):
     for name,(directory,_) in driver_packages(b,p).items():
         shutil.copytree(directory,driver_root/name,ignore=shutil.ignore_patterns('__pycache__','*.py','driver.json','*.md'))
     (sketch/'src/Hardware.cpp').write_text('#include "Hardware.h"\n#include "selected/'+p['entry']+'"\n')
-    shutil.copy2(inside(port,p['partition_file']),sketch/'partitions.csv')
+    shutil.copy2(inside(Path(package),b['partition_file']),sketch/'partitions.csv')
     (sketch/'board-manifest.json').write_text(json.dumps(b,indent=2)+'\n')
     return b,p
 

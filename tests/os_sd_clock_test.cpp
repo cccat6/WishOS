@@ -1,5 +1,5 @@
 #include "SdClockPlan.h"
-#include "ports/esp32-c6-e6/Defaults.h"
+#include "compositions/agentic-notes-e6/Defaults.h"
 #include <cassert>
 #include <cstring>
 using namespace notesos;

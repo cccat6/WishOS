@@ -46,6 +46,25 @@ class BuildTests(unittest.TestCase):
     self.assertEqual(catalog.select(['hardware/agent-os/boards/community-c3/board.json']),['community-c3'])
     self.assertEqual(catalog.select(['hardware/agent-os/runtime/headless-suite/assets/setup.html']),['community-c3','esp32-c3-runtime'])
 
+ def test_same_mcu_different_device_topology_has_independent_build_scope(self):
+  with tempfile.TemporaryDirectory() as temp:
+   root=Path(temp);hardware=root/'hardware/agent-os';shutil.copytree(boardpack.HARDWARE,hardware)
+   device=hardware/'boards/community-c6-lcd';shutil.copytree(hardware/'boards/e6-nova-c6',device)
+   composition=hardware/'compositions/c6-lcd-fixture';composition.mkdir()
+   (composition/'Port.inc').write_text('// Host schema fixture, not an implemented LCD adapter.\n')
+   (composition/'composition.json').write_text(json.dumps({'format':'notes-composition/1','id':'c6-lcd-fixture',
+    'platforms':['esp32-c6'],'entry':'Port.inc','drivers':[],'required_pins':['BUTTON','LCD_CLK','LCD_DATA','TOUCH_IRQ'],
+    'hardware_fields':[],'button_count':1,'display':{'width':240,'height':280}}))
+   board=json.loads((device/'board.json').read_text());board.update(id='community-c6-lcd',composition='../../compositions/c6-lcd-fixture',
+    drivers=[],pins={'BUTTON':7,'LCD_CLK':18,'LCD_DATA':19,'TOUCH_IRQ':5},buttons=['BUTTON'],hardware={},display={'width':240,'height':280},
+    runtime='../../runtime/headless-suite');(device/'board.json').write_text(json.dumps(board))
+   with patch.object(boardpack,'HARDWARE',hardware),patch.object(catalog,'HARDWARE',hardware),patch.object(catalog,'ROOT',root):
+    entries=catalog.catalog();self.assertEqual(entries['community-c6-lcd']['board']['mcu'],entries['e6-nova-c6']['board']['mcu'])
+    self.assertNotIn('e6',entries['community-c6-lcd']['drivers'])
+    self.assertEqual(catalog.select(['hardware/agent-os/compositions/c6-lcd-fixture/Port.inc']),['community-c6-lcd'])
+    self.assertEqual(catalog.select(['hardware/agent-os/platforms/esp32-c6/platform.json']),['community-c6-lcd','e6-nova-c6'])
+    self.assertEqual(catalog.select(['hardware/agent-os/drivers/e6/E6Driver.h']),['e6-nova-c6'])
+
  def test_staging_discards_unselected_drivers_and_previous_default_ui(self):
   with tempfile.TemporaryDirectory() as temp:
    stage=Path(temp)/'AgenticOS'

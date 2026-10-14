@@ -11,7 +11,7 @@
 #include "drivers/e6/E6Profiles.h"
 #include "ScriptHost.h"
 #include "Vfs.h"
-#include "ports/esp32-c6-e6/Defaults.h"
+#include "compositions/agentic-notes-e6/Defaults.h"
 #include "SystemFiles.h"
 #include "display/Content.h"
 #include <cassert>
@@ -26,7 +26,7 @@ static Core core;static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTI
 static CountedFiles files;
 static bool resolveFile(const char*in,char*full,const char*&rel,FileProvider*&p){if(!normalizePath("/",in,full,256))return false;p=vfs.resolve(full,rel);return p;}
 #include "UiService.h"
-#include "../../hardware/agent-os/ports/esp32-c6-e6/E6UiSurface.inc"
+#include "../../hardware/agent-os/compositions/agentic-notes-e6/E6UiSurface.inc"
 static unsigned uiQueueCalls=0;static bool deferUi=false;static ScriptHost*callbackRuntime=nullptr;static PresentationState::Stamp lastUiStamp;
 static unsigned micStarts=0;
 static const char*defaultUiDriver(){return "test.rgb565";}

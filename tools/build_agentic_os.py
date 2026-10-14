@@ -96,7 +96,7 @@ def build(package, stage, output):
     revision=subprocess.check_output([git,'rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     dirty=bool(subprocess.check_output([git,'status','--porcelain','--untracked-files=normal'],cwd=ROOT,text=True))
     manifest={'format':'notes-firmware-build/1','board':board['id'],'mcu':board['mcu'],'target':port['target'],
-              'port':port['id'],'drivers':list(drivers),'runtime':board.get('runtime'),
+              'platform':port['platform_id'],'composition':port['id'],'drivers':list(drivers),'runtime':board.get('runtime'),
               'revision':revision,'worktree_dirty':dirty,'fqbn':port['fqbn'],
               'arduino_cli':lock()['cli_version'],'arduino_core':toolchain,
               'source_sha256':tree_digest(stage/'src'),'lock_sha256':hashlib.sha256(json.dumps(lock(),sort_keys=True).encode()).hexdigest(),

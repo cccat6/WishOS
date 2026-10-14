@@ -1,0 +1,31 @@
+{
+  "format": "notes-composition/1",
+  "id": "headless-runtime",
+  "entry": "Port.inc",
+  "flags": [
+    "-DSPI_DRIVER_SELECT=3",
+    "-DUSE_SD_CRC=1"
+  ],
+  "required_pins": [],
+  "pin_constraints": {},
+  "display": null,
+  "hardware_fields": [],
+  "button_count": 0,
+  "exclude_sources": [
+    "Content.cpp",
+    "display",
+    "UiMemory.cpp"
+  ],
+  "asset_file_limit_bytes": 16384,
+  "asset_budget_bytes": 32768,
+  "drivers": [],
+  "optional_drivers": [],
+  "dependencies": [
+    "ArduinoJson",
+    "WebSockets",
+    "ESP32NFS"
+  ],
+  "platforms": [
+    "esp32-c3"
+  ]
+}

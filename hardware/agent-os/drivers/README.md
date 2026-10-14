@@ -2,7 +2,7 @@
 
 Put a reusable controller/protocol implementation in `drivers/<id>/`, with a
 `driver.json` manifest. Pins, board power topology and interactions belong to the
-port/board/runtime package respectively. The kernel knows resource methods and
+MCU platform/device/runtime package respectively. The kernel knows resource methods and
 completion contracts, not a closed list of sensor or display model names.
 
 ```json
@@ -17,7 +17,7 @@ completion contracts, not a closed list of sensor or display model names.
 ```
 
 `platforms` and `targets` are optional compatibility restrictions, not capability
-advertisements. `requires` names other drivers. A port declares required `drivers`
+advertisements. `requires` names other drivers. A native device composition declares required `drivers`
 and permitted `optional_drivers`; a board selects optional drivers using `drivers`.
 The resolver rejects cycles, unknown ids and unsupported targets before staging.
 Source files are staged at `src/drivers/<id>/`; use `drivers/<id>/...` includes and
@@ -27,13 +27,13 @@ compiled. Normal headers/sources need no build hook.
 For a native archive/SDK integration, optional `build_hook` names a local Python
 module. `prepare(context)` may return `libraries` and `flags`; `link(context,
 properties)` returns Arduino build-property overrides after compiler properties
-are available. Context includes the board, port, stage, output, dependency paths
+are available. Context includes the device, effective hardware selection, stage, output, dependency paths
 and a build-local native directory. Hooks are trusted source code reviewed in a
 PR. They must use pinned inputs and may not modify the installed SDK or firmware
 source. The C6 radio adapter demonstrates callback ABI validation without silently
 discarding duplicate symbols. A new hook does not require a kernel branch.
 
-The native port binds the implementation to buses and pins, initializes it in
+The native device composition binds the implementation to buses and pins, initializes it in
 electrically correct order, and registers its actual capabilities in `Core`:
 
 - Describe supported parameters, read/write restrictions, units and settings scope.
@@ -47,13 +47,19 @@ electrically correct order, and registers its actual capabilities in `Core`:
 - Put initial pages and application sequences in a runtime package. Motors may
   expose bounded commands and stop semantics; navigation/choreography remains app code.
 
-For a wiring-only variant, reuse the native port and change its board manifest. For
-a new topology, add a port that implements `notesos::begin/poll`, composes drivers,
+For a wiring-only variant, reuse the native composition and change its board manifest. For
+a new topology, add a composition that implements `notesos::begin/poll`, composes drivers,
 and declares its own pin constraints and resource requirements. Do not copy or edit
-the portable kernel for a board port. Multiple driver instances are constructed and
-registered by that port; selecting a source component does not force one instance.
+the portable kernel for a new device design. Multiple driver instances are constructed and
+registered by that composition; selecting a source component does not force one instance.
 
 A PR needs behavioral tests for lifecycle/failure/ownership, a selected-target
 build and an honest hardware validation record. Contribute source/license evidence
 for any imported data or libraries. See the repository PR template and the parent
 README for changed-target CI and per-board release artifacts.
+
+A platform id such as `esp32-c6` never determines the peripheral set. A device
+references a platform and a native composition independently. Shared-MCU designs
+can have unrelated resource instances, signal names, power sequences and initial
+UI packages. Silicon constraints live in `platforms/`; topology-specific constraints
+live in `compositions/` and the device manifest.

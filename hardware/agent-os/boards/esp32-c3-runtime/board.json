@@ -2,7 +2,6 @@
   "format": "notes-board/1",
   "id": "esp32-c3-runtime",
   "name": "ESP32-C3 runtime development board",
-  "port": "../../ports/esp32-c3-runtime",
   "mcu": "ESP32-C3",
   "pins": {},
   "hardware": {},
@@ -16,5 +15,10 @@
     "memory_limit_bytes": null
   },
   "runtime": "../../runtime/headless-suite",
-  "drivers": []
+  "drivers": [],
+  "platform": "esp32-c3",
+  "composition": "../../compositions/headless-runtime",
+  "fqbn": "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=custom,FlashMode=dio",
+  "application_bytes": 2097152,
+  "partition_file": "partitions.csv"
 }

@@ -31,7 +31,8 @@ of either public repository.
 
 - System: `firmware/AgenticOS/`
 - Native drivers and SDK adapters: `hardware/agent-os/drivers/`
-- Board composition and wiring: `hardware/agent-os/ports/`, `hardware/agent-os/boards/`
+- MCU platform capabilities: `hardware/agent-os/platforms/`
+- Device composition and wiring: `hardware/agent-os/compositions/`, `hardware/agent-os/boards/`
 - Initial runtime suites: `hardware/agent-os/runtime/`
 - Runtime examples: `examples/agent-os/`
 - Agent guidance: `skills/agentic-notes-hardware/`
