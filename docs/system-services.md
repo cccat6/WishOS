@@ -162,3 +162,9 @@ application. A presentation effect follows the display/presentation completion
 contract. On e-paper, BUSY must finish before another panel command; the shared SPI
 bus is released while the panel independently refreshes. User input continues to be
 captured, while its dispatch policy and page behavior are configurable.
+
+Managed downloads carry their owning remote request identity. Cancellation, expiry
+or a rejected AI result releases that request's transfer lease even when the
+server link is down. Late chunks cannot restart a cancelled request. Link-only
+interruption retains a live transaction for resume; partial files remain available
+for explicit cleanup and continue counting toward quota.
