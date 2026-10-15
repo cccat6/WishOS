@@ -108,6 +108,7 @@ build/os-ui/notes_memory_test
 build/os-ui/notes_app_test
 build/os-ui/notes_applications_test
 build/os-ui/notes_managed_services_test
+build/os-ui/notes_agent_actions_test
 build/os-ui/notes_failure_test
 "$PYTHON" -m unittest discover -s tests -p 'test_board_packages.py' -v
 "$PYTHON" -m unittest discover -s tests -p 'test_os_build.py' -v

@@ -12,7 +12,7 @@ static constexpr unsigned WsIncoming=4;
 struct WsMessage{uint32_t id=0,generation=0;bool binary=false;size_t size=0;uint8_t data[1024]{};};
 struct WsSession {
  WebSocketsClient client;String ca,headers;QueueHandle_t incoming=nullptr,outgoing=nullptr;
- std::atomic<bool>connected{false},stop{false},done{false},readable{false},waitingMemory{false};std::atomic<uint32_t>drops{0},generation{0};
+ std::atomic<bool>connected{false},stop{false},done{false},readable{false},waitingMemory{false};std::atomic<uint32_t>drops{0},generation{0},failures{0};
  uint32_t id=0,owner=0,reservation=0;bool firstResult=false,steadyBudget=false;size_t residentBytes=0;WsMessage assembly;bool assembling=false;
  ~WsSession(){client.onEvent([](WStype_t,uint8_t*,size_t){});client.disconnect();if(incoming)vQueueDelete(incoming);if(outgoing)vQueueDelete(outgoing);if(reservation)core.resources().release(reservation);}
 };
@@ -23,7 +23,7 @@ static void wsEvent(WsSession&s,const char*name,uint32_t message=0,size_t bytes=
 #endif
  JsonDocument d;d["connection_id"]=s.id;d["owner"]=s.owner;if(message)d["message_id"]=message;d["bytes"]=bytes;emit(WISHOS_WS_SOURCE,name,d.as<JsonObjectConst>(),s.owner);}
 static void wsReceive(WsSession&s,WStype_t type,uint8_t*data,size_t n){
- if(type==WStype_CONNECTED||type==WStype_DISCONNECTED){bool linked=type==WStype_CONNECTED;if(linked){++s.generation;core.resources().used(s.reservation,core.resources().reservationLimit(s.reservation));s.steadyBudget=true;}s.connected=linked;if(!linked){s.assembling=false;WsMessage abandoned;while(xQueueReceive(s.incoming,&abandoned,0)==pdTRUE){}while(xQueueReceive(s.outgoing,&abandoned,0)==pdTRUE)wsEvent(s,"send_failed",abandoned.id,abandoned.size);}
+ if(type==WStype_CONNECTED||type==WStype_DISCONNECTED){bool linked=type==WStype_CONNECTED;if(linked){++s.generation;core.resources().used(s.reservation,core.resources().reservationLimit(s.reservation));s.steadyBudget=true;}s.connected=linked;if(!linked){++s.failures;s.assembling=false;WsMessage abandoned;while(xQueueReceive(s.incoming,&abandoned,0)==pdTRUE){}while(xQueueReceive(s.outgoing,&abandoned,0)==pdTRUE)wsEvent(s,"send_failed",abandoned.id,abandoned.size);}
   if(!s.firstResult){s.firstResult=true;wsEvent(s,linked?"connected":"failed");}else wsEvent(s,linked?"connected":"disconnected");return;}
  bool initial=type==WStype_FRAGMENT_TEXT_START||type==WStype_FRAGMENT_BIN_START,more=type==WStype_FRAGMENT||type==WStype_FRAGMENT_FIN,whole=type==WStype_TEXT||type==WStype_BIN;
  if(!initial&&!more&&!whole)return;
@@ -47,23 +47,25 @@ static void stopWebSocket(){if(wsSession)wsSession->stop=true;}
 static void pollWebSocket(){if(wsSession&&wsSession->done.load()){delete wsSession;wsSession=nullptr;wsClient=nullptr;wsOwner=0;}else if(wsSession&&uxQueueMessagesWaiting(wsSession->incoming)&&!wsSession->readable.exchange(true))wsEvent(*wsSession,"readable");}
 static const char*wsHandler(const char*m,JsonObjectConst a,JsonObject out){
  if(strcmp(m,"read")&&strcmp(m,"validate_connect"))pollWebSocket();if(wsSession&&strcmp(m,"validate_connect")&&strcmp(m,"read")&&core.callerOwner()&&core.callerOwner()!=wsOwner)return "ws_owned_by_other";
- const char*fields=(!strcmp(m,"connect")||!strcmp(m,"validate_connect"))?"host,path,ca_pem,tls,verify_peer,port,reconnect_ms,headers":!strcmp(m,"send")?"text,hex":"";
+ const char*fields=(!strcmp(m,"connect")||!strcmp(m,"validate_connect"))?"host,path,ca_pem,tls,verify_peer,port,reconnect_ms,headers,ping_interval_ms,pong_timeout_ms,pong_misses":!strcmp(m,"send")?"text,hex":"";
  for(auto f:a)if(!Policies::choice(fields,f.key().c_str()))return "unknown_ws_argument";
  if(!strcmp(m,"close")){stopWebSocket();out["state"]=wsSession?"closing":"closed";return nullptr;}
  if(!strcmp(m,"connect")||!strcmp(m,"validate_connect")){
   if(wsSession&&strcmp(m,"validate_connect"))return "ws_already_open";
   for(auto key:{"host","path","ca_pem"})if(a.containsKey(key)&&(!a[key].is<const char*>()||strlen(a[key].as<const char*>())!=a[key].as<JsonString>().size()))return "ws_string_required";
-  for(auto key:{"port","reconnect_ms"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "ws_integer_required";
+  for(auto key:{"port","reconnect_ms","ping_interval_ms","pong_timeout_ms","pong_misses"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "ws_integer_required";
   if((a.containsKey("tls")&&!a["tls"].is<bool>())||(a.containsKey("verify_peer")&&!a["verify_peer"].is<bool>()))return "ws_boolean_required";
   if(a.containsKey("headers")&&!a["headers"].is<JsonObjectConst>())return "ws_headers_required";
   const char*host=a["host"]|"",*path=a["path"]|"/",*ca=a["ca_pem"]|"";bool tls=a["tls"]|false;uint32_t port=a["port"]|(tls?443u:80u),retry=a["reconnect_ms"]|5000u;
   if(!*host||strlen(host)>253||strpbrk(host,"\r\n")||strpbrk(path,"\r\n")||path[0]!='/'||strlen(path)>512||port<1||port>65535||strlen(ca)>8192||retry<100)return "ws_configuration";
+  uint32_t ping=a["ping_interval_ms"]|20000u,pong=a["pong_timeout_ms"]|5000u,misses=a["pong_misses"]|2u;
+  if(ping&&ping<100||ping>3600000||pong<100||pong>120000||!misses||misses>10)return "ws_heartbeat_configuration";
   String extra;for(auto field:a["headers"].as<JsonObjectConst>()){const char*value=field.value().as<const char*>();if(!value||strlen(value)!=field.value().as<JsonString>().size()||strpbrk(field.key().c_str(),"\r\n:")||strpbrk(value,"\r\n"))return "invalid_header";extra+=field.key().c_str();extra+=": ";extra+=value;extra+="\r\n";if(extra.length()>512)return "header_limit";}
   if(!strcmp(m,"validate_connect"))return nullptr;
   auto reservation=core.resources().acquire(tls?70000:28000,core.callerOwner());if(!reservation)return "network_memory_budget";
   auto s=new(std::nothrow)WsSession;if(!s){core.resources().release(reservation);return "memory_low";}s->reservation=reservation;s->owner=core.callerOwner();s->id=nextWs++;
   s->incoming=xQueueCreate(WsIncoming,sizeof(WsMessage));s->outgoing=xQueueCreate(2,sizeof(WsMessage));if(!s->incoming||!s->outgoing){delete s;return "memory_low";}
-  s->ca=ca;s->headers=extra;s->client.onEvent([s](WStype_t t,uint8_t*p,size_t n){wsReceive(*s,t,p,n);});s->client.setReconnectInterval(retry);s->client.setExtraHeaders(s->headers.c_str());
+  s->ca=ca;s->headers=extra;s->client.onEvent([s](WStype_t t,uint8_t*p,size_t n){wsReceive(*s,t,p,n);});s->client.setReconnectInterval(retry);if(ping)s->client.enableHeartbeat(ping,pong,misses);s->client.setExtraHeaders(s->headers.c_str());
   if(tls){if(a["verify_peer"]|true){if(s->ca.length())s->client.beginSslWithCA(host,port,path,s->ca.c_str(),"");else s->client.beginSslWithBundle(host,port,path,platformCaBundleStart,platformCaBundleEnd-platformCaBundleStart,"");}else s->client.beginSSL(host,port,path,nullptr,"");}else s->client.begin(host,port,path,"");
   s->residentBytes=sizeof(WsSession)+(WsIncoming+2)*sizeof(WsMessage)+2*sizeof(StaticQueue_t)+6144+s->ca.length()+s->headers.length();core.resources().used(reservation,s->residentBytes);
   if(xTaskCreate(wsTask,"notes-ws",6144,s,1,nullptr)!=pdPASS){delete s;return "task_allocation_failed";}
@@ -81,6 +83,8 @@ static const char*wsHandler(const char*m,JsonObjectConst a,JsonObject out){
  if(strcmp(m,"read"))return "unsupported_method";out["waiting_for_memory"]=wsSession&&wsSession->waitingMemory.load();out["started"]=wsSession!=nullptr;out["connected"]=wsSession&&wsSession->connected;out["closing"]=wsSession&&wsSession->stop;out["dropped_messages"]=wsSession?wsSession->drops.load():0;out["message_limit_bytes"]=1024;out["send_queue_capacity"]=2;
  if(wsSession){out["connection_id"]=wsSession->id;out["owner"]=wsOwner;out["buffered_messages"]=uxQueueMessagesWaiting(wsSession->incoming);out["queued_sends"]=uxQueueMessagesWaiting(wsSession->outgoing);}return nullptr;
 }
+
+static void wsNativeDescription(JsonObject o){wsAsyncDescription(o);auto h=o["heartbeat"].to<JsonObject>();h["ping_interval_ms"]=20000;h["pong_timeout_ms"]=5000;h["pong_misses"]=2;h["disable_with_ping_interval_ms"]=0;o["settings"]["ping_interval_ms"]["maximum"]=3600000;o["settings"]["pong_timeout_ms"]["maximum"]=120000;o["settings"]["pong_misses"]["maximum"]=10;}
 
 #ifdef WISHOS_WS_DEFAULT_SOURCE
 #undef WISHOS_WS_SOURCE

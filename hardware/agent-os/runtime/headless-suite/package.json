@@ -7,7 +7,8 @@
     "/lib/input.lua": "@runtime/lib/input.lua",
     "/control/control.js": "@runtime/control/control.js",
     "/control/display.js": "@runtime/control/display.js",
-    "/services.json": "assets/services.json"
+    "/services.json": "assets/services.json",
+    "/lib/ai.lua": "@runtime/lib/ai.lua"
   },
   "gzip_assets": [
     "/setup.html",

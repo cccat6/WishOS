@@ -42,5 +42,8 @@ int main(){Core core;systemCore=&core;Vfs vfs;MemoryFiles memory("apps","/apps",
  write(memory,"/one.lua","function on_start() error('failed start') end");a.clear();a["id"]="one";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();apps.poll();apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="launcher");
  // A user-selected launcher disappearing must not remove the recovery route.
  a.clear();a["launcher"]="one";assert(!apps.invoke("configure",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(!memory.remove("/one.json"));apps.requestHome();apps.poll();apps.poll();assert(!apps.invoke("read",JsonObjectConst(),o.to<JsonObject>())&&o["current"]=="launcher");
+ // A broken factory launcher must stop in recoverable control state, not
+ // repeatedly recreate a faulted VM on every loop iteration.
+ write(memory,"/home.lua","function on_start() error('broken factory UI') end");apps.requestHome();apps.poll();apps.poll();auto sequence=core.sequence();for(unsigned i=0;i<100;++i)apps.poll();assert(core.sequence()==sequence);apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["recovery_required"]==true&&o["runtime"]==false);write(memory,"/home.lua","function on_start() print('recovered') end");apps.requestHome();apps.poll();apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["recovery_required"]==false&&o["current"]=="launcher");
  host.invoke("stop",JsonObjectConst(),o.to<JsonObject>());std::cout<<"Installed application references, deferred activation, replaceable launcher and independent recovery input passed\n";
 }

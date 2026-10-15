@@ -35,6 +35,7 @@ static const uint8_t platformCaBundleStart[1]{},platformCaBundleEnd[1]{};
 struct WebSocketsClient{
  std::function<void(WStype_t,uint8_t*,size_t)>callback;const char*headers=nullptr;bool connected=false;unsigned loops=0;
  void onEvent(std::function<void(WStype_t,uint8_t*,size_t)>fn){callback=fn;}void setReconnectInterval(unsigned){}void setExtraHeaders(const char*h){headers=h;}
+ void enableHeartbeat(uint32_t,uint32_t,uint8_t){}
  void beginSslWithBundle(const char*,unsigned,const char*,const uint8_t*,size_t,const char*){}
  void beginSSL(const char*,unsigned,const char*,const char*,const char*){}
  void begin(const char*,unsigned,const char*,const char*){}void beginSslWithCA(const char*,unsigned,const char*,const char*,const char*){}

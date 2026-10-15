@@ -7,22 +7,20 @@ services. Concrete cloud/model/Harness protocols stay in the independent Hub.
 
 ## AI transactions
 
-`/services/ai` accepts input and `target: application|system|both`.
-The service owns the request independently of its originating VM. The origin is a
-receipt destination, not the task lifetime. A result is `wishos-result/1`: a small
-application payload plus typed system effects referencing verified local assets.
-Whole results are validated before effects; model prose is never executed as an
-OS command. Application replies and system receipts are separate. Application
-replacement occurs after completion notification reaches the event loop. A missing
-origin cannot retarget the reply to a new VM. Callers can explicitly cancel before
-irreversible effect admission; already accepted external work may require outcome
-reconciliation.
+`/services/ai` accepts input; its result is an ordered program of application
+messages and system resource calls. There are exactly two action types,
+`application` and `system`, with arbitrary alternation. No `both` target or fixed
+one-effect cap. See [the v2 action contract](agent-actions.md) for fields,
+recipient identity, acknowledgements, previous-result/asset references and
+incremental JSONL sequences. The system owns the sequence independently of its
+originating VM. A reply cannot be implicitly retargeted to a replacement instance.
 
-Large results use server staging and bounded transfers, never code/base64 images
-inside the control envelope. Novel/source downloads happen at the Hub. The Hub
-builds content indexes, extracts required JSON/XML fields and renders complex
-content as appropriate. Small bounded HTTP requests may run locally through system
-HTTP. A UI-only result is a presentation artifact, not a forced app installation.
+The system preflights structure before executing, then follows each service's
+completion contract. Failure stops later steps; completed side effects are not
+rolled back or replayed. Large resources and plans are transferred separately,
+verified and streamed from the selected store. A UI-only presentation is a system
+UI call, not a forced application installation. The default receiver library
+recovers pending application actions if a notification hint is missed.
 
 ## Storage
 
@@ -62,12 +60,10 @@ explicit POSIX TZ rule and can be configured without changing monotonic timers.
 ## Implementation boundaries
 
 Current APIs: `/services/ai`, `/sys/transfers`, `/sys/logs`, `/sys/telemetry`,
-`/services/time`, `/net/proxy`. The AI broker admits one typed system effect per
-result; it can be an app activation, a presentation-only document, or a declared
-resource call. Application data may accompany it for a `both` target. The server
-coalesces results from one Harness operation; the device retains bounded effect
-receipts so simultaneous steer requests cannot apply the same effect twice.
-Cross-boot replay of a previously prepared system effect requires reconciliation.
+`/services/time`, `/net/proxy`. AI sequences use `wishos-result/2`; application
+processing acknowledgements and system operation receipts are separate. Duplicate
+upstream operation IDs share one authoritative execution. Reboot changes the
+execution epoch and requires reconciliation instead of replaying old mutations.
 
 Transfer metadata stays small. Streams resume within the current boot using the
 same identity, file index, verified offset and digest. Complete files are renamed
@@ -158,7 +154,7 @@ force a particular offline page.
 
 AI completion means the declared system operation completed. Application activation
 is separate from any later display refresh or remote action initiated by that new
-application. A presentation effect follows the display/presentation completion
+application. A system UI action follows the display/presentation completion
 contract. On e-paper, BUSY must finish before another panel command; the shared SPI
 bus is released while the panel independently refreshes. User input continues to be
 captured, while its dispatch policy and page behavior are configurable.

@@ -1,7 +1,7 @@
 // Native composition integration; portable mechanisms do not know ESP32 pins.
 static Diagnostics diagnostics(core);
 static AssetTransfers transfers(core,vfs,bootId);
-static AgentService agentService(core,transfers);
+static AgentService agentService(core,transfers,vfs);
 class EspTelemetry:public TelemetryBackend {
  std::atomic<int>state_{0};std::atomic<bool>cancel_{false};char url_[256]{},body_[768]{},error_[64]{};uint32_t reservation_=0;ProxySettings proxy_;
  static void run(void*p){auto&s=*static_cast<EspTelemetry*>(p);int status=-1;{
@@ -33,7 +33,7 @@ static void registerManagedServices(){
  core.add({"/sys/logs","read,write,configure","structured bounded diagnostics",logHandler,[](JsonObject o){diagnostics.describe(o);},"read"});
  core.add({"/sys/telemetry","read,configure,flush","optional registration and aggregate diagnostics",telemetryHandler,[](JsonObject o){telemetry.describe(o);},"read"});
  core.add({"/sys/transfers","read,configure,begin,file,chunk,close_file,commit,abort,release","verified streamed resources",transferHandler,[](JsonObject o){transfers.describe(o);},"read"});
- core.add({"/services/ai",AgentService::Methods,"managed AI tasks and result application",agentHandler,[](JsonObject o){agentService.describe(o);},"read"});
+ core.add({"/services/ai",AgentService::Methods,"managed AI tasks and result application",agentHandler,[](JsonObject o){agentService.describe(o);},"read,read_action,read_result"});
  core.diagnostics(&diagnostics,[](void*p,const char*s,const char*e,JsonObjectConst d,uint32_t owner){static_cast<Diagnostics*>(p)->event(s,e,d,owner);},[](void*p,const char*s,const char*m,const char*e,uint32_t owner){static_cast<Diagnostics*>(p)->call(s,m,e,owner);});
  JsonDocument config,logs;const char*download=nullptr;String downloadText;
  for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/services.json")){deserializeJson(config,a.data,a.size);break;}

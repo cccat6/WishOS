@@ -4,7 +4,7 @@
 #include <ctype.h>
 namespace notesos {
 struct ProxySettings {
- char mode[16]="direct",host[254]{},username[128]{},password[128]{},bypass[256]="localhost,127.0.0.1";uint16_t port=1080;uint32_t timeout=10000;
+ char mode[16]="direct",host[254]{},username[128]{},password[128]{},bypass[256]="localhost,127.0.0.1,.local";uint16_t port=1080;uint32_t timeout=10000;
  bool applies(const char*target)const{if(!strcmp(mode,"direct"))return false;char list[256];strcpy(list,bypass);char*save=nullptr;for(char*p=strtok_r(list,",",&save);p;p=strtok_r(nullptr,",",&save)){if(!strcasecmp(p,target))return false;if(*p=='.'){size_t a=strlen(target),b=strlen(p);if(a>b&&!strcasecmp(target+a-b,p))return false;}}return true;}
  void describe(JsonObject o)const{o["mode"] = JsonString(mode);o["host"] = JsonString(host);o["port"]=port;o["username"] = JsonString(username);o["password"] = JsonString(password);o["bypass"] = JsonString(bypass);o["timeout_ms"]=timeout;}
  static const char*merge(JsonObjectConst a,ProxySettings&n){for(auto f:a){const char*k=f.key().c_str();if(!Core::containsMethod("mode,host,port,username,password,bypass,timeout_ms",k))return "unknown_proxy_setting";

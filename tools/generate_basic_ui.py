@@ -65,7 +65,7 @@ for name,title in names.items():
     nodes += [label('caption'+key,title_,28,y,w-56,16,'#687882'),label(key,value,28,y+27,w-100,24)]
    if not wide:nodes += [label('ap','设备热点',28,top+361,w-56,20)]
   elif name=='services':
-   for i,(key,title_) in enumerate([('mcp','MCP'),('agent','上位 Agent'),('llm','LLM API')]):
+   for i,(key,title_) in enumerate([('connection','服务状态'),('endpoint','连接地址'),('route','AI 服务')]):
     y=top+i*(70 if wide else 122);nodes += [label('caption'+key,title_,28,y,w-56,16),label(key,'未配置',28,y+26,w-56,20,h=68 if not wide else 44)]
    if not wide:nodes += [label('help','在设备网页中配置服务地址。\n保存地址不代表已经连接。',28,536,w-56,20)]
   elif name=='storage':

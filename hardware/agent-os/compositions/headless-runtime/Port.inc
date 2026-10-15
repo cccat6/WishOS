@@ -1,3 +1,4 @@
+#include "drivers/esp32-services/LinkEndpoints.h"
 #include "drivers/esp32-services/FlashVolumeService.h"
 #include "../AgentService.h"
 #include "../Diagnostics.h"
@@ -98,7 +99,7 @@ void begin(){
  {"/dev/wifi","read,describe,configure,write,profiles,profile_set,profile_remove,connect,resume_auto,disconnect,off,scan_start,scan_results,scan_clear","Wi-Fi configuration",wifiHandler},
  {"/net/default","read,configure,connect","default network",wifiHandler},
  {"/net/http","read,request,receive,cancel,release","HTTP client",networkHandler,httpAsyncDescription},
- {"/net/ws","read,connect,send,receive,close","WS/WSS transport",wsHandler,wsAsyncDescription},
+ {"/net/ws","read,connect,send,receive,close","WS/WSS transport",wsHandler,wsNativeDescription},
  {"/net/tcp","read,status,listen,connect,write,close","TCP transport",[](const char*m,JsonObjectConst a,JsonObject o){return sockets.invoke(m,a,o);}},
  {"/net/http-server","read,route,respond,remove,release,stop","application routes",[](const char*m,JsonObjectConst a,JsonObject o){return routes.invoke(m,a,o);}},
  {"/services/remote","read,submit,peek,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},remoteAsyncDescription},

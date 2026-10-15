@@ -61,7 +61,7 @@ struct Timer {
 inline bool copy(char *dst, size_t capacity, const char *src) {
   if (!src || strlen(src) >= capacity)
     return false;
-  strcpy(dst, src);
+  memmove(dst, src, strlen(src)+1);
   return true;
 }
 inline const char*argumentFields(JsonObjectConst a,const char*fields){for(auto f:a){bool found=false;const char*p=fields;size_t n=strlen(f.key().c_str());while(*p){const char*end=strchr(p,',');size_t z=end?size_t(end-p):strlen(p);if(z==n&&!strncmp(p,f.key().c_str(),n)){found=true;break;}if(!end)break;p=end+1;}if(!found)return "unknown_argument";}if(a.containsKey("persist")&&!a["persist"].is<bool>())return "persist_type";return nullptr;}

@@ -5,64 +5,75 @@ Discover `/services/ai`, `/sys/transfers`, `/sys/logs`, `/sys/telemetry`,
 presentation are OS services. UI descriptions, styles and interaction choices are
 ordinary runtime assets. A UI-only result does not need a new executable app.
 
-## AI request and response
+## AI requests and ordered results
 
-Applications call `/services/ai submit {target,input,request_id?,timeout_ms?}`.
-Targets are `application`, `system`, `both`. Text uses `input.text`; recording uses
-`input.kind="voice"` plus `recording_id` and an optional archive `file`. The system
-owns the task after admission even if the requesting VM exits. It returns an ID;
-use the declared async completion contract and read the final result by ID.
-Release completed receipts. Returning to the launcher is not a cancellation of
-already accepted external work. Explicit cancel can prevent an unadmitted local
-effect, not roll back an email already sent by an upstream tool.
+Applications call `/services/ai submit {input,request_id?,timeout_ms?}`. No request
+or result has a `both` target. The request payload is `wishos-ai/2`; results are
+`wishos-result/2` with an ordered `actions` array. Every action has exactly one
+of two types: `application` or `system`. They can alternate, including notifications
+before and after an application replacement. The system owns the task independently
+of its originating VM. Returning Home does not undo already accepted remote work.
 
-Do not implement provider/Harness/ASR protocols in an application. System AI
-configuration selects a server route; the Hub implements the concrete provider
-protocols. Ordinary bounded HTTP/API work may still use `/net/http`. A deterministic
-remote route need not invoke an LLM. Configuring a URL alone is not a successful
-protocol connection or working model integration.
+A system action is `{type:"system",path,method,args}` using a discovered resource.
+It waits for the resource's declared completion. Synchronous acceptance, deferred
+configuration and physical completion still mean what that resource advertises.
+An application action is `{type:"application",recipient:"origin"|"foreground",
+topic,data,wait:"processed"|"queued"}`. Defaults are origin, result and processed.
+Origin identifies the exact originating VM; foreground explicitly chooses the
+current VM when that step executes. Never silently deliver an old reply to a new VM.
 
-The Hub must return a small `wishos-result/1` object. `application` holds data for
-the original instance; `effects` holds a typed system operation. The current
-broker admits one effect per transaction (sequence independent tasks for more):
+For processed actions, handle the `application_action` hint by reading
+`read_action {id,step}`, then `acknowledge {id,step,ok,result?}` after processing.
+Only the selected instance can acknowledge. Pending actions remain readable when
+the event ring loses a hint. The optional `/system/lib/ai.lua` receiver implements
+this subscription plus bounded periodic recovery for ordinary applications:
 
-- `application`: a verified descriptor `path`, `transfer_id`, optional `persist`
-  and `activate`. The system installs and optionally activates it.
-- `presentation`: a verified UI document `path`, `transfer_id` and optional
-  advertised `driver`. The system renders it without replacing the running app.
-- `resource_call`: `path`, `method`, `args` for an advertised capability. Use the
-  typed operations above for runtime/app/transfer operations.
+```lua
+local ai=notes.require('/system/lib/ai.lua')
+local receiver
+function on_start()
+  receiver=ai.listen(function(action,done)
+    -- Render/read/update application state as appropriate.
+    -- Return false for asynchronous handling, then call done(ok, result).
+    -- Returning normally acknowledges successful synchronous processing.
+    print(action.topic)
+  end)
+end
+function on_stop() if receiver then receiver.stop() end end
+```
 
-A system-target task cannot return application-only data; an application-target
-task cannot request system effects. The device validates the envelope before any
-effect, emits `result_ready` before replacement, and reports final completion only
-after the applicable service receipt. Replies never migrate to a replacement VM.
-The system cannot make already executed external side effects transactional.
+Queued actions carry small data in the event and advance immediately. They are not
+a processing barrier. Do not use queued delivery when replacement must wait for
+an application to finish work. A processed acknowledgement also does not prove a
+separately queued display refresh finished; wait on the display operation when
+that is the desired barrier.
 
-## Large resources and local parsing
+Large resources are staged by the Hub, then transferred with file digests into a
+fresh version directory. A result references the verified bundle via top-level
+`transfer_id`; `{$asset:"relative/path"}` resolves an argument within that bundle.
+`{$previous:"application_id"}` obtains a previous step's object field. For more
+complex variables, conditions and loops use the existing runtime application,
+not an invented result-script dialect. A UI-only result can call `/sys/ui` without
+replacing the application.
 
-Use `stage_resource` on the Hub to fetch a book/source URL or store generated text.
-It returns an artifact ID. Return `files:[{path,artifact_id}]` alongside the managed
-result; the Hub negotiates storage, sends bounded binary chunks, and the device
-verifies each file before committing the package. Never put whole books, long code,
-base64 images or large JSON/XML in the small control envelope. Device restart needs
-a new transfer; link interruption within the same boot can resume/reconcile the
-current transfer. Immutable version directories preserve previous packages.
+For sequences too large for the control envelope, stage `actions.jsonl` (one
+action per line) and return `sequence:{path:"actions.jsonl",format:"jsonl"}` instead
+of `actions`. The device preflights and reads it incrementally. There is no fixed
+step-count limit; the advertised action-size and overall task deadline apply.
+Failures stop remaining actions without rolling back completed side effects.
+Cancellation waits for an in-flight native operation to end safely. Resume/read
+receipts before retrying uncertain mutations; do not replay the entire sequence.
 
-Prepare book indexes on the host. Extract only needed JSON/XML fields upstream
-when the response exceeds the device's advertised response/VM budget. Full DOM
-parsing of arbitrary XML/HTML is not an advertised native capability. Local Lua
-JSON decode consumes its VM budget; bounded HTTP does not prove arbitrary JSON
-fits. For graphics, generate supported UI JSON or host-rendered files matching the
-discovered geometry, palette and codecs; do not assume a six-color screen.
+Prepare book indexes and extract large JSON/XML upstream. Full arbitrary XML/HTML
+DOM parsing is not a native capability. A host can generate a UI-only document,
+processed data, or an application package according to the discovered budget and
+formats. Do not assume a six-color screen, particular geometry or PSRAM.
 
-Storage policy chooses ordered provider roots and quotas. Internal Flash requires
-explicit `allow_internal:true`; choose a quota that fits the actual data partition,
-not total chip Flash. A mounted but full card is not a reason to silently switch
-storage. Capacity queries do not mount media. Delivery may explicitly prepare it.
-Retained partial directories consume space and are cleaned explicitly, never by
-formatting or deleting unrelated files. Recording has independent retention rules;
-asset fallback does not permit silent recording-to-Flash.
+Download policy lists ordered providers and quotas. Internal Flash is allowed only
+when explicitly enabled; mounted-full media does not silently redirect downloads.
+Recording retention remains separate. Partial files use quota and are cleaned
+explicitly; cancellation frees leases, never formats a volume. The Hub can stage
+binary output through `POST /api/os/artifacts/upload` without base64 in model output.
 
 ## Time, proxy and diagnostics
 
@@ -96,9 +107,7 @@ application/power policy explicitly wants a final batch. This does not enable an
 opted-out collector. Unsent RAM aggregates may be lost on reset or power loss;
 registration counts are not user counts, and reset reasons distinguish wakeups.
 AI system work remains active after leaving its originating application unless
-explicitly cancelled. Use `activate:false` for a package that should only be
-installed in the background; choose the application target when the active app
-must decide how and whether to present a response.
+explicitly cancelled. Use an install action without a launch action for a background installation; use an application action when that application should decide how to present the result.
 
 Generated binary output can use authenticated Hub
 `POST /api/os/artifacts/upload` (`Content-Type: application/octet-stream`).
