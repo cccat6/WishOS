@@ -24,9 +24,9 @@ controls. Current implementation coverage and limits are listed in
 `docs/agent-os-runtime.md`; this boundary does not imply every application lifecycle
 or update path is already implemented.
 
-This repository contains WishOS and separately selected driver/application packages. It remains private during internal testing. The `hub/` directory is
-an independent Git repository containing the MCP server, Harness adapters and host
-rendering pipeline. E6 waveform research and local credentials/data are not part
+This repository contains WishOS and separately selected driver/application packages. It remains private during internal testing. [WishOS Hub](https://github.com/cccat6/WishOS-Hub) is an independent
+repository containing MCP, user-host Harness connectors, cloud relay and host
+resource processing. A local checkout may live in `hub/`; it is not an OS build dependency. E6 waveform research and local credentials/data are not part
 of either public repository.
 
 - System: `firmware/WishOS/`
@@ -38,6 +38,9 @@ of either public repository.
 - Agent guidance: `skills/agentic-notes-hardware/`
 - Implemented interfaces and limits: `docs/agent-os-runtime.md`
 - System-owned AI, resources, diagnostics, proxy and time: [managed services](docs/system-services.md)
+- Ordered application/system results: [action contract](docs/agent-actions.md)
+- LAN/cloud endpoint selection: [device link](docs/device-link.md)
+- Interrupted operations and recovery evidence: [recovery](docs/recovery.md)
 - Current requirements, audit gaps and completion gates: [system plan](docs/agent-os-plan.md)
 
 Build using `tools/build_wishos.sh`; select a board with `WISHOS_BOARD`.

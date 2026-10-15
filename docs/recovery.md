@@ -59,4 +59,15 @@ not a universal application-memory ceiling or a reason to weaken system reserves
 Tests use the public 20-second connection-attempt default, allowing the SDK's DNS
 wait to finish. Restoration accepts a working configured fallback when proactive
 promotion is disabled. mDNS capability does not guarantee multicast reachability
-on every router; the separately configured public-DNS relay remains a fallback.
+on every router. Repeated local tests included intermittent mDNS timeouts despite
+a successful run; an authenticated IPv4 run passed all eleven checks after the
+header fix. The separately configured public-DNS relay remains a fallback.
+
+A real public-cloud check also connected the C3 to `relay.wishos.dev` using WSS
+with peer verification enabled, and an MCP 2026-07-28 client at `mcp.wishos.dev`
+read `/sys/board` with the current boot guard. Its temporary pairing installation
+was removed afterwards. This exposed and fixed a native WebSocket header framing
+error: extra headers ended in CRLF while the SDK added its own CRLF, prematurely
+ending the HTTP headers. Regression coverage now includes authenticated handshakes.
+This proves the physical device's TLS/RPC path, not screen/audio operation or a
+vendor-model conversation.

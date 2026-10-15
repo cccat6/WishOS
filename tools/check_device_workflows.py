@@ -58,6 +58,8 @@ class Peer:
 class Endpoint:
     def __init__(self):self.peer=None;self.connections=0;self.server=None
     async def handle(self,ws):
+        assert ws.request.headers.get('Authorization')=='Bearer fixture-token'
+        assert ws.request.headers.get('X-Wishos-Fixture')=='control'
         peer=Peer(ws);self.peer=peer;self.connections+=1;await peer.run()
     async def start(self,port=0):
         self.server=await serve(self.handle,'0.0.0.0',port,ping_interval=None);return self.server.sockets[0].getsockname()[1]
@@ -99,7 +101,7 @@ async def main():
         async def online():
             r=await rpc('/dev/wifi');return r if r['connected'] else None
         await wait(online);relay_port=await relay.start()
-        settings={'enabled':True,'endpoints':[{'id':'lan','host':args.host,'port':lan_port,'path':'/os/device?id=fixture','tls':False},{'id':'relay','host':args.host,'port':relay_port,'path':'/os/device?id=fixture','tls':False}],'attempt_timeout_ms':20000,'retry_ms':300,'probe_interval_ms':1000,'idle_ms':250}
+        settings={'enabled':True,'endpoints':[{'id':'lan','host':args.host,'port':lan_port,'path':'/os/device?id=fixture','tls':False,'headers':{'Authorization':'Bearer fixture-token','X-Wishos-Fixture':'control'}},{'id':'relay','host':args.host,'port':relay_port,'path':'/os/device?id=fixture','tls':False,'headers':{'Authorization':'Bearer fixture-token','X-Wishos-Fixture':'control'}}],'attempt_timeout_ms':20000,'retry_ms':300,'probe_interval_ms':1000,'idle_ms':250}
         await rpc('/services/link','configure',{'settings':settings});await wait(lambda:selected('relay'));await relay.peer.ready.wait();report['checks'].append('ordered_failover_to_second_endpoint')
         assert (await relay.peer.call('/sys/board'))['result']['mac']==report['board']['mac'];report['checks'].append('rpc_over_mdns_resolved_hostname' if args.host.endswith('.local') else 'rpc_over_explicit_endpoint')
         # Hold a fragmented request while the preferred endpoint becomes reachable.

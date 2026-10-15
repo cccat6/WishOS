@@ -60,7 +60,7 @@ static const char*wsHandler(const char*m,JsonObjectConst a,JsonObject out){
   if(!*host||strlen(host)>253||strpbrk(host,"\r\n")||strpbrk(path,"\r\n")||path[0]!='/'||strlen(path)>512||port<1||port>65535||strlen(ca)>8192||retry<100)return "ws_configuration";
   uint32_t ping=a["ping_interval_ms"]|20000u,pong=a["pong_timeout_ms"]|5000u,misses=a["pong_misses"]|2u;
   if(ping&&ping<100||ping>3600000||pong<100||pong>120000||!misses||misses>10)return "ws_heartbeat_configuration";
-  String extra;for(auto field:a["headers"].as<JsonObjectConst>()){const char*value=field.value().as<const char*>();if(!value||strlen(value)!=field.value().as<JsonString>().size()||strpbrk(field.key().c_str(),"\r\n:")||strpbrk(value,"\r\n"))return "invalid_header";extra+=field.key().c_str();extra+=": ";extra+=value;extra+="\r\n";if(extra.length()>512)return "header_limit";}
+  String extra;for(auto field:a["headers"].as<JsonObjectConst>()){const char*value=field.value().as<const char*>();if(!value||strlen(value)!=field.value().as<JsonString>().size()||strpbrk(field.key().c_str(),"\r\n:")||strpbrk(value,"\r\n"))return "invalid_header";if(extra.length())extra+="\r\n";extra+=field.key().c_str();extra+=": ";extra+=value;if(extra.length()>512)return "header_limit";}
   if(!strcmp(m,"validate_connect"))return nullptr;
   auto reservation=core.resources().acquire(tls?70000:28000,core.callerOwner());if(!reservation)return "network_memory_budget";
   auto s=new(std::nothrow)WsSession;if(!s){core.resources().release(reservation);return "memory_low";}s->reservation=reservation;s->owner=core.callerOwner();s->id=nextWs++;

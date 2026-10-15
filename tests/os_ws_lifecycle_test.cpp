@@ -39,7 +39,7 @@ struct WebSocketsClient{
  void beginSslWithBundle(const char*,unsigned,const char*,const uint8_t*,size_t,const char*){}
  void beginSSL(const char*,unsigned,const char*,const char*,const char*){}
  void begin(const char*,unsigned,const char*,const char*){}void beginSslWithCA(const char*,unsigned,const char*,const char*,const char*){}
- void loop(){entered=true;while(holdTransport.load())std::this_thread::yield();if(!connected){assert(headers&&strstr(headers,"X-Test: retained"));connected=true;callback(WStype_CONNECTED,nullptr,0);}++loops;}
+ void loop(){entered=true;while(holdTransport.load())std::this_thread::yield();if(!connected){assert(headers&&strstr(headers,"X-Test: retained"));std::string handshake=std::string(headers)+"\r\nUser-Agent: arduino-WebSocket-Client\r\n\r\n";assert(handshake.find("\r\n\r\n")==handshake.size()-4);connected=true;callback(WStype_CONNECTED,nullptr,0);}++loops;}
  bool sendBIN(uint8_t*p,size_t n){callback(WStype_BIN,p,n);return true;}bool sendTXT(uint8_t*p,size_t n){callback(WStype_TEXT,p,n);return true;}
  void disconnect(){if(connected){connected=false;callback(WStype_DISCONNECTED,nullptr,0);}}
 };
