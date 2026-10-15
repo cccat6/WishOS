@@ -3,6 +3,13 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 PYTHON=${PYTHON:-python3}
+"$PYTHON" - <<'PYTHON_CHECK'
+import json, py_compile
+from pathlib import Path
+for filename in json.loads(Path('docs/agent-os-public-sources.json').read_text())['files']:
+    if filename.endswith('.py'):
+        py_compile.compile(filename, doraise=True)
+PYTHON_CHECK
 LIBS=${ARDUINO_LIBRARIES:-$HOME/Documents/Arduino/libraries}
 if [ "$(uname -s)" = Darwin ]; then
   CXX=${CXX:-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++}

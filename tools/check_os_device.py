@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Explicit, identity-checked runtime validation. Never chooses an arbitrary serial port."""
-import argparse,json,time,uuid,urllib.request,socket,threading
+import argparse,json,time,uuid,urllib.request,socket,threading,gzip
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import serial
@@ -26,6 +26,11 @@ def rpc(path,method='read',args=None,timeout=12,ok=True):
    if ok:assert r.get('ok'),(path,method,r.get('error'),r.get('result'))
    return r
  raise TimeoutError(path+' '+method)
+def http_bytes(url):
+ with urllib.request.urlopen(url,timeout=5) as response:
+  data=response.read()
+  return gzip.decompress(data) if response.headers.get('Content-Encoding')=='gzip' else data
+
 def prepare_flash(method="mount"):
  r=rpc('/sys/operations','request',{'path':'/dev/flash','method':method,'args':{}})['result'];ident=r['completion_id']
  try:
@@ -33,7 +38,7 @@ def prepare_flash(method="mount"):
   while time.monotonic()<end:
    result=rpc('/sys/operations','read',{'id':ident})['result']
    if result['ready']:
-    return result['event']=='operation_completed
+    return result['event']=='operation_completed'
    time.sleep(.05)
   raise TimeoutError('flash mount')
  finally:rpc('/sys/operations','release',{'id':ident})
@@ -71,6 +76,8 @@ try:
   assert ntp['last_sync_ms']>old and not ntp['active'],ntp
   clock=rpc('/sys/clock')['result'];assert clock['wall_clock_valid'] and abs(clock['unix_s']-time.time())<5
   report['time_sync']=ntp;report['clock']=clock;report['checks'].append('real_ntp_synchronization')
+ current_network=rpc('/dev/wifi')['result']
+ if current_network.get('connected'):report['ip']=current_network['ip']
  # Memory-region policy rejects unavailable hardware atomically. File caches
  # use the same actual-allocation accounting as runtime instances and services.
  denied=rpc('/sys/resources','configure',{'application_memory':'external'},ok=False)
@@ -111,13 +118,13 @@ end"""
    if any(x.get('event')=='log' and x.get('data',{}).get('message')=='worker_verified' for x in logs):break
   assert any(x.get('event')=='log' and x.get('data',{}).get('message')=='worker_verified' for x in logs),logs
   if report.get('ip'):
-   assert urllib.request.urlopen('http://'+report['ip']+'/app/runtime-test',timeout=5).read()==b'runtime alive'
-   assert urllib.request.urlopen('http://'+report['ip']+'/',timeout=5).read()==b'runtime home'
+   assert http_bytes('http://'+report['ip']+'/app/runtime-test')==b'runtime alive'
+   assert http_bytes('http://'+report['ip']+'/')==b'runtime home'
   report['checks'].append('lua_timer_worker_http_concurrency')
   bad=rpc('/sys/runtime','load',{'source':'invalid Lua !'},ok=False);assert not bad['ok'];assert not rpc('/sys/runtime')['result']['fault']
   rpc('/sys/runtime','stop');assert rpc('/sys/timers')['result']['timers']==[];assert not rpc('/net/http-server')['result']['active']
   if report.get('ip'):
-   assert b'<html' in urllib.request.urlopen('http://'+report['ip']+'/',timeout=5).read().lower()
+   assert b'<html' in http_bytes('http://'+report['ip']+'/').lower()
    report['checks'].append('runtime_homepage_replace_and_release')
   callback_source="""function on_start()
  notes.on('/sys/timers','fired',function(e) print('callback_timer_verified') end,{once=true})
