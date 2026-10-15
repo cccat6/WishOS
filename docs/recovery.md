@@ -21,7 +21,11 @@ failure and native-driver defects are distinct from ordinary connection faults.
 
 Configuration changes validate before persistence/effects. An RPC-originated link
 configuration drains its response before retiring the connection. Stable control
-IDs are retained across network routes. A completed physical operation, a received
+IDs are retained across network routes. A failed read-only precondition is distinct
+from a mutation that was dispatched without a receipt. Safe reads can recover
+within a bounded same-boot window; a mutation can wait for dispatch only while
+its transport proves it has not been sent. Once sent, loss of confirmation
+requires reconciliation rather than automatic replay. A completed physical operation, a received
 packet, and a stored artifact are separate facts.
 
 A result program is not a transaction over arbitrary external systems. If power
@@ -71,3 +75,70 @@ error: extra headers ended in CRLF while the SDK added its own CRLF, prematurely
 ending the HTTP headers. Regression coverage now includes authenticated handshakes.
 This proves the physical device's TLS/RPC path, not screen/audio operation or a
 vendor-model conversation.
+
+
+## Package and server bridge acceptance on 2026-10-16
+
+Native implementation: `095c002506618d7219defa55a3eb6f3f51ff1639`. The public
+host suite, driver-SDK checks and C3/C6 builds pass, including Linux ASan leak
+checks. An adjacent allocator review confirmed LVGL handles zero-size reallocations
+before entering its backend; the shared resource allocator's null/zero release
+was fixed and compile-only admission returns its temporary allocation balance.
+
+The USB-identified disposable C3 passed eight package scenarios: live component
+discovery, stable transfer identity, native validation/install/activation, active
+revision write protection, bad-code rejection without replacing the old VM,
+whole-file replacement with 123,050 unchanged bytes copied locally, stale catalog
+rejection, and an actual reset after copying 1,024 bytes. The last committed
+revision still launched after reboot. Test files and catalog entries were removed.
+
+The final C3 also passed eleven system workflow scenarios: ordered endpoint
+failover, RPC delivery and fragmented-message barriers, response-before-link
+retirement, silent heartbeat failover, invalid configuration preservation,
+application/system action ordering across replacement, a 41-step streamed JSONL
+program, upstream deadline/release, reset during a partial transfer, old-boot
+rejection and restoration of saved endpoint policy without reflashing.
+
+The real local MCP client passed eight package scenarios using the default
+retain-current policy, including guidance resources/prompts/tool fallback,
+preflight rejection before transfer, native admission/activation, single-file
+replacement with local copies, rejected bad/stale replacements retaining the old
+VM, and VFS lease enforcement. The isolated local service and its test files were
+cleaned up. Cloud acceptance is recorded separately; a successful local run is
+not evidence of the public relay or a vendor Harness account.
+
+These checks exercise a headless C3 system composition. C6 compilation and SDK
+adapter checks do not establish the new physical board's display, microphone,
+SD, power circuit, radio coexistence or sensor performance. The E6 research board
+was not used. The final local builds use 1,783,683 bytes / 97,412 static RAM bytes
+on C3, and 3,990,106 bytes / 214,788 static RAM bytes on C6. Runtime heap and
+concurrency availability remain measured, separate quantities; the C6 image is
+close to its selected application partition capacity.
+
+
+The final physical public-cloud run also passed all eight MCP package scenarios
+through `mcp.wishos.dev` and the paired WSS relay, using Hub
+`a5a6399b91bd376616dfd1bec6b44a55b410b382` / Worker version
+`0969e477-1474-4f09-8055-7c9918c12278`. It used the explicit
+`stop_current_before_transfer:true, activate:true` policy. Full preflight and
+boot/catalog checks precede the stop; unchanged app.json and unchanged.bin were
+copied on the C3 while only main.lua was replaced. Bad and stale updates left the
+running instance intact. Native transfer, validation, installation and activation
+were separately confirmed; temporary files, application and cloud installation
+were removed and the prior link settings restored.
+
+The default retain-current policy remains available and passed the real local
+MCP test. Under C3 TLS/old-VM memory pressure it can correctly refuse a new native
+operation without replacing the running instance. The explicit stop strategy is
+upstream deployment orchestration using ordinary system lifecycle calls, not a
+C3 exception in the kernel. A later failure can leave the runtime stopped; prior
+files and recorded receipts remain available for explicit recovery. System
+allocation reserves were not reduced to admit these tests.
+
+A lost precondition-read reply was found during cloud acceptance. Hub now keeps
+known-not-dispatched evidence separate from sent/unknown effects, retries only
+safe preparation or transport-proven unsent work within a same-boot deadline,
+and does not replay uncertain mutations. That shared path has Hub fault-injection
+regressions in addition to the physical successful run. An independent 32-read
+physical cloud probe also passed. These are protocol/device tests, not vendor
+model, account or Harness-session acceptance.

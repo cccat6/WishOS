@@ -154,7 +154,7 @@ async def main():
         for offset in range(0,len(body),1024):await transfer_call('chunk',{'id':tid,'offset':str(offset),'hex':body[offset:offset+1024].hex()})
         await transfer_call('close_file',{'id':tid});await transfer_call('commit',{'id':tid})
         await rpc('/services/remote','complete',{'id':remote,'ok':True,'result':{'format':'wishos-result/2','operation_id':'long-fixture','transfer_id':tid,'sequence':{'path':'actions.jsonl','format':'jsonl'}}})
-        await wait(finished);assert (await rpc('/services/ai','read',{'id':task}))['step']==41;await rpc('/services/ai','release',{'id':task});report['checks'].append('verified_jsonl_plan_runs_with_bounded_memory')
+        await wait(finished);assert (await rpc('/services/ai','read',{'id':task}))['step']==41;await rpc('/services/ai','release',{'id':task});await rpc('/fs','remove',{'file':started['root']+'/actions.jsonl'});await rpc('/fs','remove',{'file':started['root']});report['long_plan_cleanup']=True;report['checks'].append('verified_jsonl_plan_runs_with_bounded_memory')
         # A server that never returns a result cannot pin the request/download forever.
         task=(await rpc('/services/ai','submit',{'input':{'text':'no response'},'timeout_ms':500}))['id']
         async def expired():
