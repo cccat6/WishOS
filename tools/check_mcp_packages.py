@@ -4,7 +4,7 @@ import argparse,json,subprocess,time,sys,threading
 from pathlib import Path
 from serial.tools.list_ports import comports
 from os_client import Client
-p=argparse.ArgumentParser();p.add_argument('--serial-id',required=True);p.add_argument('--hub',required=True,type=Path);p.add_argument('--node',required=True,type=Path);p.add_argument('--mode',choices=['local','cloud'],required=True);p.add_argument('--probe',action='store_true');p.add_argument('--lan-host',help='LAN address of this host, reachable by the selected device (local mode)');p.add_argument('--output',required=True,type=Path);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--serial-id',required=True);p.add_argument('--hub',required=True,type=Path);p.add_argument('--node',required=True,type=Path);p.add_argument('--mode',choices=['local','cloud'],required=True);p.add_argument('--probe',action='store_true');p.add_argument('--stop-before-transfer',action='store_true',help='Explicitly request preflight-then-stop deployment policy');p.add_argument('--lan-host',help='LAN address of this host, reachable by the selected device (local mode)');p.add_argument('--output',required=True,type=Path);a=p.parse_args()
 if a.mode=='local' and not a.lan_host:p.error('--lan-host is required in local mode')
 ports=[p.device for p in comports() if (p.serial_number or '').upper()==a.serial_id.upper()];assert len(ports)==1
 c=Client(port=ports[0],timeout=15);original=None;proc=None;report={};serial_lines=[];drain_stop=threading.Event();drainer=None
@@ -22,7 +22,7 @@ try:
  err=a.output.with_suffix('.stderr.log');err.parent.mkdir(parents=True,exist_ok=True)
  with err.open('w') as stderr:
   proc=subprocess.Popen([str(a.node),'--use-env-proxy',str(Path(__file__).with_suffix('.mjs').resolve())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr,text=True)
-  proc.stdin.write(json.dumps({'hub':str(a.hub.resolve()),'mode':a.mode,'serial_id':a.serial_id.upper(),'lan_host':a.lan_host,'probe':a.probe})+'\n');proc.stdin.flush()
+  proc.stdin.write(json.dumps({'hub':str(a.hub.resolve()),'mode':a.mode,'serial_id':a.serial_id.upper(),'lan_host':a.lan_host,'probe':a.probe,'stop_before_transfer':a.stop_before_transfer})+'\n');proc.stdin.flush()
   for line in proc.stdout:
    try:data=json.loads(line)
    except ValueError:continue

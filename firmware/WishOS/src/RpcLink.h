@@ -32,7 +32,7 @@ public:
  void poll(bool acceptRequests=true){
   if(!transport_.connected(transport_.context)){if(linked_||message_)reset();return;}
   auto generation=transport_.generation(transport_.context);if(linked_&&generation_!=generation)reset();
-  if(!linked_){generation_=generation;frame_=static_cast<uint8_t*>(core_.resources().allocate(FrameBytes));if(!frame_){reset();return;}
+  if(!linked_){generation_=generation;frame_=static_cast<uint8_t*>(core_.resources().allocate(FrameBytes));if(!frame_||!workspace()){reset();return;}
    linked_=true;JsonDocument hello;hello["type"]="hello";hello["abi"]="wishos-rpc/1";hello["boot_id"]=boot_;hello["message_limit_bytes"]=MAX_WIRE;hello["request_window"]=1;hello["frame_bytes"]=FrameBytes;if(!stage(hello)){reset();return;}
   }
   auto frame=frame_;
@@ -40,13 +40,14 @@ public:
   // predecessor's response has entered the transport in order.
   for(unsigned turn=0;turn<4;++turn){
    if(sending_){size_t n=std::min(PayloadBytes,sending_-sent_);memcpy(frame,"WOS1",4);put32(frame+4,outbound_);frame[8]=sent_;frame[9]=sent_>>8;frame[10]=sending_;frame[11]=sending_>>8;memcpy(frame+HeaderBytes,message_+sent_,n);
-    if(!transport_.send(transport_.context,frame,n+HeaderBytes))return;lastActivity_=core_.now();sent_+=n;if(sent_==sending_){sending_=sent_=0;++outbound_;core_.resources().freeAllocation(message_);message_=nullptr;}continue;
+    if(!transport_.send(transport_.context,frame,n+HeaderBytes))return;lastActivity_=core_.now();sent_+=n;if(sent_==sending_){sending_=sent_=0;++outbound_;}continue;
    }
    if(!acceptRequests)return;size_t n=FrameBytes;if(!transport_.receive(transport_.context,frame,n))return;lastActivity_=core_.now();
    if(!receive(frame,n))continue;
    // The one-message window lets receive and reply share storage. Const input
    // makes JSON strings owned by the document before the reply overwrites it.
-   // Release the workspace when drained so idle links do not reserve app RAM.
+   // Keep this shared workspace while connected: an app reaching its memory
+   // ceiling must not prevent control requests from being received.
    message_[total_]=0;JsonDocument request,reply;auto error=deserializeJson(request,static_cast<const char*>(message_),total_);received_=total_=0;
    if(error||!request.is<JsonObject>()){reply["ok"]=false;reply["error"]="invalid_json";reply["boot_id"]=boot_;}
    else invokeEnvelope(core_,request.as<JsonObjectConst>(),reply,boot_,core_.now());
