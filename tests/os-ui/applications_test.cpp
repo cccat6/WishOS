@@ -39,7 +39,7 @@ int main(){Core core;systemCore=&core;Vfs vfs;MemoryFiles memory("apps","/apps",
  host.invoke("stop",JsonObjectConst(),o.to<JsonObject>());a.clear();a["id"]="on-card";assert(!apps.invoke("remove",a.as<JsonObjectConst>(),o.to<JsonObject>()));
  // on_start may fail after its candidate replaces the old VM. The manager
  // still knows which instance faulted and restores the launcher on the next poll.
- write(memory,"/one.lua","function on_start() error('failed start') end");a.clear();a["id"]="one";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();apps.poll();apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="launcher");
+ write(memory,"/one.lua","function on_start() error('failed start') end");a.clear();a["id"]="one";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["last_error"]=="script_start_failed"&&strstr(o["last_detail"]|"","failed start"));apps.poll();apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="launcher");
  // A user-selected launcher disappearing must not remove the recovery route.
  a.clear();a["launcher"]="one";assert(!apps.invoke("configure",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(!memory.remove("/one.json"));apps.requestHome();apps.poll();apps.poll();assert(!apps.invoke("read",JsonObjectConst(),o.to<JsonObject>())&&o["current"]=="launcher");
  // A broken factory launcher must stop in recoverable control state, not

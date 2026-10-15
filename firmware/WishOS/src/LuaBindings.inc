@@ -21,14 +21,14 @@
   static int requireModule(lua_State*L){
     auto&s=self(L);if(!s.loading_)return luaL_error(L,"Import modules during loading; use their functions in callbacks");
     if(!s.reader_)return luaL_error(L,"module_reader_unavailable");const char*name=luaL_checkstring(L,1);char full[256];if(!normalizePath(s.base_,name,full,sizeof full)||strlen(full)<4||strcmp(full+strlen(full)-4,".lua"))return luaL_error(L,"module_path");
-    unsigned slot=0;for(;slot<s.moduleCount_;++slot)if(!strcmp(full,s.modules_[slot]))break;
-    if(slot<s.moduleCount_){if(!s.moduleReady_[slot])return luaL_error(L,"cyclic_module");lua_rawgeti(L,LUA_REGISTRYINDEX,s.moduleRefs_[slot]);return 1;}
-    if(slot==8)return luaL_error(L,"module_capacity");strcpy(s.modules_[s.moduleCount_++],full);
+    unsigned slot=0;for(;slot<s.moduleCount_;++slot)if(!strcmp(full,s.modules_[slot].path))break;
+    if(slot<s.moduleCount_){if(!s.modules_[slot].ready)return luaL_error(L,"cyclic_module");lua_rawgeti(L,LUA_REGISTRYINDEX,s.modules_[slot].ref);return 1;}
+    if(slot==8)return luaL_error(L,"module_capacity");if(slot==s.moduleCapacity_){auto next=static_cast<Module*>(s.core_.resources().reallocate(s.modules_,(slot+1)*sizeof(Module)));if(!next)return luaL_error(L,"module_memory_low");s.modules_=next;s.moduleCapacity_=slot+1;}s.modules_[slot]={};strcpy(s.modules_[s.moduleCount_++].path,full);
     char*source=nullptr;size_t size=0;const char*error=s.reader_(s.readerContext_,full,source,size);
     if(error){free(source);--s.moduleCount_;return luaL_error(L,"%s",error);}s.scratch_=source;
     if(size>8192){s.cleanup();--s.moduleCount_;return luaL_error(L,"module_size");}
     int status=luaL_loadbufferx(L,source,size,full,"t");s.cleanup();if(status!=LUA_OK){--s.moduleCount_;return lua_error(L);}
     char previous[256];strcpy(previous,s.base_);strcpy(s.base_,full);auto slash=strrchr(s.base_,'/');if(slash==s.base_)slash[1]=0;else *slash=0;
     status=lua_pcall(L,0,1,0);strcpy(s.base_,previous);if(status!=LUA_OK){return lua_error(L);}
-    if(lua_isnil(L,-1)){lua_pop(L,1);lua_pushboolean(L,true);}lua_pushvalue(L,-1);s.moduleRefs_[slot]=luaL_ref(L,LUA_REGISTRYINDEX);s.moduleReady_[slot]=true;return 1;
+    if(lua_isnil(L,-1)){lua_pop(L,1);lua_pushboolean(L,true);}lua_pushvalue(L,-1);s.modules_[slot].ref=luaL_ref(L,LUA_REGISTRYINDEX);s.modules_[slot].ready=true;return 1;
   }

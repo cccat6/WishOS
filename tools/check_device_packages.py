@@ -54,7 +54,9 @@ def package(code):
 def deliver(files,base=None,old=None):
     global copied_bytes
     operation('/dev/flash','space')
-    result=transfer('begin',{'bytes':str(sum(map(len,files.values()))),'files':len(files),'request_id':'pkg-'+uuid.uuid4().hex})
+    begin={'bytes':str(sum(map(len,files.values()))),'files':len(files),'request_id':'pkg-'+uuid.uuid4().hex}
+    result=transfer('begin',begin);resumed=transfer('begin',begin);assert resumed['id']==result['id'] and resumed['root']==result['root']
+    if 'transfer_begin_resume_keeps_identity' not in report['checks']:report['checks'].append('transfer_begin_resume_keeps_identity')
     tid,root=result['id'],result['root'];roots.append((root,files));report.setdefault('test_roots',[]).append(root)
     for name,data in files.items():
         fields={'id':tid,'path':name,'bytes':str(len(data)),'sha256':digest(data)}

@@ -40,9 +40,12 @@ public:
  bool canAllocate(size_t bytes,Region r=Region::Internal)const{std::lock_guard<std::recursive_mutex> lock(mutex_);return r==Region::Auto?(fits(bytes,Region::External)||fits(bytes,Region::Internal)):fits(bytes,r);}
  uint32_t acquire(size_t bytes,uint32_t owner,Region region=Region::Internal,bool elastic=false){
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  size_t required=elastic?(bytes<16384?bytes:16384):bytes;
+  size_t required=elastic?0:bytes; // Elastic ceilings are charged only as their allocations grow.
   size_t total=promised(),maximum=limit();if(!bytes||bytes>maximum||total>maximum-required||!next_){++failures_;return 0;}
-  if(region==Region::Auto)region=fits(required,Region::External)?Region::External:Region::Internal;
+  if(region==Region::Auto){
+   if(elastic){auto headroom=[&](Region r){if(!present(r))return size_t(0);size_t available=allocatableHeap(r),reserve=reserves_[index(r)];return available>reserve?available-reserve:0;};size_t external=headroom(Region::External),internal=headroom(Region::Internal);region=external>=bytes||external>internal?Region::External:Region::Internal;}
+   else region=fits(required,Region::External)?Region::External:Region::Internal;
+  }
   if(!fits(required,region)){++failures_;return 0;}
   for(auto&s:slots_)if(!s.id){s.owner=owner;s.limit=bytes;s.region=region;s.elastic=elastic;s.used=0;s.id=next_++;return s.id;}++failures_;return 0;
  }
@@ -58,7 +61,7 @@ public:
  }
  size_t allocationSize(void*ptr)const{if(!ptr)return 0;auto p=static_cast<Allocation*>(ptr)-1;return p->size-sizeof(Allocation);}
  void*reallocate(void*ptr,size_t bytes){std::lock_guard<std::recursive_mutex> lock(mutex_);
-  if(!ptr)return allocate(bytes);if(!bytes){freeAllocation(ptr);return nullptr;}if(bytes>SIZE_MAX-sizeof(Allocation))return allocationDenied();
+  if(!bytes){freeAllocation(ptr);return nullptr;}if(!ptr)return allocate(bytes);if(bytes>SIZE_MAX-sizeof(Allocation))return allocationDenied();
   auto p=static_cast<Allocation*>(ptr)-1;size_t n=bytes+sizeof(Allocation),old=p->size;auto region=p->region;
   if(n>old){size_t growth=n-old,total=promised(),maximum=limit();if(growth>maximum||total>maximum-growth||!fits(growth,region))return allocationDenied();}
   auto fn=heaps_[index(region)].resize;auto next=static_cast<Allocation*>(fn?fn(p,n):realloc(p,n));if(!next)return n<=old?ptr:allocationDenied();

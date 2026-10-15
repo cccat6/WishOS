@@ -24,7 +24,8 @@ class PackageValidator {
   if(method){doc.clear();auto device=core_.find("/sys/ui");if(!device||!core_.supports(*device,method))return "package_ui_validation_unavailable";JsonDocument a;a[!strcmp(method,"validate_app")?"file":"path"]=file_;a["schema_only"]=true;return core_.invoke("/sys/ui",method,a.as<JsonObjectConst>(),out.to<JsonObject>());}
   return nullptr;
  }
- void fail(const char*error){copy(error_,sizeof error_,error);done_=true;}
+ void settled(){done_=true;core_.resources().freeAllocation(line_);line_=nullptr;lineSize_=0;}
+ void fail(const char*error){copy(error_,sizeof error_,error);settled();}
  const char*line(){if(lineReady_)return nullptr;const char*relative;vfs_.resolve(inventory_,relative);uint8_t bytes[256];
   if(inventoryAt_<inventorySize_){size_t got=0;if(auto e=provider_->read(relative,inventoryAt_,bytes,std::min<uint64_t>(sizeof bytes,inventorySize_-inventoryAt_),got))return e;if(!got)return "package_short_read";
    for(size_t i=0;i<got;++i){inventoryHash_.update(bytes+i,1);++inventoryAt_;if(bytes[i]=='\n'){if(lineSize_){lineReady_=true;return nullptr;}continue;}if(lineSize_==LineLimit)return "package_inventory_line_limit";line_[lineSize_++]=bytes[i];}
@@ -52,7 +53,7 @@ public:
     char full[256];if(!e&&row.containsKey("kind")&&(!row["kind"].is<const char*>()||!Core::containsMethod("lua,json,asset",row["kind"])))e="package_file_kind";if(!e)e=resolve(row["path"],full);if(!e&&(*last_&&strcmp(last_,row["path"])>=0||!strcmp(full,package_)||!strcmp(full,inventory_)))e="package_inventory_order";
     if(!e)e=canonical(full);if(!e){FileInfo info;vfs_.resolve(full,relative);e=provider_->stat(relative,info);if(!e&&(info.directory||info.size!=size_))e="package_size_mismatch";}
     if(!e){if(!strcmp(full,manifest_))foundEntry_=true;if(!strcmp(full,program_))foundProgram_=true;copy(last_,sizeof last_,row["path"]);copy(file_,sizeof file_,full);copy(expected_,sizeof expected_,row["sha256"]);asset_=row["kind"]=="asset";lua_=row["kind"]=="lua";jsonKind_=row["kind"]=="json";at_=0;fileHash_.reset();lineSize_=0;lineReady_=false;}
-   }else if(!e&&inventoryAt_==inventorySize_){char actual[65];inventoryHash_.finish(actual);if(strcmp(actual,inventoryExpected_))e="package_inventory_digest_mismatch";else if(!count_||!foundEntry_||!foundProgram_)e="package_entry_missing";else{done_=true;}}}
+   }else if(!e&&inventoryAt_==inventorySize_){char actual[65];inventoryHash_.finish(actual);if(strcmp(actual,inventoryExpected_))e="package_inventory_digest_mismatch";else if(!count_||!foundEntry_||!foundProgram_)e="package_entry_missing";else{settled();}}}
   if(e&&!transient(e))fail(e);
  }
  void describe(JsonObject out)const{out["format"]="wishos-package/1";out["inventory"]="sorted_jsonl";out["inventory_line_limit_bytes"]=LineLimit;out["header_limit_bytes"]=LineLimit;out["json_limit_bytes"]=JsonLimit;out["lua_source_limit_bytes"]=LuaSyntax::SourceLimit;out["lua_parser"]=LUA_RELEASE;out["native_execution"]=false;out["file_kinds"]="lua,json,asset";out["hash_chunk_bytes"]=1024;out["file_count_limit"]=nullptr;}

@@ -25,7 +25,8 @@ private:
   Resize resize_=nullptr;void*allocatorContext_=nullptr;bool ownerReleased_=false;
   void releaseOwned(){if(!isolated_&&!ownerReleased_){ownerReleased_=true;clearCallbacks();core_.releaseOwner(owner_);}}
   Reader reader_=nullptr;void*readerContext_=nullptr;char base_[256]="/";
-  char modules_[8][256]{};bool moduleReady_[8]{};int moduleRefs_[8]{};unsigned moduleCount_=0;
+  struct Module {char path[256]{};bool ready=false;int ref=LUA_NOREF;};
+  Module*modules_=nullptr;unsigned moduleCount_=0,moduleCapacity_=0;
   uint32_t reservation_=0,owner_=0;bool stopped_=false,isolated_=false;
   void(*yield_)(void*)=nullptr;bool(*cancelled_)(void*)=nullptr;void*executionContext_=nullptr;
   JsonVariantConst computeInput_;JsonVariant computeOutput_;
@@ -34,7 +35,7 @@ private:
   uint32_t steps_=0,stepLimit_,calls_=0,callLimit_;bool loading_=false,preparing_=false,executing_=false,fault_=false,consumed_=false;
   const char*source_=nullptr;size_t sourceSize_=0;const Event*event_=nullptr;int operation_=0;
   struct Subscription{char path[48]{};bool manual=false,callbacks=false;uint32_t manualAfter=0;};
-  Subscription subscriptions_[16];unsigned subscriptionCount_=0,callbackCount_=0;int callbacksRef_=LUA_NOREF;bool callbacksPending_=false,legacyEvent_=false;char error_[160]{};
+  Subscription*subscriptions_=nullptr;unsigned subscriptionCount_=0,subscriptionCapacity_=0,callbackCount_=0;int callbacksRef_=LUA_NOREF;bool callbacksPending_=false,legacyEvent_=false;char error_[160]{};
   char*scratch_=nullptr;JsonDocument*input_=nullptr,*output_=nullptr;size_t jsonBudget_=0;
   static LuaRuntime& self(lua_State*L){return **(LuaRuntime**)lua_getextraspace(L);}
   static void*allocate(void*context,void*ptr,size_t,size_t n){
@@ -105,9 +106,9 @@ private:
     auto&s=self(L);if(s.isolated_)luaL_error(L,"worker_subscriptions_unavailable");
     if(*path!='/'||strlen(path)>=48)luaL_error(L,"event_source_limit");
     unsigned i=0;for(;i<s.subscriptionCount_;++i)if(!strcmp(path,s.subscriptions_[i].path))break;
-    if(i==s.subscriptionCount_){if(!enabled)return;if(i==16)luaL_error(L,"subscription_capacity");s.subscriptions_[i]={};copy(s.subscriptions_[i].path,48,path);++s.subscriptionCount_;}
+    if(i==s.subscriptionCount_){if(!enabled)return;if(i==16)luaL_error(L,"subscription_capacity");if(i==s.subscriptionCapacity_){auto next=static_cast<Subscription*>(s.core_.resources().reallocate(s.subscriptions_,(i+1)*sizeof(Subscription)));if(!next)luaL_error(L,"subscription_memory_low");s.subscriptions_=next;s.subscriptionCapacity_=i+1;}s.subscriptions_[i]={};copy(s.subscriptions_[i].path,48,path);++s.subscriptionCount_;}
     auto&entry=s.subscriptions_[i];if(!managed&&enabled&&!entry.manual)entry.manualAfter=s.core_.sequence();(managed?entry.callbacks:entry.manual)=enabled;
-    if(!entry.manual&&!entry.callbacks){for(unsigned j=i+1;j<s.subscriptionCount_;++j)s.subscriptions_[j-1]=s.subscriptions_[j];s.subscriptions_[--s.subscriptionCount_]={};}
+    if(!entry.manual&&!entry.callbacks){for(unsigned j=i+1;j<s.subscriptionCount_;++j)s.subscriptions_[j-1]=s.subscriptions_[j];s.subscriptions_[--s.subscriptionCount_]={};if(!s.subscriptionCount_){s.core_.resources().freeAllocation(s.subscriptions_);s.subscriptions_=nullptr;s.subscriptionCapacity_=0;}}
   }
   static int subscribe(lua_State*L){setSubscription(L,luaL_checkstring(L,1),true,false);return 0;}
   static int callbackListen(lua_State*L){auto&s=self(L);size_t size;const char*path=luaL_checklstring(L,1,&size);if(strlen(path)!=size)return luaL_error(L,"event_source_limit");setSubscription(L,path,lua_toboolean(L,2),true);s.callbackCount_=lua_tointeger(L,3);lua_pushinteger(L,s.core_.sequence());return 1;}
@@ -174,7 +175,7 @@ private:
   }
 public:
   LuaRuntime(Core&core,size_t budget=0,uint32_t steps=20000,uint32_t calls=32):core_(core),budget_(budget?budget:core.resources().defaultVmLimit()),stepLimit_(steps),callLimit_(calls),owner_(core.acquireOwner()){reservation_=core_.resources().acquireApplication(budget_,owner_);if(!reservation_)copy(error_,sizeof error_,"system_memory_budget");}
-  ~LuaRuntime(){releaseOwned();loading_=true;cleanup();if(state_)lua_close(state_);core_.resources().release(reservation_);}
+  ~LuaRuntime(){releaseOwned();loading_=true;cleanup();if(state_)lua_close(state_);core_.resources().freeAllocation(modules_);core_.resources().freeAllocation(subscriptions_);core_.resources().release(reservation_);}
   void fileContext(const char*file,Reader reader,void*context){reader_=reader;readerContext_=context;copy(base_,sizeof base_,file);auto end=strrchr(base_,'/');if(end==base_)end[1]=0;else if(end)*end=0;else strcpy(base_,"/");}
   bool stop(){if(stopped_)return !fault_;stopped_=true;bool ok=fault_?false:execute(3);releaseOwned();return ok;}
   void jsonAllocationBackend(ArduinoJson::Allocator*allocator){jsonAllocator_=allocator;}

@@ -1,6 +1,6 @@
 # Runtime package admission and whole-file revisions
 
-Contract draft agreed for the 2026-10-16 implementation. The portable OS owns
+Version 1, implemented with the 2026-10-16 native and Hub bridge. The portable OS owns
 native admission and catalog commit; Hub owns preflight before device writes.
 Native drivers remain compile-selected components. This format describes runtime
 application files, not firmware updates or native driver installation.
@@ -25,6 +25,13 @@ or image bindings. Default `/sys/ui validate` additionally checks current render
 preparation without presentation. Preflight does not execute
 on_start or prove arbitrary dynamic program semantics. Native runtime preparation,
 instruction/memory limits and completion/lifecycle rules remain authoritative.
+A VM memory budget is an elastic ceiling, checked on actual allocation growth;
+it is not a reservation or a promise that the whole ceiling is currently free.
+Native services retain their own required headroom. Preflight, installation and
+activation receipts are distinct, including when a valid installed revision
+cannot activate while another runtime or TLS connection consumes memory.
+Validation scratch is released at completion; the revision lease remains held
+until explicit release or catalog commit.
 
 ## Device ABI
 

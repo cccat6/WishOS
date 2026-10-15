@@ -68,6 +68,12 @@ class PackageTests(unittest.TestCase):
    target=Path(folder);pack.generate(pack.DEFAULT,target)
    self.assertIn('/components.json',(target/'BoardPackage.h').read_text())
 
+ def test_generated_metadata_obeys_the_same_asset_budget(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);board=self.fixture(root);original=Path(board['composition']);port=root/'composition';port.mkdir();spec=pack.read_json(original/'composition.json');spec['entry']='Port.inc';spec['asset_budget_bytes']=500
+   (port/'Port.inc').write_text('// validation fixture');(port/'composition.json').write_text(json.dumps(spec));board['composition']='composition';self.write(root,board)
+   with self.assertRaisesRegex(ValueError,'compiled asset budget'):pack.load(root)
+
  def test_binary_assets_preserve_nul_and_size(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root);b['assets']['/icons/test.bin']='test.bin';raw=b'\x00\xff\x00data';(root/'test.bin').write_bytes(raw);self.write(root,b)
