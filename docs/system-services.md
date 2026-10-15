@@ -168,3 +168,17 @@ or a rejected AI result releases that request's transfer lease even when the
 server link is down. Late chunks cannot restart a cancelled request. Link-only
 interruption retains a live transaction for resume; partial files remain available
 for explicit cleanup and continue counting toward quota.
+
+## Validation of this change
+
+The public host suite passed, including failure/concurrency/restore checks and real
+FAT32/exFAT images. Hub passed 111 tests. C3 and C6 complete firmware builds passed;
+the optional S3 driver SDK compilation passed, not a complete S3 hardware port.
+The disposable C3 passed 26 physical checks across the general runtime and managed
+service fixtures: proxy HTTP/HTTPS, origin TLS verification, UTC/NTP/timezone,
+system WebSocket, typed application replies, multifile verified activation, old
+application notification before the replacement starts, offline request cancellation
+releasing its download, actual telemetry registration and aggregate acknowledgments.
+Harness generation used a test adapter; this validates the system protocol and
+lifecycle rather than a particular model's generation quality. Telemetry was
+disabled after the test. No E6 research board was flashed or controlled.

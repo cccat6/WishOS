@@ -67,11 +67,20 @@ try:
   report['wifi_state']={k:state.get(k) for k in ['connected','reason','enabled','radio_mode','ssid','ip','connection_pending','configuration_pending','selection','sdk_status','disconnect_reason']}
   assert state.get('connected');report['ip']=state['ip'];report['checks'].append('wifi_connected')
  if a.check_time:
+  # Association and NTP have separate deadlines; do not spend the NTP wait
+  # budget while a saved Wi-Fi profile is still connecting after boot.
+  end=time.monotonic()+40
+  while time.monotonic()<end:
+   if rpc('/dev/wifi')['result'].get('connected'):break
+   time.sleep(.25)
+  else:raise TimeoutError('Wi-Fi association required for NTP validation')
   prior=rpc('/services/time')['result'];old=prior['last_sync_ms']
   if not prior['active']:rpc('/services/time','sync')
-  for _ in range(80):
+  end=time.monotonic()+prior['configured']['timeout_ms']/1000+3
+  while time.monotonic()<end:
    ntp=rpc('/services/time')['result']
    if ntp['last_sync_ms']>old and not ntp['active']:break
+   if ntp['last_error'] and not ntp['active']:break
    time.sleep(.25)
   assert ntp['last_sync_ms']>old and not ntp['active'],ntp
   clock=rpc('/sys/clock')['result'];assert clock['wall_clock_valid'] and abs(clock['unix_s']-time.time())<5
