@@ -31,9 +31,11 @@ static std::atomic<bool>holdTransport{false},entered{false};static bool failLaun
 static int xTaskCreate(void(*fn)(void*),const char*,unsigned,void*p,unsigned,void*){if(failLaunch)return 0;tasks.emplace_back([=]{fn(p);});return pdPASS;}
 static void vTaskDelete(void*){}static void vTaskDelay(unsigned n){std::this_thread::sleep_for(std::chrono::milliseconds(n));}
 enum WStype_t{WStype_CONNECTED,WStype_DISCONNECTED,WStype_FRAGMENT_TEXT_START,WStype_FRAGMENT_BIN_START,WStype_FRAGMENT,WStype_FRAGMENT_FIN,WStype_TEXT,WStype_BIN};
+static const uint8_t platformCaBundleStart[1]{},platformCaBundleEnd[1]{};
 struct WebSocketsClient{
  std::function<void(WStype_t,uint8_t*,size_t)>callback;const char*headers=nullptr;bool connected=false;unsigned loops=0;
  void onEvent(std::function<void(WStype_t,uint8_t*,size_t)>fn){callback=fn;}void setReconnectInterval(unsigned){}void setExtraHeaders(const char*h){headers=h;}
+ void beginSslWithBundle(const char*,unsigned,const char*,const uint8_t*,size_t,const char*){}
  void beginSSL(const char*,unsigned,const char*,const char*,const char*){}
  void begin(const char*,unsigned,const char*,const char*){}void beginSslWithCA(const char*,unsigned,const char*,const char*,const char*){}
  void loop(){entered=true;while(holdTransport.load())std::this_thread::yield();if(!connected){assert(headers&&strstr(headers,"X-Test: retained"));connected=true;callback(WStype_CONNECTED,nullptr,0);}++loops;}

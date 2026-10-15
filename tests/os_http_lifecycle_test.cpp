@@ -2,6 +2,7 @@
 #include "Core.h"
 #include "DriverRequests.h"
 #include "Policy.h"
+#include "NetworkProxy.h"
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -9,6 +10,7 @@
 #include <deque>
 #include <iostream>
 #include <mutex>
+#include <memory>
 #include <thread>
 #include <vector>
 #include <algorithm>
@@ -25,6 +27,8 @@ static int xQueueSend(Queue*q,const void*data,unsigned timeout){std::unique_lock
 static int xQueueReceive(Queue*q,void*out,unsigned){std::lock_guard<std::mutex>g(q->lock);if(q->data.empty()){if(emptyReceiveHook)emptyReceiveHook(q);return 0;}memcpy(out,q->data.front().data(),q->size);q->data.pop_front();q->ready.notify_all();return pdTRUE;}
 struct Stream {virtual ~Stream()=default;virtual int available()=0;virtual int read()=0;virtual int peek()=0;virtual void flush()=0;virtual size_t write(uint8_t)=0;virtual size_t write(const uint8_t*,size_t)=0;};
 struct NetworkClient{virtual ~NetworkClient()=default;};struct NetworkClientSecure:NetworkClient{void setCACert(const char*){}};
+static NetworkProxy networkProxy;
+struct ProxyClient:NetworkClient{explicit ProxyClient(ProxySettings){}};struct ProxySecureClient:NetworkClientSecure{explicit ProxySecureClient(ProxySettings){}int lastError(char*,size_t){return 0;}void usePlatformRoots(){}};
 static std::atomic<bool> holdTransport{false},entered{false};static bool failLaunch=false;static unsigned responseBlocks=16;
 struct HTTPClient{
  void setTimeout(unsigned){}void setConnectTimeout(unsigned){}void setReuse(bool){}void collectHeaders(const char**,unsigned){}bool begin(NetworkClient&,const char*){return true;}
@@ -37,7 +41,6 @@ struct{size_t getFreeHeap(){return 200000;}}ESP;
 static Core core;static uint32_t nextJob=1;
 struct Receipt{uint32_t id=0;bool complete=false,ok=false;char state[48]{},error[80]{};};static Receipt jobs[8];static void rememberJob(uint32_t id){jobs[id%8]={};jobs[id%8].id=id;}
 static void emit(const char*p,const char*e,JsonObjectConst d,uint32_t targetOwner=0){core.emit(p,e,d,targetOwner);}
-static void hex(const uint8_t*p,size_t n,char*out){for(size_t i=0;i<n;++i)sprintf(out+i*2,"%02x",p[i]);out[n*2]=0;}
 #include "drivers/esp32-services/NetworkService.h"
 static void join(){for(auto&t:tasks)t.join();tasks.clear();}
 int main(){JsonDocument a,out,empty,handle;a["url"]="http://test/";a["stream"]=true;a["response_limit"]=8192;a["timeout_ms"]=2000;

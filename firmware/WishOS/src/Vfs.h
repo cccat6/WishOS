@@ -15,12 +15,11 @@ inline bool parseOffset(JsonVariantConst v,uint64_t &out){
     for(;*p;++p){if(*p<'0'||*p>'9'||out>(UINT64_MAX-(*p-'0'))/10)return false;out=out*10+(*p-'0');}return true;}
   if(v.is<uint32_t>()){out=v.as<uint32_t>();return true;}return false;
 }
-inline void sizeText(JsonObject out,const char*key,uint64_t value){char s[24];snprintf(s,sizeof(s),"%llu",(unsigned long long)value);out[key]=s;}
+inline void sizeText(JsonObject out,const char*key,uint64_t value){char digits[21],text[21];size_t n=0;do{digits[n++]=char('0'+value%10);value/=10;}while(value);for(size_t i=0;i<n;++i)text[i]=digits[n-i-1];text[n]=0;out[key]=text;}
 inline bool pathWithin(const char*root,const char*path){size_t n=strlen(root);return !strcmp(root,"/")||(!strncmp(root,path,n)&&(!path[n]||path[n]=='/'));}
 inline bool normalizePath(const char *base,const char *path,char*out,size_t cap,const char*boundary="/"){
   if(!base||!path||!out||cap<2||strchr(path,'\\')||strchr(path,'?')||strchr(path,'#'))return false;
-  char combined[512];int n=path[0]=='/'?snprintf(combined,sizeof(combined),"%s",path):snprintf(combined,sizeof(combined),"%s/%s",base,path);
-  if(n<0||n>=int(sizeof(combined)))return false;size_t at=1;out[0]='/';out[1]=0;
+  char combined[512];size_t n=strlen(path),prefix=path[0]=='/'?0:strlen(base)+1;if(n>=sizeof combined||prefix>=sizeof combined-n)return false;if(prefix){memcpy(combined,base,prefix-1);combined[prefix-1]='/';}memcpy(combined+prefix,path,n+1);size_t at=1;out[0]='/';out[1]=0;
   char *save=nullptr;
   for(char*t=strtok_r(combined,"/",&save);t;t=strtok_r(nullptr,"/",&save)){
     if(!strcmp(t,"."))continue;
@@ -31,7 +30,14 @@ inline bool normalizePath(const char *base,const char *path,char*out,size_t cap,
   size_t b=strlen(boundary);return !strcmp(boundary,"/")||(!strncmp(out,boundary,b)&&(out[b]==0||out[b]=='/'));
 }
 class FileProvider {
+ uint64_t writeQuota_=0;
 public:
+ // A volume quota is a storage policy, independent of medium/MCU capacity.
+ void writeQuota(uint64_t bytes){writeQuota_=bytes;}
+ uint64_t writeQuota()const{return writeQuota_;}
+ const char*admitMetadata(){if(!writeQuota_)return nullptr;JsonDocument state;describe(state.to<JsonObject>());uint64_t capacity=0,free=0;if(state["volume_capacity_bytes"].isNull()||state["free_bytes"].isNull()||!parseOffset(state["volume_capacity_bytes"],capacity)||!parseOffset(state["free_bytes"],free)||free>capacity)return "quota_capacity_unknown";uint64_t used=capacity-free,reserve=state["growth_overhead_bytes"]|0u;return used>writeQuota_||reserve>writeQuota_-used?"storage_quota_exceeded":nullptr;}
+ const char*admitGrowth(const char*path,uint64_t end){if(!writeQuota_)return nullptr;FileInfo prior;auto error=stat(path,prior);if(error&&strcmp(error,"not_found"))return error;uint64_t old=error?0:prior.size;if(end<=old)return nullptr;JsonDocument state;describe(state.to<JsonObject>());uint64_t capacity=0,free=0;if(state["volume_capacity_bytes"].isNull()||state["free_bytes"].isNull()||!parseOffset(state["volume_capacity_bytes"],capacity)||!parseOffset(state["free_bytes"],free)||free>capacity)return "quota_capacity_unknown";uint64_t unit=state["allocation_unit_bytes"]|1u,overhead=state["growth_overhead_bytes"]|0u;uint64_t growth=((end+unit-1)/unit-(old+unit-1)/unit)*unit+overhead;uint64_t used=capacity-free;if(used>writeQuota_||growth>writeQuota_-used)return "storage_quota_exceeded";return nullptr;}
+
   const char *id,*mount,*medium;bool persistent,removable,writable;
   FileProvider(const char*i,const char*m,const char*t,bool p,bool r,bool w):id(i),mount(m),medium(t),persistent(p),removable(r),writable(w){}
   virtual ~FileProvider()=default;
@@ -110,7 +116,7 @@ public:
     relative=best?(!strcmp(best->mount,"/")?path:path[longest]?path+longest:"/"):nullptr;return best;
   }
   FileProvider* get(const char*id)const{for(size_t i=0;i<count_;++i)if(!strcmp(providers_[i]->id,id))return providers_[i];return nullptr;}
-  void describe(JsonArray out)const{for(size_t i=0;i<count_;++i){auto p=providers_[i];auto x=out.add<JsonObject>();x["id"]=p->id;x["mount"]=p->mount;x["medium"]=p->medium;x["persistent"]=p->persistent;x["removable"]=p->removable;x["writable"]=p->writable;x["durable_writes"]=p->durableWrites();x["case_insensitive"]=p->caseInsensitive();x["available"]=p->available();x["operations"]=p->operations();p->describe(x);}}
+  void describe(JsonArray out)const{for(size_t i=0;i<count_;++i){auto p=providers_[i];auto x=out.add<JsonObject>();x["id"]=p->id;x["mount"]=p->mount;x["medium"]=p->medium;x["persistent"]=p->persistent;x["removable"]=p->removable;x["writable"]=p->writable;if(p->writeQuota())sizeText(x,"write_quota_bytes",p->writeQuota());x["durable_writes"]=p->durableWrites();x["case_insensitive"]=p->caseInsensitive();x["available"]=p->available();x["operations"]=p->operations();p->describe(x);}}
 };
 class MemoryFiles:public FileProvider {
 public:

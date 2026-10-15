@@ -21,7 +21,7 @@ public:
  void tick(uint64_t){if(vm_){bool before=*vm_->error();vm_->flushCallbacks();if(!before&&*vm_->error())notify("fault",vm_->error());}}
  bool event(const Event&e){if(!vm_)return false;bool before=*vm_->error();bool consumed=vm_->event(e);if(!before&&*vm_->error())notify("fault",vm_->error());return consumed;}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
-   if(!strcmp(m,"read")){out["loaded"]=vm_!=nullptr;out["file"]=file_;if(vm_)vm_->describe(out);out["default_vm_memory_bytes"]=core_.resources().defaultVmLimit();out["memory_policy_limit_bytes"]=core_.resources().limit();out["source_limit_bytes"]=8192;out["module_limit"]=8;out["native_driver_loading"]=false;return nullptr;}
+   if(!strcmp(m,"read")){out["loaded"]=vm_!=nullptr;out["file"]=file_;if(vm_)vm_->describe(out);out["default_vm_memory_bytes"]=core_.resources().defaultVmLimit();out["memory_policy_limit_bytes"]=core_.resources().limit();out["source_limit_bytes"]=8192;out["module_limit"]=8;out["json_decode_limit_bytes"]=4096;out["native_driver_loading"]=false;return nullptr;}
    if(vm_&&vm_->executing())return "runtime_executing";
    if(!strcmp(m,"stop")){if(vm_){bool clean=vm_->stop();out["cleanup_ok"]=clean;if(!clean)out["cleanup_error"]=vm_->error();notify("stopped");delete vm_;vm_=nullptr;}file_[0]=0;return nullptr;}
    if(strcmp(m,"load")&&strcmp(m,"restart"))return "unsupported_method";

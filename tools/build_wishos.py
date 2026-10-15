@@ -78,6 +78,7 @@ def build(package, stage, output):
     overrides={'tools.ctags.pattern':'true','compiler.cpp.extra_flags':' '.join(flags),'upload.maximum_size':str(port['application_bytes'])}
     for module in hooks:
         if hasattr(module,'link'):overrides.update(module.link(context,properties))
+    if '-flto' in flags:overrides['compiler.c.elf.extra_flags']=properties.get('compiler.c.elf.extra_flags','')+' -flto'
     command=list(common)
     for key,value in overrides.items():command.extend(['--build-property',key+'='+value])
     command.extend(['--warnings','none','--build-path',str(output),str(stage)])

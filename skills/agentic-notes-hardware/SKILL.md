@@ -7,6 +7,8 @@ description: Discover and operate WishOS resources, inspect live system state an
 
 For direct event registration and asynchronous completion functions, read [application callbacks](references/callbacks.md).
 
+For system-owned AI requests, typed results, large resource transfers, storage policy, logs, telemetry, proxies and time, read [managed services](references/managed-services.md).
+
 For installed packages, launchers, application switching, protected return/voice entry and user guidance, read [applications](references/applications.md).
 
 For script modules, startup/lifecycle, binary data and background compute, read [runtime applications](references/runtime-apps.md). Hardware wiring belongs to the deployment package; runtime applications operate exclusively through system resources.

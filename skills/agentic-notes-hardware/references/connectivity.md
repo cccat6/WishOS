@@ -84,12 +84,13 @@ Lua accesses the same resource ABI with `notes.call`, subscribes to events, and 
 from a file without rebuilding firmware. Examples: `examples/agent-os/local-poll`,
 `presenter`, and `remote-events`.
 
-`/services/remote submit` carries a route, request ID, payload and deadline. The outbox
-is transport-independent, volatile and bounded to four records. Relays `peek` without
-consuming, then `complete` using `expected_boot_id`. Apps read results and explicitly
-`release` receipts. Do not reuse an ID for another payload. Expiry is observable;
-reboot clears volatile requests. Receiving a request is not permission to invent new
-external side effects.
+AI/Harness work uses `/services/ai`, as described in [managed services](managed-services.md).
+Its system-owned lifetime, typed result processing and safe app activation continue
+when the requesting VM exits. The lower-level `/services/remote` outbox carries
+route/identity/deadline for the system bridge and ordinary non-AI service handlers;
+AI applications must not recreate provider/Harness protocols around that outbox.
+The outbox is volatile; reboot clears its records. Host durability does not turn a
+lost device receipt into proof of physical completion.
 
 `/services/link` configures a system control connection independently of the
 loaded application. Set `enabled:true` with endpoint fields, or `enabled:false`; this is not a user work mode and does not change Wi-Fi association. The device also serves the same ABI at `/os/invoke` over HTTP.
@@ -103,10 +104,8 @@ remote dispatcher and durable host journal. The Hub MCP at `/mcp` discovers
 resource methods; legacy Notes v2 uses an explicit `/mcp/notes` adapter. No E6
 geometry or waveform exists in the WishOS MCP contract.
 
-Host handlers are ordinary application functions. `route:"agent"` submits to the
-bound Harness; `route:"voice"` collects compressed capture and invokes the selected
-ASR/Harness adapters. A receipt means admission, not final task completion. The
-standalone `npm run os-bridge` also accepts `NOTES_SERVICE_MODULE` for custom routes,
+The managed `wishos.ai` server route waits for the bound Harness, stages large resources and returns a typed result. Its internal voice collector invokes the selected ASR/Harness adapters; upload, Harness completion and device effect completion remain distinct. The
+standalone `npm run os-bridge` is for custom non-AI service routes, not a replacement for the managed Hub AI connector. Configure a WishOS device in Hub (WS link or deviceUrl) for `/services/ai`. The standalone bridge accepts `NOTES_SERVICE_MODULE` for custom routes,
 `NOTES_OS_URL`, `NOTES_HUB_URL`, `NOTES_DEVICE_ID`, optional `NOTES_HUB_TOKEN`, and a
 `NOTES_OS_JOURNAL` SQLite path. Only a handler with an upstream idempotency guarantee
 may declare `replaySafe`. A process crash during another side effect yields an

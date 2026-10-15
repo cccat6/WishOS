@@ -1,9 +1,10 @@
+// Proxy settings are snapshotted when this operation is admitted.
 struct NetworkChunk{uint16_t length=0;uint8_t data[512]{};};
 struct NetworkJob {
   std::atomic<bool> busy{true},done{false},cancel{false};uint32_t id=0,owner=0,reservation=0,timeout=10000;unsigned limit=4096;
   char url[1024]{},method[8]{},body[2048]{},headers[1024]{},response[4097]{},error[64]{};
   QueueHandle_t chunks=nullptr;bool stream=false,readableNotified=false,orphan=false;
-  char*ca=nullptr;int status=0;size_t received=0;
+  ProxySettings proxy;char*ca=nullptr;int status=0,tlsError=0;size_t received=0;
   ~NetworkJob(){if(reservation)core.resources().release(reservation);free(ca);if(chunks)vQueueDelete(chunks);}
 };
 static NetworkJob* networkJob=nullptr;static bool networkNotified=false;
@@ -22,18 +23,22 @@ public:
 static void networkTask(void*context){
  auto j=static_cast<NetworkJob*>(context);
  {
-  HTTPClient client;NetworkClient plain;NetworkClientSecure secure;
-  bool tls=!strncmp(j->url,"https://",8);if(tls)secure.setCACert(j->ca);
-  NetworkClient&transport=tls?static_cast<NetworkClient&>(secure):plain;
+  bool tls=!strncmp(j->url,"https://",8);
+  std::unique_ptr<NetworkClient> connection(tls?static_cast<NetworkClient*>(new(std::nothrow)ProxySecureClient(j->proxy)):static_cast<NetworkClient*>(new(std::nothrow)ProxyClient(j->proxy)));
+  if(!connection)copy(j->error,sizeof j->error,"network_client_memory");
+  else{HTTPClient client;
+  if(tls){auto secure=static_cast<ProxySecureClient*>(connection.get());if(j->ca&&*j->ca)secure->setCACert(j->ca);else secure->usePlatformRoots();}
+  NetworkClient&transport=*connection;
   client.setTimeout(j->timeout);client.setConnectTimeout(j->timeout);client.setReuse(false);const char*responseHeaders[]={"Content-Type"};client.collectHeaders(responseHeaders,1);
   if(j->cancel.load())copy(j->error,sizeof j->error,"cancelled");
   else if(!client.begin(transport,j->url))copy(j->error,sizeof(j->error),"request_begin_failed");
   else {
     JsonDocument headers;deserializeJson(headers,j->headers);for(auto p:headers.as<JsonObjectConst>())client.addHeader(p.key().c_str(),p.value().as<const char*>());
     j->status=client.sendRequest(j->method,(uint8_t*)j->body,strlen(j->body));
-    if(j->status<=0)copy(j->error,sizeof(j->error),"network_request_failed");
+    if(j->status<=0){copy(j->error,sizeof(j->error),"network_request_failed");if(tls)j->tlsError=static_cast<ProxySecureClient*>(connection.get())->lastError(nullptr,0);}
     else if(strcmp(j->method,"HEAD")){ResponseSink sink(*j);int result=client.writeToStream(&sink);if(sink.binary)copy(j->error,sizeof(j->error),"binary_response_requires_stream");else if(sink.overflow)copy(j->error,sizeof(j->error),"response_limit");else if(result<0)copy(j->error,sizeof(j->error),"response_read_failed");}
     client.end();
+  }
   }
  }
  if(j->cancel.load())copy(j->error,sizeof j->error,"cancelled");
@@ -41,7 +46,7 @@ static void networkTask(void*context){
 }
 static void describeNetworkResult(JsonObject o){
  auto result=httpOutcome(networkJob->status,networkJob->error);
- o["transport_ok"]=result.transportOk;o["http_ok"]=result.httpOk;o["ok"]=result.ok;o["error"]=result.error;
+ o["tls_error"]=networkJob->tlsError;o["transport_ok"]=result.transportOk;o["http_ok"]=result.httpOk;o["ok"]=result.ok;o["error"]=result.error;
 }
 static void pollNetwork(){
  if(networkJob&&!networkJob->busy)core.resources().releaseUnused(networkJob->reservation);
@@ -80,7 +85,7 @@ static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
    char data[1025];hex(chunk.data,chunk.length,data);out["available"]=true;out["hex"]=data;out["bytes"]=chunk.length;
    out["finished"]=finished&&!uxQueueMessagesWaiting(networkJob->chunks);networkJob->readableNotified=false;return nullptr;
  }
- if(read){out["active"]=networkActive();out["response_pending"]=networkJob!=nullptr;out["max_buffered_response_bytes"]=4096;out["buffered_read"]="receive with offset and length; read embeds body only when it fits";out["stream_chunk_bytes"]=512;out["https_trust"]="caller_provided_ca";
+ if(read){out["active"]=networkActive();out["response_pending"]=networkJob!=nullptr;out["max_buffered_response_bytes"]=4096;out["buffered_read"]="receive with offset and length; read embeds body only when it fits";out["stream_chunk_bytes"]=512;out["https_trust"]="platform_bundle_or_caller_ca";
    if(networkJob){out["job_id"]=networkJob->id;out["stream"]=networkJob->stream;out["owner"]=networkJob->owner;out["cancel_requested"]=networkJob->cancel.load();out["buffered_chunks"]=networkJob->chunks?uxQueueMessagesWaiting(networkJob->chunks):0;
      out["state"]="running";if(!networkJob->busy){out["state"]=httpOutcome(networkJob->status,networkJob->error).ok?"completed":"failed";out["status"]=networkJob->status;describeNetworkResult(out);
        if(!core.callerOwner()||core.callerOwner()==networkJob->owner){out["response_bytes"]=networkJob->received;out["body"]=networkJob->response;if(measureJson(out)>MAX_WIRE-512){out.remove("body");out["body_requires_receive"]=true;}}}}
@@ -97,9 +102,9 @@ static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
  bool stream=a["stream"]|false;
  unsigned limit=a["response_limit"]|(stream?16777216u:4096u),timeout=a["timeout_ms"]|10000u;
  if(!limit||(!stream&&limit>4096)||!timeout||timeout>60000)return "request_limit";
- const char*ca=a["ca_pem"]|"";if(tls&&!*ca)return "https_ca_required";if(strlen(ca)>8192)return "ca_limit";
- if(!core.resources().canAllocate(tls?65000u:20000u))return "network_memory_budget";
- auto next=new(std::nothrow) NetworkJob;if(!next)return "memory_low";next->reservation=core.resources().acquire(tls?65000u:20000u,core.callerOwner());if(!next->reservation){delete next;return "network_memory_budget";}
+ const char*ca=a["ca_pem"]|"";if(strlen(ca)>8192)return "ca_limit";
+ auto reservation=core.resources().acquire(tls?65000u:20000u,core.callerOwner());if(!reservation)return "network_memory_budget";
+ auto next=new(std::nothrow) NetworkJob;if(!next){core.resources().release(reservation);return "memory_low";}next->reservation=reservation;core.resources().used(reservation,sizeof(NetworkJob));
  if(!copy(next->url,sizeof(next->url),url)||!copy(next->method,sizeof(next->method),method)||!copy(next->body,sizeof(next->body),a["body"]|"")){delete next;return "request_body_limit";}
  auto headers=a["headers"].as<JsonObjectConst>();if(measureJson(headers)>=sizeof(next->headers)){delete next;return "header_limit";}
  for(auto p:headers)if(!p.value().is<const char*>()||strlen(p.value().as<const char*>())!=p.value().as<JsonString>().size()||strchr(p.key().c_str(),'\r')||strchr(p.key().c_str(),'\n')||strchr(p.value().as<const char*>(),'\r')||strchr(p.value().as<const char*>(),'\n')){delete next;return "invalid_header";}
@@ -108,7 +113,7 @@ static const char*networkHandler(const char*m,JsonObjectConst a,JsonObject out){
  // Result storage remains live until an explicit release or application teardown.
  // Queue metadata is conservatively included in the native allocation charge.
  core.resources().used(next->reservation,sizeof(NetworkJob)+(tls?strlen(ca)+1:0)+(stream?4*sizeof(NetworkChunk)+sizeof(StaticQueue_t):0));
- next->limit=limit;next->timeout=timeout;next->id=nextJob;next->owner=core.callerOwner();
+ next->proxy=networkProxy.snapshot();next->limit=limit;next->timeout=timeout;next->id=nextJob;next->owner=core.callerOwner();
  if(xTaskCreate(networkTask,"notes-http",6144,next,1,nullptr)!=pdPASS){delete next;return "task_allocation_failed";}
  networkJob=next;networkNotified=false;++nextJob;rememberJob(next->id);
  out["job_id"]=next->id;out["status"]="accepted";return nullptr;

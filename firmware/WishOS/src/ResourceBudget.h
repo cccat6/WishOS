@@ -72,6 +72,10 @@ public:
   auto fn=heaps_[index(s->region)].resize;void*next=nullptr;if(fn)next=fn(ptr,size);else if(size)next=realloc(ptr,size);else free(ptr);
   if(s->elastic&&(!size||next))s->used=s->used.load()-previous+size;return next;
  }
+ // A long-lived SDK transport consumes its admitted peak during handshake.
+ // Reconnect must reacquire headroom before another allocating handshake.
+ bool rearm(uint32_t id,size_t resident){std::lock_guard<std::recursive_mutex>lock(mutex_);auto s=find(id);if(!s||s->elastic||resident>s->limit)return false;size_t extra=s->used>resident?s->used-resident:0;if(extra&&!fits(extra,s->region))return false;s->used=resident;return true;}
+ size_t reservationLimit(uint32_t id)const{std::lock_guard<std::recursive_mutex>lock(mutex_);auto s=find(id);return s?s->limit:0;}
  void used(uint32_t id,size_t bytes){std::lock_guard<std::recursive_mutex> lock(mutex_);auto s=find(id);if(s)s->used=bytes;}
  // A completed native operation may retain its result but no longer needs its
  // task/transport headroom. Keep the remaining allocation charged until release.

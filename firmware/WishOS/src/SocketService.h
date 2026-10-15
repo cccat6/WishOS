@@ -1,6 +1,7 @@
 #pragma once
 #include "Core.h"
 #include "WireBytes.h"
+#include "NetworkProxy.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <ctype.h>
@@ -15,26 +16,31 @@
 namespace notesos {
 // Nonblocking IPv4 sockets. Data is explicitly read/written; events only announce readiness.
 class SocketService {
- struct Socket{int fd=-1;uint32_t id=0;bool listener=false,connecting=false,notified=false;uint32_t owner=0;};
- Socket sockets_[4];uint32_t next_=1;Core&core_;bool registered_=false;
+ struct Socket{int fd=-1;uint32_t id=0;bool listener=false,connecting=false,notified=false;uint32_t owner=0;ProxyHandshake*proxy=nullptr;bool tcpReady=false;uint64_t deadline=0;};
+ Socket sockets_[4];uint32_t next_=1;Core&core_;NetworkProxy*proxy_;bool registered_=false;
  void event(Socket&s,const char*name){JsonDocument d;d["id"]=s.id;d["owner"]=s.owner;core_.emit("/net/tcp",name,d.as<JsonObjectConst>(),s.owner);}
  Socket*find(uint32_t id){for(auto&s:sockets_)if(s.id==id&&id)return &s;return nullptr;}
  Socket*vacant(){for(auto&s:sockets_)if(s.fd<0)return &s;return nullptr;}
+ void dispose(Socket&s){if(s.fd>=0)::close(s.fd);if(s.proxy){s.proxy->~ProxyHandshake();core_.resources().freeAllocation(s.proxy);}s={};}
  static bool transient(){return errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR;}
  static bool nonblocking(int fd){return fcntl(fd,F_SETFL,O_NONBLOCK)==0;}
 public:
- explicit SocketService(Core&c):core_(c){registered_=core_.onOwnerRelease(this,[](void*p,uint32_t owner){((SocketService*)p)->releaseOwner(owner);});}
+ explicit SocketService(Core&c,NetworkProxy*proxy=nullptr):core_(c),proxy_(proxy){registered_=core_.onOwnerRelease(this,[](void*p,uint32_t owner){((SocketService*)p)->releaseOwner(owner);});}
  ~SocketService(){core_.removeOwnerHook(this);closeAll();}
- void releaseOwner(uint32_t owner){for(auto&s:sockets_)if(s.fd>=0&&s.owner==owner){::close(s.fd);s={};}}
+ void releaseOwner(uint32_t owner){for(auto&s:sockets_)if(s.fd>=0&&s.owner==owner){dispose(s);}}
  bool active()const{for(auto&s:sockets_)if(s.fd>=0)return true;return false;}
- void closeAll(){for(auto&s:sockets_)if(s.fd>=0){::close(s.fd);s={};}}
+ void closeAll(){for(auto&s:sockets_)if(s.fd>=0){dispose(s);}}
  void poll(){for(auto&s:sockets_)if(s.fd>=0){
-   if(s.connecting){fd_set write,error;FD_ZERO(&write);FD_ZERO(&error);FD_SET(s.fd,&write);FD_SET(s.fd,&error);timeval tv{};
-     if(select(s.fd+1,nullptr,&write,&error,&tv)>0){int e=0;socklen_t n=sizeof e;getsockopt(s.fd,SOL_SOCKET,SO_ERROR,&e,&n);s.connecting=false;event(s,e?"failed":"connected");if(e){::close(s.fd);s={};}}continue;}
+   if(s.connecting){
+     if(s.deadline&&core_.now()>=s.deadline){event(s,"failed");dispose(s);continue;}
+     if(!s.tcpReady){fd_set write,error;FD_ZERO(&write);FD_ZERO(&error);FD_SET(s.fd,&write);FD_SET(s.fd,&error);timeval tv{};
+      if(select(s.fd+1,nullptr,&write,&error,&tv)<=0)continue;int e=0;socklen_t n=sizeof e;getsockopt(s.fd,SOL_SOCKET,SO_ERROR,&e,&n);if(e){event(s,"failed");dispose(s);continue;}s.tcpReady=true;}
+     if(s.proxy){struct Io{int fd;int write(const uint8_t*p,size_t n){int z=::send(fd,p,n,MSG_DONTWAIT);return z<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR)?0:z;}int read(uint8_t*p,size_t n){int z=::recv(fd,p,n,MSG_DONTWAIT);return z<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR)?0:z==0?-1:z;}}io{s.fd};s.proxy->step(io);if(s.proxy->error()){event(s,"failed");dispose(s);continue;}if(!s.proxy->ready())continue;s.proxy->~ProxyHandshake();core_.resources().freeAllocation(s.proxy);s.proxy=nullptr;}
+     s.connecting=false;event(s,"connected");continue;}
    if(s.listener){auto slot=vacant();if(!slot)continue;int fd=::accept(s.fd,nullptr,nullptr);if(fd<0)continue;if(!nonblocking(fd)){::close(fd);continue;}*slot={fd,next_++};slot->owner=s.owner;event(*slot,"accepted");continue;}
    uint8_t b;int n=recv(s.fd,&b,1,MSG_PEEK|MSG_DONTWAIT);
    if(n>0&&!s.notified){s.notified=true;event(s,"readable");}
-   else if(!n||(n<0&&!transient())){event(s,"closed");::close(s.fd);s={};}
+   else if(!n||(n<0&&!transient())){event(s,"closed");dispose(s);}
  }}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
    const char*fields=(!strcmp(m,"listen")||!strcmp(m,"connect"))?"address,port":!strcmp(m,"write")?"id,text,hex":!strcmp(m,"read")?"id,length":!strcmp(m,"close")?"id":"";
@@ -47,6 +53,8 @@ public:
      if(!registered_)return "owner_hook_capacity";auto slot=vacant();if(!slot)return "socket_capacity";bool listen=!strcmp(m,"listen");
      uint32_t port=a["port"]|0u;const char*address=a["address"]|(listen?"0.0.0.0":"");sockaddr_in addr{};addr.sin_family=AF_INET;addr.sin_port=htons(port);
      if(!port||port>65535||inet_pton(AF_INET,address,&addr.sin_addr)!=1)return "ipv4_address_and_port_required";
+     ProxySettings proxy=proxy_?proxy_->snapshot():ProxySettings();bool tunneled=!listen&&proxy.applies(address);
+     if(tunneled){if(inet_pton(AF_INET,proxy.host,&addr.sin_addr)!=1)return "tcp_proxy_requires_ipv4_address";addr.sin_port=htons(proxy.port);}
      int fd=socket(AF_INET,SOCK_STREAM,0);if(fd<0)return "socket_failed";
      if(!nonblocking(fd)){::close(fd);return "socket_failed";}
 #ifdef SO_NOSIGPIPE
@@ -54,10 +62,10 @@ public:
 #endif
      if(listen){int one=1;setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof one);if(::bind(fd,(sockaddr*)&addr,sizeof addr)||::listen(fd,2)){::close(fd);return "listen_failed";}}
      else if(::connect(fd,(sockaddr*)&addr,sizeof addr)&&errno!=EINPROGRESS){::close(fd);return "connect_failed";}
-     *slot={fd,next_++,listen,!listen};slot->owner=core_.callerOwner();out["id"]=slot->id;out["state"]=listen?"listening":"connecting";return nullptr;
+     *slot={fd,next_++,listen,!listen};slot->owner=core_.callerOwner();slot->deadline=core_.now()+proxy.timeout;if(tunneled){void*memory=core_.resources().allocate(sizeof(ProxyHandshake));if(!memory){dispose(*slot);return "proxy_memory_budget";}slot->proxy=new(memory)ProxyHandshake();if(auto e=slot->proxy->begin(proxy,address,port)){dispose(*slot);return e;}}out["id"]=slot->id;out["state"]=listen?"listening":"connecting";return nullptr;
    }
    auto s=find(a["id"]|0u);if(!s)return "socket_not_found";if(core_.callerOwner()&&s->owner!=core_.callerOwner())return "socket_owned_by_other";
-   if(!strcmp(m,"close")){::close(s->fd);*s={};return nullptr;}
+   if(!strcmp(m,"close")){dispose(*s);return nullptr;}
    if(s->listener||s->connecting)return "socket_not_connected";
    if(!strcmp(m,"write")){uint8_t bytes[1024];size_t n=0;if(auto e=wirePayload(a,bytes,sizeof bytes,n))return e;
      int flags=MSG_DONTWAIT;

@@ -116,3 +116,9 @@ target_include_directories(notes_applications_test PRIVATE "${NOTES_ROOT}/firmwa
 target_compile_options(notes_applications_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
 target_link_options(notes_applications_test PRIVATE -fsanitize=address,undefined)
 target_link_libraries(notes_applications_test PRIVATE notes_lua)
+
+add_executable(notes_managed_services_test managed_services_test.cpp)
+target_include_directories(notes_managed_services_test PRIVATE "${NOTES_ROOT}/firmware/WishOS/src" "${NOTES_ARDUINO_LIBS}/ArduinoJson/src")
+target_compile_options(notes_managed_services_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
+target_link_options(notes_managed_services_test PRIVATE -fsanitize=address,undefined)
+target_link_libraries(notes_managed_services_test PRIVATE notes_lua)

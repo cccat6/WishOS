@@ -37,6 +37,7 @@ of either public repository.
 - Runtime examples: `examples/agent-os/`
 - Agent guidance: `skills/agentic-notes-hardware/`
 - Implemented interfaces and limits: `docs/agent-os-runtime.md`
+- System-owned AI, resources, diagnostics, proxy and time: [managed services](docs/system-services.md)
 - Current requirements, audit gaps and completion gates: [system plan](docs/agent-os-plan.md)
 
 Build using `tools/build_wishos.sh`; select a board with `WISHOS_BOARD`.

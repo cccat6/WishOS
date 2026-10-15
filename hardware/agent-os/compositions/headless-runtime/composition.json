@@ -4,7 +4,8 @@
   "entry": "Port.inc",
   "flags": [
     "-DSPI_DRIVER_SELECT=3",
-    "-DUSE_SD_CRC=1"
+    "-DUSE_SD_CRC=1",
+    "-flto"
   ],
   "required_pins": [],
   "pin_constraints": {},
@@ -26,5 +27,7 @@
   "platforms": [
     "esp32-c3"
   ],
-  "hardware_schema": {}
+  "hardware_schema": {},
+  "system_stack_bytes": 12288,
+  "minimum_system_stack_bytes": 12288
 }

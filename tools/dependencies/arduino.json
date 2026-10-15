@@ -12,7 +12,8 @@
       "name": "WebSockets",
       "version": "2.7.2",
       "url": "https://downloads.arduino.cc/libraries/github.com/Links2004/WebSockets-2.7.2.zip",
-      "sha256": "cace4969401d5a015d3558fd501c7449a946beaa90b7313cc5b262014b54ae7e"
+      "sha256": "cace4969401d5a015d3558fd501c7449a946beaa90b7313cc5b262014b54ae7e",
+      "patch": "../patches/websockets-2.7.2-proxy.json"
     },
     "lvgl": {
       "name": "lvgl",

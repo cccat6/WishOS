@@ -36,6 +36,8 @@ build/os-native-operation-test
 build/os-core-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_retention_test.cpp -o build/os-retention-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/tests/os-stubs" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_littlefs_test.cpp -o build/os-littlefs-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$ROOT/tests/os-stubs" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_flash_lifecycle_test.cpp -o build/os-flash-lifecycle-test
+build/os-flash-lifecycle-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$LIBS/ArduinoJson/src" tests/os_files_test.cpp -o build/os-files-test
 build/os-files-test
 build/os-littlefs-test
@@ -98,6 +100,7 @@ build/os-ui/notes_actuator_test
 build/os-ui/notes_memory_test
 build/os-ui/notes_app_test
 build/os-ui/notes_applications_test
+build/os-ui/notes_managed_services_test
 build/os-ui/notes_failure_test
 "$PYTHON" -m unittest discover -s tests -p 'test_board_packages.py' -v
 "$PYTHON" -m unittest discover -s tests -p 'test_os_build.py' -v

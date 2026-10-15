@@ -182,7 +182,29 @@ def load(package):
             if not entry.startswith('/system/') or not isinstance(assets.get(entry[7:]),str) or len(assets[entry[7:]].encode())>8192:raise ValueError('application entry missing or too large')
         for role in ('launcher','voice'):
             if applications.get(role) and applications[role] not in ids:raise ValueError('application role not installed')
+    stack=b.get('system_stack_bytes',p.get('system_stack_bytes',8192))
+    if type(stack) is not int or stack<max(1024,p.get('minimum_system_stack_bytes',1024)) or stack%16 or stack>0xffffffff:raise ValueError('native system stack configuration')
+    b['system_stack_bytes']=stack
     return root,b,port,p,assets
+
+def lz4_compress(data):
+    out=bytearray();table={};anchor=at=0;n=len(data)
+    def length(value):
+        while value>=255:out.append(255);value-=255
+        out.append(value)
+    while at+12<n:
+        key=data[at:at+4];previous=table.get(key);table[key]=at
+        if previous is None or at-previous>65535:at+=1;continue
+        matched=4
+        while at+matched<n-5 and data[previous+matched]==data[at+matched]:matched+=1
+        literals=at-anchor;out.append((min(literals,15)<<4)|min(matched-4,15))
+        if literals>=15:length(literals-15)
+        out.extend(data[anchor:at]);out.extend((at-previous).to_bytes(2,'little'))
+        if matched>=19:length(matched-19)
+        at+=matched;anchor=at
+    literals=n-anchor;out.append(min(literals,15)<<4)
+    if literals>=15:length(literals-15)
+    out.extend(data[anchor:]);return bytes(out)
 
 def literal(value):
     return json.dumps(value,ensure_ascii=False)
@@ -197,8 +219,9 @@ def generate(package, output):
     _,platform=platform_package(b)
     partition_hash=hashlib.sha256(inside(root,b['partition_file']).read_bytes()).hexdigest()
     fingerprint=hashlib.sha256(json.dumps({'board':b,'composition':p,'platform':platform,'partitions':partition_hash,'assets':asset_hashes,'composition_files':port_hashes,'drivers':driver_hashes},sort_keys=True).encode()).hexdigest()
-    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};','struct Asset {const char*path;const char*data;size_t size;};','inline constexpr Asset ASSETS[]={']
-    insertion=lines.index('struct Asset {const char*path;const char*data;size_t size;};')
+    lines=['#pragma once','#include <stddef.h>','#include <stdint.h>','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};','struct Asset {const char*path;const char*data;size_t size;size_t stored;};','inline constexpr Asset ASSETS[]={']
+    insertion=lines.index('struct Asset {const char*path;const char*data;size_t size;size_t stored;};')
+    lines.insert(insertion,f'inline constexpr size_t SYSTEM_STACK_BYTES={b["system_stack_bytes"]};')
     _,runtime=runtime_package(root,b)
     lines.insert(insertion,f'inline constexpr char RUNTIME_ID[]={literal(runtime.get("id","board-local"))};')
     lines.insert(insertion,f'inline constexpr char DRIVERS[]={literal(",".join(drivers))};')
@@ -206,8 +229,13 @@ def generate(package, output):
     lines.insert(insertion,f'inline constexpr char COMPOSITION_ID[]={literal(p["id"])};')
     for key,value in sorted(assets.items()):
         raw=value.encode() if isinstance(value,str) else value
-        encoded=literal(value) if isinstance(value,str) else '"'+''.join(f'\\x{x:02x}' for x in raw)+'"'
-        lines.append(f'{{{literal(key)},{encoded},{len(raw)}}},')
+        logical=len(raw);compressed=raw
+        if isinstance(value,str) and (key.startswith(('/ui/','/suite/','/lib/')) or key.endswith('.lua')):
+            candidate=lz4_compress(raw)
+            if len(candidate)<len(raw):compressed=candidate
+        packed=compressed!=raw
+        encoded=literal(value) if isinstance(value,str) and not packed else '"'+''.join(f'\\x{x:02x}' for x in compressed)+'"'
+        lines.append(f'{{{literal(key)},{encoded},{logical},{len(compressed)}}},')
     lines += ['};','inline constexpr size_t ASSET_COUNT=sizeof(ASSETS)/sizeof(ASSETS[0]);','struct Pin {const char*signal;int gpio;int pad;};','inline constexpr Pin PINS[]={']
     lines += [f'{{{literal(k)},{v},{p.get("package_pins",{}).get(str(v),-1)}}},' for k,v in b['pins'].items()]
     lines += ['};',f'inline constexpr char RESOURCE_DEFAULTS[]={literal(json.dumps(b.get("resources",{}),separators=(",",":")))};',f'inline constexpr char HARDWARE_JSON[]={literal(json.dumps(b.get("hardware",{}),separators=(",",":")))};',f'inline constexpr int DISPLAY_WIDTH={(b.get("display") or {}).get("width",0)};',f'inline constexpr int DISPLAY_HEIGHT={(b.get("display") or {}).get("height",0)};','}','namespace notesos::pins {']

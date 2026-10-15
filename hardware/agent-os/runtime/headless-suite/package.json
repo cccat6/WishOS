@@ -6,7 +6,8 @@
     "/setup.html": "@runtime/control/setup.html",
     "/lib/input.lua": "@runtime/lib/input.lua",
     "/control/control.js": "@runtime/control/control.js",
-    "/control/display.js": "@runtime/control/display.js"
+    "/control/display.js": "@runtime/control/display.js",
+    "/services.json": "assets/services.json"
   },
   "gzip_assets": [
     "/setup.html",

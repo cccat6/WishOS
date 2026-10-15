@@ -26,6 +26,18 @@ def rpc(path,method='read',args=None,timeout=12,ok=True):
    if ok:assert r.get('ok'),(path,method,r.get('error'),r.get('result'))
    return r
  raise TimeoutError(path+' '+method)
+def prepare_flash(method="mount"):
+ r=rpc('/sys/operations','request',{'path':'/dev/flash','method':method,'args':{}})['result'];ident=r['completion_id']
+ try:
+  end=time.monotonic()+30
+  while time.monotonic()<end:
+   result=rpc('/sys/operations','read',{'id':ident})['result']
+   if result['ready']:
+    return result['event']=='operation_completed
+   time.sleep(.05)
+  raise TimeoutError('flash mount')
+ finally:rpc('/sys/operations','release',{'id':ident})
+
 try:
  board=rpc('/sys/board')['result'];assert board['mcu']=='ESP32-C3';report['board']=board
  report['initial_stats']=rpc('/sys/stats')['result'];report['checks'].append('identity_and_runtime_boot')
@@ -39,6 +51,7 @@ try:
  after=rpc('/dev/wifi')['result']
  assert before['revision']==after['revision'] and before['configured']==after['configured']
  report['checks'].append('wifi_adapter_schema_and_atomic_rejection')
+ if after.get('connected'):report['ip']=after['ip']
  if a.wifi_config:
   rpc("/dev/wifi","configure",{"settings":{"ap_enabled":False,"tx_power_dbm":8.5,"power_save":"off","connect_timeout_ms":30000}})
   config=json.loads(a.wifi_config.read_text());rpc('/dev/wifi','connect',{'ssid':config['ssid'],'password':config['password'],'persist':False,'hold':'until_resume'})
@@ -71,9 +84,9 @@ try:
  finally:rpc('/fs','remove',{'file':ram},ok=False)
  assert rpc('/sys/resources')['result']['managed_bytes']==before
  report['checks'].append('absent_psram_policy_and_ram_accounting')
- mount=rpc('/sys/storage','mount',ok=False)
- if not mount['ok']:
-  assert a.format_storage,mount;rpc('/sys/storage','format')
+ mounted=prepare_flash()
+ if not mounted:
+  assert a.format_storage,'mount failed';assert prepare_flash('format')
  base='/storage/flash/test-'+uuid.uuid4().hex[:12];rpc('/fs','mkdir',{'file':base})
  try:
   filename=base+'/中文测试.txt';payload='WishOS 中文 UTF-8';rpc('/fs','write',{'file':filename,'text':payload,'truncate':True});read=rpc('/fs','read',{'file':filename})['result'];assert bytes.fromhex(read['hex']).decode()==payload
@@ -203,7 +216,7 @@ function on_start() request() end""".replace('HTTP_TARGET',target)
   rpc('/services/nfs','start',{'provider':'flash','export_path':'/flash'});assert rpc('/services/nfs')['result']['running'];rpc('/services/nfs','stop');assert rpc('/services/nfs')['result']['owned_heap_bytes']==0;report['checks'].append('nfs_start_stop_release')
  finally:
   rpc('/sys/runtime','stop',ok=False);rpc('/fs','remove',{'file':base+'/中文测试.txt'},ok=False);rpc('/fs','remove',{'file':base},ok=False)
- report['final_stats']=rpc('/sys/stats')['result'];report['resources']=rpc('/sys/resources')['result'];assert report['resources']['reserved_bytes']==0 and report['resources']['managed_bytes']==0
+ report['final_stats']=rpc('/sys/stats')['result'];report['resources']=rpc('/sys/resources')['result'];assert report['resources']['reserved_bytes']==report['initial_resources']['reserved_bytes'] and report['resources']['managed_bytes']==report['initial_resources']['managed_bytes']
  report['ok']=True
 finally:
  s.close();a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')

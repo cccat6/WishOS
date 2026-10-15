@@ -73,7 +73,7 @@ class BuildTests(unittest.TestCase):
    self.assertTrue((stage/'src/drivers/e6/scene/Content.cpp').exists())
    self.assertTrue((stage/'src/display/NativeText.cpp').exists())
    self.assertFalse((stage/'src/display/Codec.h').exists())
-   self.assertIn('欢迎',(stage/'src/BoardPackage.h').read_text())
+   self.assertIn('/ui/welcome.json',(stage/'src/BoardPackage.h').read_text())
    builder.stage_sources(boardpack.HARDWARE/'boards/esp32-c3-runtime',stage)
    self.assertEqual([p.name for p in (stage/'src/drivers').iterdir()],['esp32-services'])
    self.assertNotIn('/ui/welcome.json',(stage/'src/BoardPackage.h').read_text())

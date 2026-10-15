@@ -39,6 +39,18 @@ struct Rule {
   uint64_t last = 0;
   char source[48]{}, event[40]{}, target[48]{}, method[32]{}, args[768]{}, where[256]{};
 };
+// Rule records are allocated only for configured rules; the index is bounded.
+// Copies of the index are non-owning transaction snapshots.
+struct RuleIndex {
+ Rule*items[MAX_RULES]{};
+ struct Iterator{Rule*const*p;Rule*const*end;void skip(){while(p!=end&&!*p)++p;}Rule&operator*()const{return **p;}Iterator&operator++(){++p;skip();return *this;}bool operator!=(const Iterator&o)const{return p!=o.p;}};
+ Iterator begin()const{Iterator i{items,items+MAX_RULES};i.skip();return i;}Iterator end()const{return {items+MAX_RULES,items+MAX_RULES};}
+ bool contains(const Rule*p)const{for(auto item:items)if(item==p)return true;return false;}
+ bool full()const{for(auto p:items)if(!p)return false;return true;}
+ Rule*create(ResourceBudget&memory){for(auto&p:items)if(!p){auto data=memory.allocate(sizeof(Rule));if(!data)return nullptr;p=new(data)Rule;return p;}return nullptr;}
+ void releaseMissing(const RuleIndex&keep,ResourceBudget&memory){for(auto&p:items)if(p&&!keep.contains(p)){p->~Rule();memory.freeAllocation(p);p=nullptr;}}
+ void prune(ResourceBudget&memory){for(auto&p:items)if(p&&!p->used){p->~Rule();memory.freeAllocation(p);p=nullptr;}}
+};
 inline bool eventAfter(uint32_t sequence,uint32_t after){uint32_t distance=sequence-after;return distance&&distance<0x80000000u;}
 struct Timer {
   bool used = false;
@@ -52,6 +64,7 @@ inline bool copy(char *dst, size_t capacity, const char *src) {
   strcpy(dst, src);
   return true;
 }
+inline const char*argumentFields(JsonObjectConst a,const char*fields){for(auto f:a){bool found=false;const char*p=fields;size_t n=strlen(f.key().c_str());while(*p){const char*end=strchr(p,',');size_t z=end?size_t(end-p):strlen(p);if(z==n&&!strncmp(p,f.key().c_str(),n)){found=true;break;}if(!end)break;p=end+1;}if(!found)return "unknown_argument";}if(a.containsKey("persist")&&!a["persist"].is<bool>())return "persist_type";return nullptr;}
 class Core {
   ResourceBudget resources_;
   CompletionStore<MAX_DEVICES+1> completions_{resources_};
@@ -59,7 +72,7 @@ class Core {
   Device devices_[MAX_DEVICES]{};
   unsigned count_ = 0;
   Event events_[MAX_EVENTS]{};
-  Rule rules_[MAX_RULES]{};
+  RuleIndex rules_;
   Timer timers_[MAX_TIMERS]{};
   uint32_t seq_ = 0, nextRule_ = 1, ruleOverruns_ = 0;
   uint64_t now_ = 0;
@@ -69,24 +82,25 @@ class Core {
   int (*gate_)(const Event&)=nullptr;
   bool (*observe_)(const Event&)=nullptr;
   const char*(*invokeGate_)(const char*,const char*)=nullptr;
-  Event deferred_[16]{};
+  Event*deferred_=nullptr;
   unsigned deferredCount_=0;uint32_t policyDrops_=0;
 
+  void*diagnosticsContext_=nullptr;void(*diagnosticEvent_)(void*,const char*,const char*,JsonObjectConst,uint32_t)=nullptr;void(*diagnosticCall_)(void*,const char*,const char*,const char*,uint32_t)=nullptr;
 public:
+  ~Core(){resources_.freeAllocation(deferred_);rules_.releaseMissing(RuleIndex(),resources_);}
+  void diagnostics(void*ctx,void(*event)(void*,const char*,const char*,JsonObjectConst,uint32_t),void(*call)(void*,const char*,const char*,const char*,uint32_t)){diagnosticsContext_=ctx;diagnosticEvent_=event;diagnosticCall_=call;}
   ResourceBudget&resources(){return resources_;}
   CompletionStore<MAX_DEVICES+1>&completions(){return completions_;}
   const char *replaceRules(JsonArrayConst definitions,const uint32_t*owned,size_t ownedCount,JsonArray ids){
     if(definitions.size()>MAX_RULES)return "rule_limit";
     for(auto definition:definitions)if(definition.as<JsonObjectConst>().containsKey("id"))return "replacement_rule_id_not_supported";
-    Rule*backup=(Rule*)malloc(sizeof(rules_));if(!backup)return "memory_low";
-    memcpy(backup,rules_,sizeof(rules_));uint32_t previousNext=nextRule_;
-    // The UI service supplies its own trusted group IDs; app ownership must not
-    // prevent replacement of the preceding system/default UI group.
-    for(size_t i=0;i<ownedCount;++i)for(auto&r:rules_)if(r.used&&r.id==owned[i])r={};
-    const char*error=nullptr;
+    RuleIndex previous=rules_,retained;uint32_t previousNext=nextRule_;unsigned at=0;
+    for(auto rule:previous.items)if(rule){bool replacing=false;for(size_t i=0;i<ownedCount;++i)if(rule->id==owned[i])replacing=true;if(!replacing)retained.items[at++]=rule;}
+    rules_=retained;const char*error=nullptr;
     for(auto rule:definitions){JsonDocument result;if((error=setRule(rule.as<JsonObjectConst>(),result.to<JsonObject>())))break;if(!ids.add(result["id"])){error="memory_low";break;}}
-    if(error){memcpy(rules_,backup,sizeof(rules_));nextRule_=previousNext;ids.clear();}
-    free(backup);return error;
+    if(error){rules_.releaseMissing(previous,resources_);rules_=previous;nextRule_=previousNext;ids.clear();}
+    else previous.releaseMissing(rules_,resources_);
+    return error;
   }
   void clock(uint64_t now) {
     std::lock_guard<std::recursive_mutex>lock(eventMutex_);now_ = now;
@@ -131,7 +145,7 @@ public:
   uint32_t callerOwner()const{return invocationOwner_;}
   bool onOwnerRelease(void*context,void(*fn)(void*,uint32_t)){for(auto&h:ownerHooks_)if(!h.release){h={context,fn};return true;}return false;}
   void removeOwnerHook(void*context){for(auto&h:ownerHooks_)if(h.context==context)h={};}
-  void releaseOwner(uint32_t owner){if(!owner)return;completions_.releaseOwner(owner);for(auto&r:rules_)if(r.owner==owner)r={};for(auto&t:timers_)if(t.owner==owner)t={};for(auto h:ownerHooks_)if(h.release)h.release(h.context,owner);}
+  void releaseOwner(uint32_t owner){if(!owner)return;completions_.releaseOwner(owner);for(auto&r:rules_)if(r.owner==owner)r={};rules_.prune(resources_);for(auto&t:timers_)if(t.owner==owner)t={};for(auto h:ownerHooks_)if(h.release)h.release(h.context,owner);}
   const char *invoke(const char *path, const char *method, JsonObjectConst args, JsonObject out,uint32_t owner=0) {
     if(out.isNull())return "response_memory_low";
     const Device *d = find(path);
@@ -140,7 +154,7 @@ public:
     if (!supports(*d, method))
       return "unsupported_method";
     if(invokeGate_)if(auto e=invokeGate_(path,method))return e;
-    auto previous=invocationOwner_;invocationOwner_=owner;auto result=d->contextHandle?d->contextHandle(d->context,method,args,out):d->handle(method,args,out);invocationOwner_=previous;return result;
+    auto previous=invocationOwner_;invocationOwner_=owner;auto result=d->contextHandle?d->contextHandle(d->context,method,args,out):d->handle(method,args,out);invocationOwner_=previous;if(diagnosticCall_)diagnosticCall_(diagnosticsContext_,path,method,result,owner);return result;
   }
   const char*request(const char*path,const char*method,JsonObjectConst args,JsonObject out,uint32_t owner=0){
     JsonDocument description;if(auto error=describe(path,description.to<JsonObject>()))return error;if(description.overflowed())return "response_memory_low";
@@ -182,6 +196,7 @@ public:
         measureJson(data) >= MAX_EVENT)
       return false;
     if(timestamp==UINT64_MAX)timestamp=now();auto source=find(path);
+    if(diagnosticEvent_)diagnosticEvent_(diagnosticsContext_,path,name,data,targetOwner);
     completions_.record(path,name,data,targetOwner,timestamp,source?size_t(source-devices_):MAX_DEVICES);
     std::lock_guard<std::recursive_mutex>lock(eventMutex_);
     auto &e = events_[seq_ % MAX_EVENTS];
@@ -238,9 +253,8 @@ public:
         r = &x;
         break;
       }
-    if (!r)
-      return id ? "rule_not_found" : "rule_limit";
-    if(r->used&&invocationOwner_&&r->owner!=invocationOwner_)return "rule_owned_by_other";
+    if(!r&&id)return "rule_not_found";
+    if(r&&r->used&&invocationOwner_&&r->owner!=invocationOwner_)return "rule_owned_by_other";
     Rule candidate;candidate.owner=invocationOwner_;candidate.afterSequence=sequence();
     if (!copy(candidate.source, sizeof(candidate.source), source) ||
         !copy(candidate.event, sizeof(candidate.event), event) ||
@@ -270,6 +284,7 @@ public:
     }
     if (!a["cooldown_ms"].isNull() && !a["cooldown_ms"].is<uint32_t>())
       return "invalid_cooldown";
+    if(!r){bool full=rules_.full();r=rules_.create(resources_);if(!r)return full?"rule_limit":"rule_memory_budget";}
     candidate.used = true;
     candidate.id = id ? id : nextRule_++;
     candidate.cooldown = a["cooldown_ms"] | 1000;
@@ -307,7 +322,7 @@ public:
     for (auto &r : rules_)
       if (r.used && r.id == id) {
         if(invocationOwner_&&r.owner!=invocationOwner_)return false;
-        r.used = false;
+        r.used = false;rules_.prune(resources_);
         return true;
       }
     return false;
@@ -363,13 +378,13 @@ public:
           JsonDocument a, result;
           deserializeJson(a, r.args);
           auto o = result.to<JsonObject>();
-          auto executedId=r.id;
-          const char *error = invoke(r.target, r.method, a.as<JsonObjectConst>(), o,r.owner);
+          auto executedId=r.id,executedOwner=r.owner;char target[48],method[32];copy(target,sizeof target,r.target);copy(method,sizeof method,r.method);
+          const char *error = invoke(target, method, a.as<JsonObjectConst>(), o,executedOwner);
           o["rule_id"] = executedId;
           o["source_sequence"] = e.sequence;
           if (error)
             o["error"] = error;
-          emit("/sys/rules", "executed", o);
+          emit("/sys/rules", "executed", o,executedOwner);
         }
   }
   void dispatch(uint32_t &cursor) {
@@ -382,10 +397,10 @@ public:
     if(cursor+1<oldest)ruleOverruns_+=oldest-cursor-1;
     for(uint32_t i=begin;i<=end;++i){Event e;{std::lock_guard<std::recursive_mutex>lock(eventMutex_);e=events_[(i-1)%MAX_EVENTS];}if(e.sequence!=i){++ruleOverruns_;continue;}
       int g=gate_?gate_(e):0;
-      if(g==1){if(deferredCount_<16)deferred_[deferredCount_++]=e;else ++policyDrops_;}
+      if(g==1){if(!deferred_)deferred_=static_cast<Event*>(resources_.allocate(16*sizeof(Event)));if(deferred_&&deferredCount_<16)deferred_[deferredCount_++]=e;else ++policyDrops_;}
       else if(g==2)++policyDrops_;else dispatchOne(e);
     }
-    cursor=end;
+    cursor=end;if(!deferredCount_&&deferred_){resources_.freeAllocation(deferred_);deferred_=nullptr;}
   }
   const char *timer(JsonObjectConst a, JsonObject out) {
     if ((!a["id"].isNull()&&!a["id"].is<uint32_t>()) || !a["delay_ms"].is<uint32_t>())

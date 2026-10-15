@@ -26,13 +26,12 @@ public:
      const char*key=a["request_id"]|"",*route=a["route"]|"";uint32_t ttl=a["timeout_ms"]|300000u;
      if(!*route||strlen(route)>64||strlen(key)>64||ttl<100||ttl>86400000)return "remote_request_range";
      if(!a["payload"].is<JsonObjectConst>()||measureJson(a["payload"])>1536)return "remote_payload_limit";
-     char payload[1537];serializeJson(a["payload"],payload,sizeof payload);
      if(*key)for(auto&r:slots_)if(r.id&&!strcmp(r.key,key)){
        if(core_.callerOwner()&&r.owner!=core_.callerOwner())return "request_owned_by_other";
        if(strcmp(r.route,route)||!equivalent(r.payload,a["payload"]))return "request_id_conflict";describe(r,out);return nullptr;}
      Request*r=nullptr;for(auto&s:slots_)if(!s.id){r=&s;break;}if(!r)return "remote_queue_full";
-     if(!next_)return "request_id_exhausted";*r={};r->id=next_++;r->owner=core_.callerOwner();r->expires=now+ttl;strcpy(r->route,route);strcpy(r->payload,payload);
-     if(*key)strcpy(r->key,key);else snprintf(r->key,sizeof r->key,"%s:%lu",boot,(unsigned long)r->id);
+     if(!next_)return "request_id_exhausted";*r={};r->id=next_++;r->owner=core_.callerOwner();r->expires=now+ttl;strcpy(r->route,route);serializeJson(a["payload"],r->payload,sizeof r->payload);
+     if(*key)strcpy(r->key,key);else{size_t n=strlen(boot);if(n>48)n=48;memcpy(r->key,boot,n);r->key[n++]=':';char digits[10];unsigned count=0;uint32_t value=r->id;do{digits[count++]=char('0'+value%10);value/=10;}while(value);while(count)r->key[n++]=digits[--count];r->key[n]=0;}
      describe(*r,out);changed(*r,"queued");return nullptr;
    }
    if(!strcmp(m,"peek")){if(a.containsKey("after_id")&&!a["after_id"].is<uint32_t>())return "remote_cursor_type";uint32_t after=a["after_id"]|0u;Request*oldest=nullptr;for(auto&r:slots_)if(r.id>after&&!r.done&&(!core_.callerOwner()||r.owner==core_.callerOwner())&&(!oldest||r.id<oldest->id))oldest=&r;if(oldest)describe(*oldest,out);else out["state"]="empty";return nullptr;}
@@ -42,9 +41,8 @@ public:
    if(core_.callerOwner()&&r->owner!=core_.callerOwner())return "request_owned_by_other";
    if(!strcmp(m,"complete")){
      if(!a["ok"].is<bool>()||!a.containsKey("result")||measureJson(a["result"])>1536)return "remote_result_limit";
-     char result[1537];serializeJson(a["result"],result,sizeof result);
      if(r->done){if(r->ok!=a["ok"].as<bool>()||!equivalent(r->result,a["result"]))return "completion_conflict";}
-     else{r->done=true;r->ok=a["ok"];strcpy(r->result,result);changed(*r,r->ok?"completed":"failed");}
+     else{r->done=true;r->ok=a["ok"];serializeJson(a["result"],r->result,sizeof r->result);changed(*r,r->ok?"completed":"failed");}
    }else if(!strcmp(m,"release")){if(!r->done)return "request_pending";*r={};return nullptr;}
    else if(strcmp(m,"read"))return "unsupported_method";
    describe(*r,out);return nullptr;

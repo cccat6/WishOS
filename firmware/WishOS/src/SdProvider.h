@@ -78,7 +78,7 @@ public:
     auto published=snapshot();
     o["prepare"]["path"]="/dev/sd";o["prepare"]["method"]="mount";o["prepare"]["args"].to<JsonObject>();
     o["filename_encoding"]="utf8";o["mounted"]=available();o["operation_pending"]=working();o["filesystem"]=available()?(published.type==64?"exfat":published.type==32?"fat32":"fat16"):"unknown";
-    o["revision"]=revision.load();o["partition_resize_supported"]=false;o["free_is_cached"]=true;o["free_needs_refresh"]=spaceDirty.load();o["space_refresh_async"]=requestSpace_!=nullptr;
+    o["revision"]=revision.load();o["partition_resize_supported"]=false;o["free_is_cached"]=true;o["free_needs_refresh"]=spaceDirty.load();o["space_refresh_async"]=requestSpace_!=nullptr;if(requestSpace_){o["capacity_refresh"]["path"]="/dev/sd";o["capacity_refresh"]["method"]="space";o["capacity_refresh"]["args"].to<JsonObject>();}
     if(published.mounted&&published.known){sizeText(o,"physical_capacity_bytes",published.physical);sizeText(o,"volume_capacity_bytes",published.volume);}else{o["physical_capacity_bytes"]=nullptr;o["volume_capacity_bytes"]=nullptr;}
     if(working()?published.freeKnown:freeKnown.load())sizeText(o,"free_bytes",working()?published.free:freeBytes);else o["free_bytes"]=nullptr;
   }

@@ -1,0 +1,27 @@
+{
+  "name": "WebSockets",
+  "source_sha256": "17558a5af4a55aaa987e13ce6f38d89a685ae7522072c6a9e5d9917b8222687e",
+  "changes": [
+    {
+      "file": "src/WebSocketsClient.cpp",
+      "sha256": "81c6900bf87414bdd63dee8ef5954af960b2fed70a162d48d4e99eefa959ae82",
+      "replacements": [
+        {
+          "old": "new WEBSOCKETS_NETWORK_CLASS()",
+          "new": "WISHOS_PLAIN_CLIENT()",
+          "count": 2
+        },
+        {
+          "old": "new WEBSOCKETS_NETWORK_SSL_CLASS()",
+          "new": "WISHOS_SECURE_CLIENT()",
+          "count": 1
+        },
+        {
+          "old": "#include \"WebSocketsClient.h\"",
+          "new": "#include \"WebSocketsClient.h\"\n#if defined(ESP32)\nextern NetworkClient* wishosCreateNetworkClient();\nextern NetworkClientSecure* wishosCreateSecureClient();\n#define WISHOS_PLAIN_CLIENT() wishosCreateNetworkClient()\n#define WISHOS_SECURE_CLIENT() wishosCreateSecureClient()\n#else\n#define WISHOS_PLAIN_CLIENT() new WEBSOCKETS_NETWORK_CLASS()\n#define WISHOS_SECURE_CLIENT() new WEBSOCKETS_NETWORK_SSL_CLASS()\n#endif",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}
