@@ -8,18 +8,21 @@ application files, not firmware updates or native driver installation.
 A revision is an immutable directory with:
 
 - `package.json`: `{format:"wishos-package/1",entry:"app.json",inventory:"files.jsonl",inventory_sha256:"<sha256>"}`.
-- `files.jsonl`: one `{path,bytes,sha256}` per nonempty line, sorted by the UTF-8
+- `files.jsonl`: one `{path,bytes,sha256,kind?}` per nonempty line, sorted by the UTF-8
   bytes of the canonical relative path; `bytes` is a decimal string. The inventory
   lists every package payload including the application descriptor, excluding
-  package.json and the inventory itself. All Lua (`.lua`) is text source.
+  package.json and the inventory itself. Kinds are `lua`, `json` or `asset`; the program entry and `.lua` files are always compiled.
+  An explicit asset is hashed as data, so large JSON data need not be parsed as UI/control metadata.
 - The `wishos-app/1` descriptor and its runtime resources. Relative references may
   contain `..` provided they stay within the revision; `/system/` shared libraries
   are device-provided dependencies, not duplicated native code.
 
 The manifest and inventory are streamed/hashed with bounded buffers. A native
 validator checks canonical paths, byte counts/digests, Lua 5.4.8 syntax, declared
-JSON/UI formats and the application's capability/budget requirements. UI validation
-uses the selected renderer without presentation. Preflight does not execute
+JSON/UI formats and the application's capability/budget requirements. UI schema validation
+uses the renderer's shared vocabulary without requiring application-created font
+or image bindings. Default `/sys/ui validate` additionally checks current render
+preparation without presentation. Preflight does not execute
 on_start or prove arbitrary dynamic program semantics. Native runtime preparation,
 instruction/memory limits and completion/lifecycle rules remain authoritative.
 
@@ -27,8 +30,10 @@ instruction/memory limits and completion/lifecycle rules remain authoritative.
 
 - `/sys/runtime validate {file|source,memory_bytes?}` compiles text only using the
   native parser, preserves the current VM and has no application side effects.
-- `/sys/ui validate {path,...view settings}` validates the real document/resources
-  without navigation, bindings or display submission. Exposed only by a UI adapter.
+- `/sys/ui validate {path,schema_only?,...view settings}` validates the real document/resources
+  without navigation, bindings or display submission. `schema_only:true` checks
+  structure and reports render_ready:false; runtime resource bindings may be
+  created later by the app. Exposed only by a UI adapter.
 - `/sys/apps validate {manifest,package}` starts a native incremental package check.
   Returns `operation_id`; async success is `validated`, failure is `failed`.
 - `/sys/apps validation {operation_id}` reads the retained validation outcome.

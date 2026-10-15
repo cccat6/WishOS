@@ -391,6 +391,7 @@
     "tests/test_os_nfs_socket.py",
     "tools/build_wishos.py",
     "tools/build_wishos.sh",
+    "tools/check_device_packages.py",
     "tools/check_device_workflows.py",
     "tools/check_lua_syntax.cpp",
     "tools/check_os_device.py",

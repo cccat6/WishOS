@@ -9,7 +9,8 @@ components; changing an app does not rebuild firmware.
 A package revision contains `package.json` (`wishos-package/1`) and a sorted,
 streaming `files.jsonl` inventory. The header identifies the `wishos-app/1`
 descriptor and inventory SHA-256. Each payload row identifies path, byte count and
-SHA-256. Do not hand-invent hashes. Publishers produce these from exact file bytes.
+SHA-256. Optional `kind` distinguishes lua/json controls from ordinary assets; large
+JSON data can be explicit assets rather than control documents. Do not hand-invent hashes. Publishers produce these from exact file bytes.
 The application descriptor's entry and all relative package paths stay inside
 this revision; parent-relative paths are valid when they do not escape it.
 Device-provided `/system/` libraries are shared references, not replacement GPIO
@@ -26,7 +27,9 @@ After delivery, call `/sys/apps validate {manifest,package}` through the discove
 async completion interface. Its `validated` completion includes `operation_id` and
 catalog `revision`; query `validation {operation_id}` for full diagnostics. The
 native validator incrementally verifies hashes and compiles Lua without on_start.
-UI/rule descriptions use native validation without presentation or binding changes.
+UI/rule descriptions use the renderer's schema validation without presentation or
+binding changes. Application-created fonts or resources are checked in their
+actual execution context; package preflight does not run the app to create them.
 Validation holds a read lease through the later install and has an advertised
 bounded lifetime. Release abandoned checks with `release_validation`.
 

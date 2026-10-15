@@ -1,4 +1,5 @@
 #include "NativeOperation.h"
+#include "RuntimeContract.h"
 #include "../firmware/WishOS/src/Conditions.h"
 #include "compositions/agentic-notes-e6/Defaults.h"
 #include "../firmware/WishOS/src/PowerMonitor.h"
