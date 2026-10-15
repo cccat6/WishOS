@@ -32,7 +32,7 @@ static void registerManagedServices(){
  core.add({"/net/proxy","read,configure","outbound proxy policy",proxyHandler,[](JsonObject o){networkProxy.describe(o);},"read"});
  core.add({"/sys/logs","read,write,configure","structured bounded diagnostics",logHandler,[](JsonObject o){diagnostics.describe(o);},"read"});
  core.add({"/sys/telemetry","read,configure,flush","optional registration and aggregate diagnostics",telemetryHandler,[](JsonObject o){telemetry.describe(o);},"read"});
- core.add({"/sys/transfers","read,configure,begin,file,chunk,close_file,commit,abort,release","verified streamed resources",transferHandler,[](JsonObject o){transfers.describe(o);},"read"});
+ core.add({"/sys/transfers","read,configure,begin,file,copy_file,chunk,close_file,commit,abort,release","verified streamed resources",transferHandler,[](JsonObject o){transfers.describe(o);},"read"});
  core.add({"/services/ai",AgentService::Methods,"managed AI tasks and result application",agentHandler,[](JsonObject o){agentService.describe(o);},"read,read_action,read_result"});
  core.diagnostics(&diagnostics,[](void*p,const char*s,const char*e,JsonObjectConst d,uint32_t owner){static_cast<Diagnostics*>(p)->event(s,e,d,owner);},[](void*p,const char*s,const char*m,const char*e,uint32_t owner){static_cast<Diagnostics*>(p)->call(s,m,e,owner);});
  JsonDocument config,logs;const char*download=nullptr;String downloadText;
@@ -45,4 +45,4 @@ static void registerManagedServices(){
  saved=preferences.getString("telemetry","");if(!saved.length()&&config["telemetry"].is<JsonObjectConst>())serializeJson(config["telemetry"],saved);if(saved.length())telemetry.restore(saved.c_str());
  uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);char id[18];snprintf(id,sizeof id,"%02X:%02X:%02X:%02X:%02X:%02X",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);telemetry.identity(id,bootId);switch(esp_reset_reason()){case ESP_RST_POWERON:telemetry.resetReason("power_on");break;case ESP_RST_SW:telemetry.resetReason("software");break;case ESP_RST_PANIC:telemetry.resetReason("panic");break;case ESP_RST_INT_WDT:case ESP_RST_TASK_WDT:case ESP_RST_WDT:telemetry.resetReason("watchdog");break;case ESP_RST_DEEPSLEEP:telemetry.resetReason("deep_sleep");break;case ESP_RST_BROWNOUT:telemetry.resetReason("brownout");break;case ESP_RST_EXT:telemetry.resetReason("external");break;default:telemetry.resetReason("unknown");}setenv("TZ",timeService.config().timezone,1);tzset();
 }
-static void pollManagedServices(bool suspended=false){diagnostics.poll(uptime());if(!suspended)agentService.poll();else telemetryBackend.cancel();telemetry.poll(uptime(),!suspended&&WiFi.status()==WL_CONNECTED);}
+static void pollManagedServices(bool suspended=false){diagnostics.poll(uptime());if(!suspended){transfers.poll();agentService.poll();}else telemetryBackend.cancel();telemetry.poll(uptime(),!suspended&&WiFi.status()==WL_CONNECTED);}

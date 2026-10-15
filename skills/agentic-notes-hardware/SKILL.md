@@ -5,6 +5,8 @@ description: Discover and operate WishOS resources, inspect live system state an
 
 # WishOS resource control
 
+For code package preflight, immutable revisions and whole-file updates, read [runtime packages](references/packages.md). Discover the component index advertised by `/sys/board`; native contributors and runtime app authors use different guidance. Package delivery is gated by validators, not by relying on this text alone.
+
 For direct event registration and asynchronous completion functions, read [application callbacks](references/callbacks.md).
 
 For system-owned AI requests, typed results, large resource transfers, storage policy, logs, telemetry, proxies and time, read [managed services](references/managed-services.md).

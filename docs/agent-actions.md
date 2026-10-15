@@ -16,7 +16,8 @@ Inline result:
   "transfer_id": 12,
   "actions": [
     {"type":"application","recipient":"origin","topic":"result","data":{"text":"The new reader is ready."}},
-    {"type":"system","path":"/sys/apps","method":"install","args":{"manifest":{"$asset":"app.json"}}},
+    {"type":"system","path":"/sys/apps","method":"validate","args":{"manifest":{"$asset":"app.json"},"package":{"$asset":"package.json"}}},
+    {"type":"system","path":"/sys/apps","method":"install","args":{"manifest":{"$asset":"app.json"},"package":{"$asset":"package.json"},"validation_id":{"$previous":"operation_id"},"expected_revision":{"$previous":"revision"}}},
     {"type":"system","path":"/sys/apps","method":"launch","args":{"id":{"$previous":"application_id"}}},
     {"type":"application","recipient":"foreground","topic":"open","data":{"file":{"$asset":"book.txt"}}}
   ]
@@ -82,3 +83,5 @@ service's diagnostic result. A failed step does not increment the completed coun
 resource acceptance, application processing and physical display completion remain
 different receipts. Same-operation duplicates share the authoritative execution;
 a duplicate/follower failure must not replace that authoritative receipt.
+
+Package generation and whole-file updates use the [package admission contract](package-contract.md). Do not insert hidden steps that change the meaning of `$previous`; validation and installation are explicit ordered calls.

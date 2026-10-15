@@ -85,7 +85,6 @@ build/os-wifi-test
 build/os-ble-config-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/tests/radio-stubs" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_radio_mux_test.cpp hardware/agent-os/drivers/esp32-c6-radio/RadioMux.cpp -o build/os-radio-mux-test
 build/os-radio-mux-test
-"$PYTHON" -m unittest discover -s tests -p 'test_os_client.py' -v
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_runtime_test.cpp -o build/os-runtime-test
 build/os-runtime-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_power_test.cpp -o build/os-power-test
@@ -95,6 +94,7 @@ build/os-conditions-test
 "$PYTHON" -m unittest discover -s tests -p 'test_os_assets.py' -v
 cmake -S tests/os-ui -B build/os-ui -G Ninja -DCMAKE_C_COMPILER="${CXX%++}" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_OSX_SYSROOT="$SDK" -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/os-ui -j 4
+"$PYTHON" -m unittest discover -s tests -p 'test_os_client.py' -v
 build/os-ui/notes_ui_test
 build/os-ui/notes_suite_test
 for surface in 128x64 320x240 239x321; do build/os-ui/notes_portable_ui_$surface; done
@@ -107,6 +107,7 @@ build/os-ui/notes_actuator_test
 build/os-ui/notes_memory_test
 build/os-ui/notes_app_test
 build/os-ui/notes_applications_test
+build/os-ui/notes_packages_test
 build/os-ui/notes_managed_services_test
 build/os-ui/notes_agent_actions_test
 build/os-ui/notes_failure_test

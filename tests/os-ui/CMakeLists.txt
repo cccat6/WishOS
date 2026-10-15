@@ -128,3 +128,13 @@ target_include_directories(notes_agent_actions_test PRIVATE "${NOTES_ROOT}/firmw
 target_compile_options(notes_agent_actions_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
 target_link_options(notes_agent_actions_test PRIVATE -fsanitize=address,undefined)
 target_link_libraries(notes_agent_actions_test PRIVATE notes_lua)
+
+add_executable(notes_packages_test packages_test.cpp)
+target_include_directories(notes_packages_test PRIVATE "${NOTES_ROOT}/firmware/WishOS/src" "${NOTES_ARDUINO_LIBS}/ArduinoJson/src")
+target_compile_options(notes_packages_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
+target_link_options(notes_packages_test PRIVATE -fsanitize=address,undefined)
+target_link_libraries(notes_packages_test PRIVATE notes_lua)
+
+add_executable(notes_lua_syntax "${NOTES_ROOT}/tools/check_lua_syntax.cpp")
+target_include_directories(notes_lua_syntax PRIVATE "${NOTES_ROOT}/firmware/WishOS/src")
+target_link_libraries(notes_lua_syntax PRIVATE notes_lua)

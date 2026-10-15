@@ -35,7 +35,7 @@ int main(){Core core;systemCore=&core;Vfs vfs;MemoryFiles memory("apps","/apps",
  apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["launcher"]=="launcher"&&o["restore_valid"]==false);
  // A queued activation uses the admitted manifest path even if the catalog is
  // subsequently updated. Direct runtime stop does not leave an app marked in use.
- write(memory,"/alternate.json",R"({"format":"wishos-app/1","id":"on-card","title":"New revision","entry":"missing.lua"})");a.clear();a["id"]="on-card";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));a.clear();a["manifest"]="/apps/alternate.json";assert(!apps.invoke("install",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="on-card");
+ write(memory,"/alternate.json",R"({"format":"wishos-app/1","id":"on-card","title":"New revision","entry":"one.lua"})");a.clear();a["id"]="on-card";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));a.clear();a["manifest"]="/apps/alternate.json";assert(!apps.invoke("install",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="on-card");
  host.invoke("stop",JsonObjectConst(),o.to<JsonObject>());a.clear();a["id"]="on-card";assert(!apps.invoke("remove",a.as<JsonObjectConst>(),o.to<JsonObject>()));
  // on_start may fail after its candidate replaces the old VM. The manager
  // still knows which instance faulted and restores the launcher on the next poll.

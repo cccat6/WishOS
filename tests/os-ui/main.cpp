@@ -50,6 +50,8 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  assert(!uiHandler("open",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(uiDocument(presentationState.active())->view.rotation==90);
  assert(prepareUi("/storage/ram/template.json",uiDocument(presentationState.active())->view));assert(lv_display_get_horizontal_resolution(uiDisplay)==720);assert(lv_display_get_vertical_resolution(uiDisplay)==480);
  assert(!strcmp(lv_label_get_text(lv_obj_get_child(uiRoot,0)),"New title"));assert(lv_obj_get_child_count(uiRoot)==1);
+ {auto active=presentationState.active();auto before=uiQueueCalls;auto root=uiRoot;std::string rendered=lv_label_get_text(lv_obj_get_child(uiRoot,0));std::string values;serializeJson(uiValues,values);JsonDocument check,result;check["path"]="/storage/ram/updated.json";check["rotation"]=180;assert(!uiHandler("validate",check.as<JsonObjectConst>(),result.to<JsonObject>()));assert(result["validated"]==true&&result["presented"]==false);assert(uiRoot==root&&presentationState.active()==active&&uiQueueCalls==before&&lv_display_get_horizontal_resolution(uiDisplay)==720);std::string after;serializeJson(uiValues,after);assert(values==after&&rendered==lv_label_get_text(lv_obj_get_child(uiRoot,0)));}
+
  for(int x=0;x<480;x+=16)assert(renderUiBand(x,stripe));a["rotation"]=45;assert(uiHandler("open",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(uiDocument(presentationState.active())->view.rotation==90);
  assert(prepareUi("/storage/ram/updated.json"));assert(renderUiBand(200,stripe));
  // Background model invalidation never navigates, regardless of caller identity.

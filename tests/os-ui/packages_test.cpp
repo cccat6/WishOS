@@ -1,0 +1,38 @@
+#include "Applications.h"
+#include "AssetTransfers.h"
+#include "FileService.h"
+#include <cassert>
+#include <map>
+#include <string>
+#include <iostream>
+using namespace notesos;
+static std::string hash(const std::string&s){Sha256 h;h.update((const uint8_t*)s.data(),s.size());char out[65];h.finish(out);return out;}
+static std::string text(JsonVariantConst d){std::string out;serializeJson(d,out);return out;}
+struct Files:MemoryFiles {bool wait=false;Files():MemoryFiles("ram","/ram","ram"){}const char*read(const char*p,uint64_t at,uint8_t*out,size_t n,size_t&got)override{if(wait&&strstr(p,".bin")){wait=false;return "spi_busy";}return MemoryFiles::read(p,at,out,n,got);}};
+struct Fixture {
+ Core core;Vfs vfs;Files files;ScriptHost host{core,vfs};Applications apps{core,vfs,host,""};AssetTransfers transfers{core,vfs,"boot"};FileService fs{vfs};
+ Fixture(){vfs.add(files);assert(transfers.restore(R"({"targets":[{"provider":"ram","root":"/incoming","quota_bytes":"1000000"}]})"));write("/old/main.lua","function on_start() value=17 end");JsonDocument a,o;a["file"]="/ram/old/main.lua";a["root"]="/ram/old";assert(!host.invoke("load",a.as<JsonObjectConst>(),o.to<JsonObject>()));}
+ void write(const std::string&p,const std::string&s){for(size_t at=1;(at=p.find('/',at))!=std::string::npos;++at){FileInfo info;if(files.stat(p.substr(0,at).c_str(),info))assert(!files.mkdir(p.substr(0,at).c_str()));}size_t n;assert(!files.write(p.c_str(),0,(const uint8_t*)s.data(),s.size(),true,n)&&n==s.size());}
+ std::string package(const std::string&root,std::string code="function on_start() end",std::string id="cat"){
+  std::map<std::string,std::string> content{{"app.json","{\"format\":\"wishos-app/1\",\"id\":\""+id+"\",\"title\":\"Cats\",\"entry\":\"main.lua\"}"},{"main.lua",code},{"payload.bin",std::string(4097,'c')}};
+  std::string inventory;for(auto&[path,body]:content){write(root+"/"+path,body);JsonDocument row;row["path"]=path;row["bytes"]=std::to_string(body.size());row["sha256"]=hash(body);inventory+=text(row)+"\n";}
+  write(root+"/files.jsonl",inventory);write(root+"/package.json","{\"format\":\"wishos-package/1\",\"entry\":\"app.json\",\"inventory\":\"files.jsonl\",\"inventory_sha256\":\""+hash(inventory)+"\"}");return "/ram"+root;
+ }
+ uint32_t check(const std::string&root,uint32_t timeout=300000){JsonDocument a,o;a["manifest"]=root+"/app.json";a["package"]=root+"/package.json";a["timeout_ms"]=timeout;assert(!apps.invoke("validate",a.as<JsonObjectConst>(),o.to<JsonObject>()));return o["operation_id"];}
+ JsonDocument status(uint32_t id){JsonDocument a,o;a["operation_id"]=id;assert(!apps.invoke("validation",a.as<JsonObjectConst>(),o.to<JsonObject>()));return o;}
+ void poll(unsigned n=100){for(unsigned i=0;i<n;++i)apps.poll();}
+ JsonDocument install(const std::string&root,uint32_t id){JsonDocument a,o;a["manifest"]=root+"/app.json";a["package"]=root+"/package.json";a["validation_id"]=id;a["expected_revision"]=status(id)["revision"];auto e=apps.invoke("install",a.as<JsonObjectConst>(),o.to<JsonObject>());if(e)o["error"]=e;return o;}
+ void release(uint32_t id){JsonDocument a,o;a["operation_id"]=id;assert(!apps.invoke("release_validation",a.as<JsonObjectConst>(),o.to<JsonObject>()));}
+ uint32_t owner(){JsonDocument o;host.invoke("read",JsonObjectConst(),o.to<JsonObject>());return o["owner"];}
+};
+int main(){
+ {Fixture f;auto owner=f.owner();auto root=f.package("/bad","function on_start(");auto id=f.check(root);f.poll();assert(f.status(id)["error"]=="script_syntax"&&f.owner()==owner&&f.vfs.canMutate((root+"/main.lua").c_str()));assert(f.install(root,id)["error"]=="package_validation_required");}
+ {Fixture f;auto owner=f.owner(),seq=f.core.sequence();JsonDocument a,o;a["source"]="error('must never execute')";assert(!f.host.invoke("validate",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["compiled"]==true&&o["executed"]==false&&f.owner()==owner&&f.core.sequence()==seq);a["source"]="local x <const> = 1";assert(!f.host.invoke("validate",a.as<JsonObjectConst>(),o.to<JsonObject>()));}
+ {Fixture f;auto owner=f.owner();auto root=f.package("/good");auto id=f.check(root);f.files.wait=true;f.poll();assert(f.status(id)["state"]=="validated"&&f.owner()==owner);JsonDocument a,o;a["path"]=root+"/main.lua";a["text"]="bad";assert(!strcmp(f.fs.invoke("write",a.as<JsonObjectConst>(),o.to<JsonObject>()),"file_in_use"));assert(f.install(root,id)["application_id"]=="cat");a.clear();a["id"]="cat";assert(!f.apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));f.poll();assert(f.owner()!=owner&&!f.vfs.canMutate((root+"/main.lua").c_str()));f.host.invoke("stop",JsonObjectConst(),o.to<JsonObject>());assert(f.vfs.canMutate((root+"/main.lua").c_str()));}
+ {Fixture f;auto root=f.package("/changed");auto id=f.check(root);f.write("/changed/main.lua","function on_start() end -- changed behind VFS fixture");f.poll();assert(f.status(id)["error"]=="package_size_mismatch");f.release(id);root=f.package("/expiry");id=f.check(root,100);f.poll();f.core.clock(101);f.apps.poll();assert(f.status(id)["error"]=="validation_expired"&&f.vfs.canMutate((root+"/main.lua").c_str()));}
+ {Fixture f;auto root=f.package("/first");auto id=f.check(root);f.poll();f.write("/other.json",R"({"format":"wishos-app/1","id":"other","title":"Other","entry":"old/main.lua"})");JsonDocument a,o;a["manifest"]="/ram/other.json";assert(!f.apps.invoke("install",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(f.install(root,id)["error"]=="revision_conflict");f.release(id);assert(f.vfs.canMutate((root+"/main.lua").c_str()));}
+ {Fixture f;std::string payload(4097,'p');f.write("/original.bin",payload);JsonDocument a,o;a["bytes"]="4097";a["files"]=1;assert(!f.transfers.invoke("begin",a.as<JsonObjectConst>(),o.to<JsonObject>()));auto id=o["id"].as<uint32_t>();a.clear();a["id"]=id;a["path"]="copy.bin";a["source"]="/ram/original.bin";a["bytes"]="4097";a["sha256"]=hash(payload);assert(!f.transfers.invoke("copy_file",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["state"]=="copying"&&!f.vfs.canMutate("/ram/original.bin"));f.files.wait=true;f.transfers.poll();f.transfers.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["file_offset"]=="0");f.transfers.poll();f.transfers.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["file_offset"]=="1024");for(int i=0;i<7;++i)f.transfers.poll();f.transfers.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["state"]=="receiving"&&o["files_complete"]==1&&f.vfs.canMutate("/ram/original.bin"));a.clear();a["id"]=id;assert(!f.transfers.invoke("commit",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(!f.transfers.invoke("release",a.as<JsonObjectConst>(),o.to<JsonObject>()));
+  a.clear();a["bytes"]="4097";a["files"]=1;assert(!f.transfers.invoke("begin",a.as<JsonObjectConst>(),o.to<JsonObject>()));id=o["id"];a.clear();a["id"]=id;a["path"]="copy.bin";a["source"]="/ram/original.bin";a["bytes"]="4097";a["sha256"]=hash("wrong");assert(!f.transfers.invoke("copy_file",a.as<JsonObjectConst>(),o.to<JsonObject>()));for(int i=0;i<8;++i)f.transfers.poll();f.transfers.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["state"]=="aborted"&&o["error"]=="transfer_digest_mismatch"&&f.vfs.canMutate("/ram/original.bin"));
+ }
+ std::cout<<"Package syntax/hash admission, immutable revisions, retained validation, expiration, catalog conflicts and bounded local delta copies passed\n";
+}

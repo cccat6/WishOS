@@ -240,22 +240,10 @@ public:
     }
     out["cursor"] = cursor;
   }
-  const char *setRule(JsonObjectConst a, JsonObject out) {
-    const char *source = a["source"] | "", *event = a["event"] | "", *target = a["target"] | "",
-               *method = a["method"] | "";
-    const Device *d = find(target);
-    if (!find(source) || !d || !supports(*d, method) || !*event)
-      return "invalid_rule";
-    uint32_t id = a["id"] | 0;
-    Rule *r = nullptr;
-    for (auto &x : rules_)
-      if ((id && x.used && x.id == id) || (!id && !x.used)) {
-        r = &x;
-        break;
-      }
-    if(!r&&id)return "rule_not_found";
-    if(r&&r->used&&invocationOwner_&&r->owner!=invocationOwner_)return "rule_owned_by_other";
-    Rule candidate;candidate.owner=invocationOwner_;candidate.afterSequence=sequence();
+  const char*validateRule(JsonObjectConst a)const{Rule candidate;return parseRule(a,candidate);}
+  const char*parseRule(JsonObjectConst a,Rule&candidate)const{
+    const char *source=a["source"]|"",*event=a["event"]|"",*target=a["target"]|"",*method=a["method"]|"";
+    const Device*d=find(target);if(!find(source)||!d||!supports(*d,method)||!*event)return "invalid_rule";
     if (!copy(candidate.source, sizeof(candidate.source), source) ||
         !copy(candidate.event, sizeof(candidate.event), event) ||
         !copy(candidate.target, sizeof(candidate.target), target) ||
@@ -284,6 +272,25 @@ public:
     }
     if (!a["cooldown_ms"].isNull() && !a["cooldown_ms"].is<uint32_t>())
       return "invalid_cooldown";
+    return nullptr;
+  }
+  const char *setRule(JsonObjectConst a, JsonObject out) {
+    const char *source = a["source"] | "", *event = a["event"] | "", *target = a["target"] | "",
+               *method = a["method"] | "";
+    const Device *d = find(target);
+    if (!find(source) || !d || !supports(*d, method) || !*event)
+      return "invalid_rule";
+    uint32_t id = a["id"] | 0;
+    Rule *r = nullptr;
+    for (auto &x : rules_)
+      if ((id && x.used && x.id == id) || (!id && !x.used)) {
+        r = &x;
+        break;
+      }
+    if(!r&&id)return "rule_not_found";
+    if(r&&r->used&&invocationOwner_&&r->owner!=invocationOwner_)return "rule_owned_by_other";
+    Rule candidate;candidate.owner=invocationOwner_;candidate.afterSequence=sequence();
+    if(auto error=parseRule(a,candidate))return error;
     if(!r){bool full=rules_.full();r=rules_.create(resources_);if(!r)return full?"rule_limit":"rule_memory_budget";}
     candidate.used = true;
     candidate.id = id ? id : nextRule_++;

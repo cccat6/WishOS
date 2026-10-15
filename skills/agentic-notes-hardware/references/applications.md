@@ -26,7 +26,9 @@ An application descriptor is a normal file:
 ```
 
 Entry and asset references are relative to their package files. Upload and verify
-all files before `install {manifest,persist}` registers the descriptor. Installation
+all files and run native `validate {manifest,package}` before
+`install {manifest,package,validation_id,expected_revision,persist}` registers the descriptor.
+See [package admission and whole-file revisions](packages.md) for preflight, tickets and updates. Installation
 must not run the application. `launch {id,arguments}` accepts optional JSON launch arguments (read through `/sys/apps read` in `on_start`) and is asynchronous and executes at a system
 loop boundary after the calling callback has returned. `home`/`exit` return to the
 configured launcher; `voice` enters the configured ordinary voice application.

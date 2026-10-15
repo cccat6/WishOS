@@ -21,8 +21,12 @@ class Packages(m.Client):
     def __init__(self):self.calls=[];self.files={};self.loaded='old';self.bad_read=False;self.lost_load=False;self.activation_count=0;self.apps={};self.revision=1;self.launcher='factory'
     def call(self,path,method='read',args=None,request_id=None):
         a=args or {};self.calls.append((path,method,a))
+        if path=='/sys/capabilities':return {'entry_source_limit_bytes':8192,'methods':'read,validate,load,stop'}
         if path=='/sys/apps':
             if method=='read':return {'revision':self.revision,'launcher':self.launcher,'pending':'','persisted':True}
+            if method=='validate':return {'operation_id':17,'revision':self.revision}
+            if method=='validation':return {'state':'validated','revision':self.revision}
+            if method=='release_validation':return {}
             if method=='install':
                 assert a['expected_revision']==self.revision
                 d=json.loads(self.files[a['manifest']]);self.apps[d['id']]={'id':d['id'],'manifest':a['manifest'],'entry':a['manifest'].rsplit('/',1)[0]+'/'+d['entry']};self.revision+=1;return {'application_id':d['id']}
@@ -59,6 +63,13 @@ class Tests(unittest.TestCase):
                 result=c.publish_app(p,'/storage/flash',persist=True)
             self.assertEqual(c.activation_count,1);self.assertEqual(result['verified_files'],3);self.assertEqual(c.apps['example']['entry'],result['entry']);self.assertEqual(c.launcher,'factory')
             load=next(i for i,(_,m,_) in enumerate(c.calls) if m=='launch');self.assertTrue(all(m!='write' for _,m,_ in c.calls[load:]))
+    def test_bad_source_is_refused_before_any_device_write(self):
+        c=Packages()
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start(')
+            with self.assertRaises(ValueError):c.publish_app(p,'/storage/flash')
+        self.assertFalse(any(method in ('mkdir','write','install','launch') for _,method,_ in c.calls))
+
     def test_installation_does_not_execute_or_replace_the_launcher(self):
         c=Packages()
         with tempfile.TemporaryDirectory() as folder:
@@ -77,7 +88,7 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start() end')
             with self.assertRaises(ValueError):c.publish_app(p,'/storage/ram',persist=True)
-        self.assertTrue(all(method in ('read','mounts') for _,method,_ in c.calls))
+        self.assertTrue(all(method in ('read','describe','mounts') for _,method,_ in c.calls))
     def test_stream_exact(self):
         c=Fake();r=c.present_native(bytes([0x11])*172800,'e6.ink6.image-v1',True);self.assertEqual(r['job_id'],7)
         chunks=[x[2] for x in c.calls if x[1]=='chunk'];self.assertEqual(sum(len(x['hex'])//2 for x in chunks),172800);self.assertEqual([x['offset'] for x in chunks],list(range(0,172800,1024)));self.assertEqual(c.calls[-1][1],'commit')

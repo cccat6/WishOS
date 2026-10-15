@@ -57,6 +57,17 @@ class PackageTests(unittest.TestCase):
    self.assertEqual(gzip.decompress(assets[path+'.gz']),source.read_bytes())
    self.assertNotIn(path,assets)
 
+ def test_component_index_describes_selected_layers_and_custom_hardware(self):
+  root,board,_,port,_=pack.load(pack.DEFAULT)
+  index=pack.component_index(root,board,port)
+  self.assertEqual(index['format'],'wishos-components/1')
+  self.assertEqual({c['layer'] for c in index['components']},{'system','driver','application'})
+  compiled={c['id'] for c in index['components'] if c['kind']=='peripheral'}
+  self.assertEqual(compiled,set(pack.driver_packages(board,port)))
+  with tempfile.TemporaryDirectory() as folder:
+   target=Path(folder);pack.generate(pack.DEFAULT,target)
+   self.assertIn('/components.json',(target/'BoardPackage.h').read_text())
+
  def test_binary_assets_preserve_nul_and_size(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root);b['assets']['/icons/test.bin']='test.bin';raw=b'\x00\xff\x00data';(root/'test.bin').write_bytes(raw);self.write(root,b)

@@ -38,6 +38,8 @@ of either public repository.
 - Agent guidance: `skills/agentic-notes-hardware/`
 - Implemented interfaces and limits: `docs/agent-os-runtime.md`
 - System-owned AI, resources, diagnostics, proxy and time: [managed services](docs/system-services.md)
+- Package admission and whole-file revisions: [package contract](docs/package-contract.md)
+- System, native driver and runtime app inventory: [components](docs/components.md)
 - Ordered application/system results: [action contract](docs/agent-actions.md)
 - LAN/cloud endpoint selection: [device link](docs/device-link.md)
 - Interrupted operations and recovery evidence: [recovery](docs/recovery.md)
