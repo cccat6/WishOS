@@ -1,6 +1,11 @@
 -- Ordinary launcher application, using the same services as installed apps.
 local C=notes.require('../suite/common.lua');local rows={};local page=0;local starts={[0]=0}
-local function desktop() local t=C.call('/services/time','read') or {};C.open('home',{connection=C.agent_status(),clock=t.wall_clock_valid and t.local_time:sub(12,16) or ''});C.action('voice',function() C.launch('voice') end);C.action('apps',function() page=0;starts={[0]=0};C.show_apps() end);C.action('device',function() C.launch('device') end);C.action('settings',function() C.launch('settings') end) end
+local function clock_text() local t=C.call('/services/time','read') or {};return t.wall_clock_valid and t.local_time:sub(12,16) or '' end
+local function update_clock()
+ local ui=C.call('/sys/ui');if not ui or ui.view_id~=C.view or ui.path~=C.path('home') then return end
+ local text=clock_text();if text~=C.model.clock then C.update({clock=text}) end
+end
+local function desktop() C.open('home',{connection=C.agent_status(),clock=clock_text()});C.action('voice',function() C.launch('voice') end);C.action('apps',function() page=0;starts={[0]=0};C.show_apps() end);C.action('device',function() C.launch('device') end);C.action('settings',function() C.launch('settings') end) end
 function C.show_apps()
  rows={};local cursor=starts[page] or 0;local more=false;local own=C.call('/sys/apps','read') or {}
  repeat local r=C.call('/sys/apps','list',{cursor=cursor,limit=3-#rows});if not r then break end;for _,a in ipairs(r.applications) do if a.id~=own.current then rows[#rows+1]=a end end;cursor=r.next_cursor;more=r.more until #rows==3 or not more
@@ -13,6 +18,8 @@ local function welcome() C.open('welcome');C.action('ready',function() C.prefere
 local function choose(lang) C.preferences.language=lang;C.save_preferences();welcome() end
 function on_start()
  C.init();C.button(function() C.launch('voice',{record=true}) end)
+ C.timer(C.config.clock_poll_interval_ms,C.config.clock_poll_interval_ms,update_clock)
+ notes.on('/services/time','synchronized',update_clock)
  notes.on('/dev/wifi',{'connected','disconnected'},function() local r=C.call('/sys/ui');if r and r.path==C.path('home') then C.update({connection=C.agent_status()}) end end)
  notes.on('/services/link',{'connected','disconnected'},function() local r=C.call('/sys/ui');if r and r.path==C.path('home') then C.update({connection=C.agent_status()}) end end)
  C.action('home',desktop)

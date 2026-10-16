@@ -186,3 +186,15 @@ request is now being validated through the real configured Harness; it is not
 the complete new-voice P0 demonstration. Current-app editing/rollback/save-as,
 favorites, sharing and two-physical-display adaptation keep the explicit pending
 statuses in [the acceptance scope](agent-os-plan.md).
+
+The reported eight-minute clock lag was isolated to the launcher snapshot:
+at host 01:28:51 the device clock also read 01:28:51, while the home model still
+contained 01:20. NTP had completed successfully; the device used `CST-8` and the
+configured six-hour synchronization interval. The ordinary launcher now checks
+wall time using its runtime timer and updates only when the displayed minute
+changes, also responding to synchronization events. It does not count timer
+callbacks as elapsed wall time or repaint other pages. Host regressions cover
+same-minute suppression, forward ticks, backward correction and navigation.
+The live S3 showed 01:30 then 01:31 with completed display receipts, matching
+host/device Unix seconds within one second. This is not a deep-sleep oscillator
+or long-term drift characterization.
