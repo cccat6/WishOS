@@ -1,0 +1,23 @@
+{
+  "launcher": "launcher",
+  "voice": "",
+  "applications": [
+    {
+      "id": "launcher",
+      "title": "WishOS",
+      "manifest": "/system/apps/launcher.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "hardware/agent-os/runtime/lckfb-suite"
+      },
+      "fallback_manifest": "/system/recovery/launcher.json"
+    }
+  ],
+  "navigation": {
+    "home_buttons": 1,
+    "voice_buttons": 0,
+    "home_hold_ms": 1800,
+    "voice_hold_ms": 600,
+    "debounce_ms": 30
+  }
+}

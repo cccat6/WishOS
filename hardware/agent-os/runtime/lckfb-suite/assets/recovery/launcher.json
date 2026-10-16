@@ -1,0 +1,9 @@
+{
+  "format": "wishos-app/1",
+  "id": "launcher",
+  "title": "WishOS",
+  "entry": "launcher.lua",
+  "help": {
+    "controls": "浏览器打开设备地址进入桌面 / Open the device address for applications and settings."
+  }
+}

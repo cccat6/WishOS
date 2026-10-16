@@ -44,6 +44,8 @@ build/os-core-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_retention_test.cpp -o build/os-retention-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/tests/os-stubs" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_littlefs_test.cpp -o build/os-littlefs-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$ROOT/tests/os-stubs" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_flash_lifecycle_test.cpp -o build/os-flash-lifecycle-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_posix_provider_test.cpp -o build/os-posix-provider-test
+build/os-posix-provider-test
 build/os-flash-lifecycle-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$LIBS/ArduinoJson/src" tests/os_files_test.cpp -o build/os-files-test
 build/os-files-test

@@ -7,7 +7,7 @@ from pathlib import Path
 from serial.tools.list_ports import comports
 from os_client import Client, RpcError
 
-p=argparse.ArgumentParser();p.add_argument('--serial-id',required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--esptool',type=Path);args=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--serial-id',required=True);p.add_argument('--expected-mcu',default='ESP32-C3',choices=['ESP32-C3','ESP32-C6','ESP32-S3']);p.add_argument('--output',type=Path,required=True);p.add_argument('--esptool',type=Path);args=p.parse_args()
 ports=[v.device for v in comports() if (v.serial_number or '').upper()==args.serial_id.upper()];assert len(ports)==1
 client=Client(port=ports[0],timeout=15);report={'checks':[]};roots=[];app_id='check-'+uuid.uuid4().hex[:10];report['test_app_id']=app_id;copied_bytes=0;extra_apps=[];catalog_root="/storage/flash/catalog-"+uuid.uuid4().hex[:10];catalog_files=[];catalog_created=False
 
@@ -97,7 +97,7 @@ def launch():
         assert r['event']=='launched' and r['data']['ok'],r
     finally:call('/sys/operations','release',{'id':ident})
 try:
-    board=call('/sys/board');report['board']=board;assert board['mcu']=='ESP32-C3'
+    board=call('/sys/board');report['board']=board;assert board['mcu']==args.expected_mcu and board['mac']==args.serial_id.upper()
     index=board['component_index'];parts=call('/fs','read',{'file':index['file'],'offset':'0','length':1024});raw=bytearray(bytes.fromhex(parts['hex']))
     while len(parts['hex'])==2048:
         parts=call('/fs','read',{'file':index['file'],'offset':str(len(raw)),'length':1024});raw.extend(bytes.fromhex(parts['hex']))
@@ -140,7 +140,7 @@ try:
         copying=wait(lambda:(r if (r:=call('/sys/transfers'))['state']=='copying' and 0<int(r['file_offset'])<len(changed['kept.bin']) else None))
         report['copy_offset_before_reset']=copying['file_offset']
         old_boot=client.boot_id;client.serial.close()
-        subprocess.run([str(args.esptool),'--chip','esp32c3','--port',ports[0],'run'],check=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        subprocess.run([str(args.esptool),'--chip',{'ESP32-C3':'esp32c3','ESP32-C6':'esp32c6','ESP32-S3':'esp32s3'}[args.expected_mcu],'--port',ports[0],'run'],check=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         def connected():
             matches=[p.device for p in comports() if (p.serial_number or '').upper()==args.serial_id.upper()]
             return matches[0] if len(matches)==1 else None
@@ -174,7 +174,7 @@ finally:
                 except RpcError as e:
                     if str(e)!='not_found':raise
             call('/fs','remove',{'file':root})
-        report['cleanup_ok']=True
+        call('/sys/apps','home');wait(lambda:not call('/sys/apps').get('pending'));report['cleanup_ok']=True
     except Exception as e:report['cleanup_error']=str(e)
     client.serial.close();args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(report,indent=2))
 print(json.dumps({'ok':report.get('ok',False),'checks':report['checks'],'cleanup_ok':report.get('cleanup_ok',False)},indent=2))

@@ -1,0 +1,27 @@
+{
+  "downloads": {
+    "targets": [
+      {
+        "provider": "flash",
+        "root": "/downloads",
+        "quota_bytes": "1048576",
+        "allow_internal": true
+      }
+    ]
+  },
+  "logs": {
+    "enabled": true,
+    "level": "info",
+    "capacity": 16,
+    "rate_per_second": 20
+  },
+  "telemetry": {
+    "enabled": false,
+    "registration": true,
+    "usage": true,
+    "errors": true,
+    "endpoint": "https://telemetry.wishos.dev/v1/ingest",
+    "interval_ms": 3600000,
+    "retry_ms": 60000
+  }
+}

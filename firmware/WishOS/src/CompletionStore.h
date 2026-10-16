@@ -47,7 +47,9 @@ public:
  void record(const char*source,const char*event,JsonObjectConst data,uint32_t owner,uint64_t at,size_t sourceIndex=Sources-1){
   if(!interest_[sourceIndex].load())return;
   std::lock_guard<std::recursive_mutex>lock(mutex_);
-  for(auto r=head_;r;r=r->next)if((!owner||owner==r->owner)&&!strcmp(source,r->source)&&choice(r->events,event)&&(!r->bound||matches(*r,data))){
+  // System observations (owner 0) follow authorized calls into any view.
+  // Application observations remain isolated by owner and correlation fields.
+  for(auto r=head_;r;r=r->next)if((!r->owner||!owner||owner==r->owner)&&!strcmp(source,r->source)&&choice(r->events,event)&&(!r->bound||matches(*r,data))){
    if((r->bound&&r->ready)||measureJson(data)>=sizeof r->data)continue;
    if(!r->bound&&r->ready){auto block=memory_.allocate(sizeof(Pending));if(!block){r->captureFailed=true;continue;}auto p=new(block)Pending;p->next=r->pending;r->pending=p;strcpy(p->event,event);serializeJson(data,p->data,sizeof p->data);p->order=++order_;p->at=at;}
    else{strcpy(r->event,event);serializeJson(data,r->data,sizeof r->data);r->ready=true;r->order=++order_;r->at=at;}

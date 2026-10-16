@@ -1,0 +1,30 @@
+{
+  "format": "notes-runtime-package/1",
+  "id": "lckfb-suite",
+  "assets": {
+    "/defaults.json": "assets/defaults.json",
+    "/control/control.js": "@runtime/control/control.js",
+    "/control/display.js": "@runtime/control/display.js",
+    "/services.json": "assets/services.json",
+    "/applications.json": "assets/applications.json",
+    "/apps/launcher.json": "assets/apps/launcher.json",
+    "/apps/launcher.lua": "assets/apps/launcher.lua",
+    "/control/setup.html": "@runtime/control/setup.html",
+    "/control/locale.js": "@runtime/control/locale.js",
+    "/ui/home.json": "assets/ui/home.json"
+  },
+  "gzip_assets": [
+    "/control/control.js",
+    "/control/display.js",
+    "/control/setup.html",
+    "/control/locale.js"
+  ],
+  "compiled_assets": {
+    "/applications.json": "assets/applications.json",
+    "/defaults.json": "assets/defaults.json",
+    "/services.json": "assets/services.json",
+    "/recovery/launcher.json": "assets/recovery/launcher.json",
+    "/recovery/launcher.lua": "assets/recovery/launcher.lua",
+    "/control/setup.html": "assets/recovery/setup.html"
+  }
+}

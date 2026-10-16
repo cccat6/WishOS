@@ -1,0 +1,17 @@
+#include "drivers/esp32-services/SdMmcVolume.h"
+#include "drivers/esp-wire-i2c/WireI2c.h"
+#include "drivers/pca9557/Pca9557.h"
+#include "drivers/qmi8658/Qmi8658.h"
+#include "drivers/ft6336/Ft6336.h"
+#include "DisplayScheduler.h"
+#include "Policy.h"
+#include "PackedFont.h"
+#include "UiMemory.h"
+#include "display/NativeText.h"
+#include "ButtonGestures.h"
+#include <lvgl.h>
+#include <lvgl_private.h>
+#include <driver/spi_master.h>
+#include <esp_lcd_panel_io.h>
+#include <esp_lcd_panel_vendor.h>
+#include <esp_lcd_panel_ops.h>

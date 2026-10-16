@@ -1,0 +1,58 @@
+{
+  "format": "notes-board/1",
+  "id": "lckfb-szpi-esp32s3",
+  "name": "LCKFB-SZPI-ESP32-S3-VA",
+  "mcu": "ESP32-S3",
+  "pins": {
+    "KEY": 0,
+    "SDA": 1,
+    "SCL": 2,
+    "LCD_MOSI": 40,
+    "LCD_SCLK": 41,
+    "LCD_DC": 39,
+    "LCD_BL": 42,
+    "SD_CLK": 47,
+    "SD_CMD": 48,
+    "SD_D0": 21
+  },
+  "hardware": {
+    "i2c_hz": 100000,
+    "lcd_spi_hz": 80000000,
+    "sd_max_hz": 40000000
+  },
+  "buttons": [
+    "KEY"
+  ],
+  "display": {
+    "width": 320,
+    "height": 240
+  },
+  "resources": {
+    "heap_reserve_bytes": 32768,
+    "external_heap_reserve_bytes": 262144,
+    "default_vm_memory_bytes": 98304,
+    "application_memory": "auto",
+    "memory_limit_bytes": null
+  },
+  "runtime": "../../runtime/lckfb-suite",
+  "drivers": [],
+  "platform": "esp32-s3",
+  "composition": "../../compositions/lckfb-szpi-esp32s3",
+  "fqbn": "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi",
+  "application_bytes": 6291456,
+  "partition_file": "partitions.csv",
+  "application_providers": [
+    "user",
+    "flash"
+  ],
+  "runtime_filesystem": {
+    "format": "littlefs",
+    "partition": "nfs_test",
+    "root": "/factory",
+    "mount": "/storage/flash"
+  },
+  "flash_bytes": 16777216,
+  "assets": {
+    "/services.json": "services.json"
+  }
+}

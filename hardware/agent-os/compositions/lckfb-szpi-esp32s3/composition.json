@@ -1,0 +1,63 @@
+{
+  "format": "notes-composition/1",
+  "id": "lckfb-szpi-esp32s3",
+  "entry": "Port.inc",
+  "flags": [
+    "-DWISHOS_RESOURCE_CAPACITY=64"
+  ],
+  "required_pins": [
+    "KEY",
+    "SDA",
+    "SCL",
+    "LCD_MOSI",
+    "LCD_SCLK",
+    "LCD_DC",
+    "LCD_BL",
+    "SD_CLK",
+    "SD_CMD",
+    "SD_D0"
+  ],
+  "pin_constraints": {},
+  "display": {
+    "width": 320,
+    "height": 240
+  },
+  "button_count": 1,
+  "asset_file_limit_bytes": 16384,
+  "asset_budget_bytes": 131072,
+  "drivers": [
+    "esp-wire-i2c",
+    "pca9557",
+    "qmi8658",
+    "ft6336"
+  ],
+  "optional_drivers": [],
+  "dependencies": [
+    "ArduinoJson",
+    "WebSockets",
+    "ESP32NFS",
+    "lvgl"
+  ],
+  "platforms": [
+    "esp32-s3"
+  ],
+  "hardware_schema": {
+    "i2c_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "lcd_spi_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 80000000
+    },
+    "sd_max_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 40000000
+    }
+  },
+  "system_stack_bytes": 16384,
+  "minimum_system_stack_bytes": 16384
+}

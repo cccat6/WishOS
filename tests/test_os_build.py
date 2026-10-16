@@ -21,10 +21,10 @@ class BuildTests(unittest.TestCase):
   self.assertEqual(catalog.select(['hardware/agent-os/boards/esp32-c3-runtime/board.json']),['esp32-c3-runtime'])
   self.assertEqual(catalog.select(['hardware/agent-os/drivers/e6/E6Driver.h']),['e6-nova-c6'])
   self.assertEqual(catalog.select(['hardware/agent-os/runtime/headless-suite/assets/setup.html']),['esp32-c3-runtime','esp32-s3-runtime'])
-  self.assertEqual(catalog.select(['firmware/WishOS/lib/input.lua']),['e6-nova-c6','esp32-c3-runtime','esp32-s3-runtime'])
-  self.assertEqual(catalog.select(['firmware/WishOS/src/Core.h']),['e6-nova-c6','esp32-c3-runtime','esp32-s3-runtime'])
+  self.assertEqual(catalog.select(['firmware/WishOS/lib/input.lua']),['e6-nova-c6','esp32-c3-runtime','esp32-s3-runtime','lckfb-szpi-esp32s3'])
+  self.assertEqual(catalog.select(['firmware/WishOS/src/Core.h']),['e6-nova-c6','esp32-c3-runtime','esp32-s3-runtime','lckfb-szpi-esp32s3'])
   self.assertEqual(catalog.select(['docs/agent-os-plan.md']),[])
-  self.assertEqual(catalog.select(['tools/flash_layout.py']),['e6-nova-c6','esp32-c3-runtime','esp32-s3-runtime'])
+  self.assertEqual(catalog.select(['tools/flash_layout.py']),['e6-nova-c6','esp32-c3-runtime','esp32-s3-runtime','lckfb-szpi-esp32s3'])
   self.assertEqual(catalog.select(['hardware/agent-os/references/esp-sparkbot.json']),[])
   self.assertEqual(catalog.select(['tools/dependencies/esp-sr.json']),['e6-nova-c6'])
   self.assertEqual(catalog.select([],board='esp32-c3-runtime'),['esp32-c3-runtime'])
@@ -37,7 +37,7 @@ class BuildTests(unittest.TestCase):
    self.assertEqual(catalog.select(['tools/dependencies/arduino.json'],previous_lock=previous),[])
   current=json.loads(json.dumps(previous));current['libraries']['lvgl']['version']='future'
   with patch.object(catalog,'dependency_lock',return_value=current):
-   self.assertEqual(catalog.select(['tools/dependencies/arduino.json'],previous_lock=previous),['e6-nova-c6'])
+   self.assertEqual(catalog.select(['tools/dependencies/arduino.json'],previous_lock=previous),['e6-nova-c6','lckfb-szpi-esp32s3'])
 
  def test_new_board_is_discovered_without_editing_matrix_or_kernel(self):
   with tempfile.TemporaryDirectory() as temp:

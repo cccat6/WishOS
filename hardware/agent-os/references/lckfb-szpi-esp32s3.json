@@ -1,7 +1,7 @@
 {
   "format": "notes-hardware-reference/1",
   "id": "lckfb-szpi-esp32s3",
-  "status": "compatibility_reference_not_a_firmware_port",
+  "status": "initial_firmware_port_with_recorded_hardware_checks",
   "sources": [
     "https://item.szlcsc.com/43285221.html",
     "https://wiki.lckfb.com/zh-hans/szpi-esp32s3/beginner/introduction.html",
@@ -99,5 +99,6 @@
       "gxhtc3",
       "qmc5883l"
     ]
-  }
+  },
+  "firmware_package": "../boards/lckfb-szpi-esp32s3"
 }

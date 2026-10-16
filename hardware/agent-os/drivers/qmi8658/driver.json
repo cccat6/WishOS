@@ -4,5 +4,9 @@
   "requires": [
     "i2c",
     "sensor-sampling"
+  ],
+  "sources": [
+    "https://www.qstcorp.com/upload/pdf/202202/%EF%BC%88%E5%B7%B2%E4%BC%A0%EF%BC%89QMI8658C%20datasheet%20rev%200.9.pdf",
+    "https://www.qstcorp.com/upload/pdf/202210/13-52-27%20QMI8658C%20Datasheet%20Rev%20A%20%281%29.pdf"
   ]
 }

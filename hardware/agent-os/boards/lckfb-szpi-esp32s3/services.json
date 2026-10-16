@@ -1,0 +1,12 @@
+{
+  "downloads": {
+    "targets": [
+      {
+        "provider": "flash",
+        "root": "/wishos/downloads",
+        "quota_bytes": "8388608",
+        "allow_internal": true
+      }
+    ]
+  }
+}

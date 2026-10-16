@@ -78,6 +78,15 @@ end
   local.add({"/cached","submit","",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["id"]=77;o["state"]="completed";o["ok"]=true;return nullptr;},[](JsonObject o){auto match=asyncContract(o,"submit","/cached");match["id"]="id";o["async"]["submit"]["settled"]["field"]="state";o["async"]["submit"]["settled"]["events"]["completed"]="completed";}});
   JsonDocument a;a["source"]="local returned=false function on_start() local r=notes.request('/cached','submit',{},function(e) assert(returned and e.data.id==77);notes.call('/effect','write',{amount=7}) end);assert(r.ok);returned=true end";a["memory_bytes"]=65536;before=effects;assert(!runtime.invoke("load",a.as<JsonObjectConst>(),out.to<JsonObject>()));assert(effects==before);runtime.tick(1);assert(effects==before+7);runtime.tick(2);assert(effects==before+7);
  }kernel=&c;
+ // System calls into an application's resource retain that operation's result;
+ // a different application still cannot observe another owner's private event.
+ {Core local;JsonDocument spec,reply,event,result;asyncContract(spec.to<JsonObject>(),"refresh","/display")["view"]="view";reply["view"]=42;event["view"]=42;uint32_t system,other;
+  assert(!local.completions().reserve(0,spec["async"]["refresh"],system));assert(!local.completions().reserve(99,spec["async"]["refresh"],other));
+  assert(!local.completions().bind(system,spec["async"]["refresh"],reply.as<JsonObjectConst>(),0));assert(!local.completions().bind(other,spec["async"]["refresh"],reply.as<JsonObjectConst>(),0));
+  local.completions().record("/display","completed",event.as<JsonObjectConst>(),7,123);
+  assert(!local.completions().read(system,0,result.to<JsonObject>()));assert(result["ready"]==true);assert(!local.completions().read(other,99,result.to<JsonObject>()));assert(result["ready"]==false);
+  assert(!local.completions().release(system,0));assert(!local.completions().release(other,99));
+ }
  // A completed request survives an overflowing ordinary event journal.
  {LuaRuntime vm(c,65536,200000);app=&vm;const char*s="function on_start() assert(notes.request('/work','begin',{value=9},function(e) assert(e.data.value==9);notes.call('/effect','write',{amount=9}) end).ok);for i=1,48 do print('noise') end end";
   uint32_t cursor=c.sequence();before=effects;assert(vm.load(s,strlen(s))&&vm.start());c.dispatch(cursor);assert(effects==before);assert(vm.flushCallbacks());assert(effects==before+9);stats(vm,out);assert(out["callbacks"]==0);vm.flushCallbacks();assert(effects==before+9);

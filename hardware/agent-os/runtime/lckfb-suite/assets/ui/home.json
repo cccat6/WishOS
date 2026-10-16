@@ -1,0 +1,116 @@
+{
+  "version": "0.1.0",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#FFF8EE",
+        "padding": 16
+      },
+      "children": [
+        {
+          "type": "label",
+          "id": "title",
+          "placement": {
+            "x": 0,
+            "y": 0,
+            "width": 288
+          },
+          "style": {
+            "fontSize": 32,
+            "textColor": "#BA481E"
+          },
+          "labelProps": {
+            "text": "WishOS",
+            "missingGlyph": "replace"
+          }
+        },
+        {
+          "type": "label",
+          "id": "subtitle",
+          "placement": {
+            "x": 0,
+            "y": 49,
+            "width": 288
+          },
+          "style": {
+            "fontSize": 20,
+            "textColor": "#263238"
+          },
+          "labelProps": {
+            "text": "可定制的设备操作系统",
+            "missingGlyph": "replace"
+          }
+        },
+        {
+          "type": "label",
+          "id": "network",
+          "placement": {
+            "x": 0,
+            "y": 83,
+            "width": 288
+          },
+          "style": {
+            "fontSize": 20,
+            "textColor": "#263238"
+          },
+          "labelProps": {
+            "text": "正在准备网络",
+            "missingGlyph": "replace"
+          }
+        },
+        {
+          "type": "label",
+          "id": "storage",
+          "placement": {
+            "x": 0,
+            "y": 117,
+            "width": 288
+          },
+          "style": {
+            "fontSize": 20,
+            "textColor": "#263238"
+          },
+          "labelProps": {
+            "text": "microSD · SDMMC",
+            "missingGlyph": "replace"
+          }
+        },
+        {
+          "type": "label",
+          "id": "help",
+          "placement": {
+            "x": 0,
+            "y": 151,
+            "width": 288
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#263238"
+          },
+          "labelProps": {
+            "text": "浏览器打开设备 IP 进行配置",
+            "missingGlyph": "replace"
+          }
+        },
+        {
+          "type": "label",
+          "id": "footer",
+          "placement": {
+            "x": 0,
+            "y": 178,
+            "width": 288
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#263238"
+          },
+          "labelProps": {
+            "text": "长按 BOOT 返回桌面",
+            "missingGlyph": "replace"
+          }
+        }
+      ]
+    }
+  ]
+}
