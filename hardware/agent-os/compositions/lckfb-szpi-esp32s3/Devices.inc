@@ -8,8 +8,12 @@ static drivers::Sampling imuSampling(core,imu,"/dev/imu"),touchSampling(core,tou
 static SystemNavigation navigation(core,applications,1,1,0);
 static char appScope[48]="system";
 static constexpr Setting SETTINGS[]={
+ Setting{"/dev/audio","start_timeout_ms","integer","3000","",1,60000}.inSystem().at("next_start"),
  Setting{"/sys/ui","font_file","string","\"\"","",0,255}.inSystem().at("next_ui_prepare"),
  Setting{"/sys/ui","font_cache_glyphs","integer","128","",0,1024}.inSystem().at("next_ui_prepare"),
+ Setting{"/sys/ui","image_cache_bytes","integer","131072","",0,1048576}.inSystem().at("next_ui_prepare"),
+ Setting{"/sys/ui","font_face_cache","integer","8","",0,32}.inSystem().at("next_ui_prepare"),
+ Setting{"/sys/ui","retain_renderer_on_switch","boolean","true"}.inSystem().at("next_application_exit"),
  {"/dev/display","pending","enum","\"latest\"","latest,fifo,reject"},
  {"/dev/display","prepare_timeout_ms","integer","30000","",1,4294967295.0},
  {"/dev/display","queue_limit","integer","2","",1,4},
@@ -44,7 +48,7 @@ static void beginNativeDevices(){(void)wishos_nimble_external_memory();vfs.add(s
 static void registerNativeDevices(){
  registerAudio();
  core.add({"/dev/ble","read,configure,start,restart,stop,write,scan,scan_results,scan_stop,connect,gatt_read,gatt_write,subscribe","Bluetooth GATT, HID and central",bleHandler,[](JsonObject o){for(auto m:{"start","restart","stop","connect","gatt_read","gatt_write","subscribe"})asyncContract(o,m,"/dev/ble",{"operation_completed","operation_failed"})["operation_id"]="operation_id";asyncContract(o,"scan","/dev/ble",{"scan_completed"})["operation_id"]="operation_id";o["modes"]="gatt,hid,central";},"read,scan_results"});
- core.add({"/dev/camera","read,describe,configure,start,capture,read_chunk,release,stop,cancel","camera frames",[](const char*m,JsonObjectConst a,JsonObject o){return camera.invoke(m,a,o);},[](JsonObject o){camera.describe(o);},"read,describe,read_chunk"});
+ core.add({"/dev/camera","read,describe,configure,start,capture,read_chunk,copy_frame,release,stop,cancel","camera frames",[](const char*m,JsonObjectConst a,JsonObject o){return camera.invoke(m,a,o);},[](JsonObject o){camera.describe(o);},"read,describe,read_chunk"});
  core.add({"/sys/navigation","read,configure","protected system input",[](const char*m,JsonObjectConst a,JsonObject o){return navigation.invoke(m,a,o);},[](JsonObject o){navigation.describe(o);},"read"});
  core.add({"/dev/sd","read,describe,configure,probe,mount,unmount,space,cancel","SDMMC removable volume",[](const char*m,JsonObjectConst a,JsonObject o){return sdVolume.invoke(m,a,o);},[](JsonObject o){sdVolume.describe(o);},"read,describe"});
  core.add({"/dev/imu",drivers::Sampling::Methods,"six-axis inertial sensor",[](const char*m,JsonObjectConst a,JsonObject o){return imuSampling.invoke(m,a,o);},[](JsonObject o){imuSampling.describe(o);},"read,describe"});
@@ -58,4 +62,4 @@ static void registerNativeDevices(){
  JsonDocument nav;for(auto asset:boardpack::ASSETS)if(!strcmp(asset.path,"/applications.json")&&!deserializeJson(nav,asset.data,asset.size)&&nav["navigation"].is<JsonObjectConst>()){navigation.configure(nav["navigation"]);break;}
  String saved=preferences.getString("policy","{}");policies.restore(saved.c_str());
 }
-static void pollNativeDevices(){microphone.poll();pollBle();camera.poll();sdVolume.poll();lcdInitialization.poll();imuSampling.poll(uptime());touchSampling.poll(uptime());pollUiPresentation();lcdScheduler.tick(uptime());pollButtonInput();}
+static void pollNativeDevices(){microphone.poll();pollAudio();pollBle();camera.poll();sdVolume.poll();lcdInitialization.poll();imuSampling.poll(uptime());touchSampling.poll(uptime());pollUiPresentation();lcdScheduler.tick(uptime());pollButtonInput();}

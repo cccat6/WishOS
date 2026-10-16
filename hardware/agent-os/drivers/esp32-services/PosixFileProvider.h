@@ -14,8 +14,8 @@ class PosixFileProvider:public FileProvider {
 protected:
  bool&mounted_;const char*base_;const char*resource_;const char*filesystem_;uint32_t unit_;std::recursive_mutex*bus_;
 private:
-std::recursive_mutex localBus_;int readFd_=-1;char readPath_[320]{};
- void closeReader(){if(readFd_>=0)::close(readFd_);readFd_=-1;readPath_[0]=0;}
+std::recursive_mutex localBus_;struct Reader{int fd=-1;char path[320]{};uint64_t used=0;};Reader readers_[2];uint64_t readOrder_=0;
+ void closeReader(){for(auto&r:readers_){if(r.fd>=0)::close(r.fd);r={};}}
  uint64_t revision_=1;mutable std::mutex spaceMutex_;uint64_t capacity_=0,free_=0;bool known_=false,dirty_=true;std::atomic<bool>background_{false};void*spaceContext_=nullptr;const char*(*requestSpace_)(void*)=nullptr;
  void changedSpace(uint64_t reserve=0){std::lock_guard<std::mutex>lock(spaceMutex_);if(known_)free_=reserve>free_?0:free_-reserve;dirty_=true;}
  struct Fd{int value;~Fd(){if(value>=0)::close(value);}};
@@ -51,11 +51,13 @@ public:
  }
  const char*stat(const char*p,FileInfo&i)override{Guard guard(bus_);if(!guard.held)return "bus_busy";char full[320];if(auto e=path(p,full,sizeof full))return e;struct stat s;if(::stat(full,&s))return error();i={uint64_t(s.st_size),S_ISDIR(s.st_mode)};return nullptr;}
  const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{got=0;Guard guard(bus_);if(!guard.held)return "bus_busy";char full[320];if(auto e=path(p,full,sizeof full)){closeReader();return e;}if(at>INT32_MAX)return "invalid_offset";
-  // One bounded descriptor avoids reopening and traversing large font/image
-  // files for every decoder window. Mutations and volume transitions invalidate
-  // it; all seeks/reads retain the provider bus lock.
-  if(readFd_<0||strcmp(readPath_,full)){closeReader();readFd_=::open(full,O_RDONLY);if(readFd_<0)return error();struct stat s;if(fstat(readFd_,&s)){auto e=error();closeReader();return e;}if(S_ISDIR(s.st_mode)){closeReader();return "is_directory";}memcpy(readPath_,full,strlen(full)+1);}
-  if(lseek(readFd_,at,SEEK_SET)<0){auto e=error();closeReader();return e;}ssize_t r=::read(readFd_,b,n);if(r<0){auto e=error();closeReader();return e;}got=size_t(r);return nullptr;}
+  // Alternating a font and an image must not repeatedly reopen the large
+  // font. This bounded weak cache owns no VFS lease; every mutation/remount
+  // closes all descriptors before effects, under the same physical bus lock.
+  Reader*reader=nullptr;for(auto&r:readers_)if(r.fd>=0&&!strcmp(r.path,full)){reader=&r;break;}
+  if(!reader){reader=&readers_[0];for(auto&r:readers_)if(r.fd<0||r.used<reader->used)reader=&r;if(reader->fd>=0)::close(reader->fd);*reader={};reader->fd=::open(full,O_RDONLY);if(reader->fd<0)return error();struct stat s;if(fstat(reader->fd,&s)){auto e=error();closeReader();return e;}if(S_ISDIR(s.st_mode)){closeReader();return "is_directory";}memcpy(reader->path,full,strlen(full)+1);}
+  reader->used=++readOrder_;if(lseek(reader->fd,at,SEEK_SET)<0){auto e=error();closeReader();return e;}ssize_t r=::read(reader->fd,b,n);if(r<0){auto e=error();closeReader();return e;}got=size_t(r);return nullptr;}
+
  const char*write(const char*p,uint64_t at,const uint8_t*b,size_t n,bool truncate,size_t&wrote)override{wrote=0;Guard guard(bus_);if(!guard.held)return "bus_busy";if(!writable)return "read_only";if(n>UINT64_MAX-at)return "invalid_offset";if(auto e=admitGrowth(p,at+n))return e;char full[320];if(auto e=path(p,full,sizeof full))return e;if(at>INT32_MAX||(truncate&&at))return "invalid_offset";closeReader();Fd f{::open(full,O_WRONLY|O_CREAT|(truncate?O_TRUNC:0),0600)};if(f.value<0)return error();++revision_;struct stat previous;if(fstat(f.value,&previous))return error();uint64_t before=previous.st_size;if(lseek(f.value,at,SEEK_SET)<0)return error();ssize_t r=::write(f.value,b,n);if(r<0)return error();wrote=size_t(r);uint64_t end=at+wrote;changedSpace(end>before?((end+unit_-1)/unit_-(before+unit_-1)/unit_)*unit_:0);if(wrote!=n)return "write_failed";return fsync(f.value)?error():nullptr;}
  const char*createFile(const char*p)override{Guard guard(bus_);if(!guard.held)return "bus_busy";if(!writable)return "read_only";if(auto e=admitMetadata())return e;char full[320];if(auto e=path(p,full,sizeof full))return e;closeReader();Fd f{::open(full,O_CREAT|O_EXCL|O_RDWR,0600)};if(f.value<0)return error();++revision_;changedSpace(2*unit_);return fsync(f.value)?error():nullptr;}
  const char*resize(const char*p,uint64_t n)override{Guard guard(bus_);if(!guard.held)return "bus_busy";if(!writable)return "read_only";if(auto e=admitGrowth(p,n))return e;char full[320];if(auto e=path(p,full,sizeof full))return e;if(n>INT32_MAX)return "file_size_limit";closeReader();Fd f{::open(full,O_RDWR)};if(f.value<0)return error();struct stat prior;if(fstat(f.value,&prior))return error();if(ftruncate(f.value,n))return error();++revision_;changedSpace(n>uint64_t(prior.st_size)?((n+unit_-1)/unit_-(uint64_t(prior.st_size)+unit_-1)/unit_)*unit_:0);return fsync(f.value)?error():nullptr;}

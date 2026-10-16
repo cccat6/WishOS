@@ -15,11 +15,12 @@ function C.show_answer()
  C.action('next',function() if answerPage<pages then answerPage=answerPage+1;C.show_answer() end end)
 end
 local function show(state,detail)
- if state=='recording' then stop_animation();C.update({message=C.t('正在聆听','Listening'),detail=C.t('短按用户键或点发送结束','Press the user key or Send'),record_label=C.t('结束并发送','Send recording'),activity=notes.resolve('../icons/voice.png')});C.beep()
- elseif state=='processing' then C.update({message=C.t('交给 Agent 处理','Your Agent is working'),detail=C.t('可回到桌面继续使用','You can return Home'),record_label=C.t('继续说话','Say more')});animate('busy')
+ if state=='starting' then stop_animation();C.update({message=C.t('正在启动麦克风','Starting microphone'),detail=C.t('就绪后会有提示音','A tone signals readiness'),record_label=C.t('结束录音','Stop recording'),activity=notes.resolve('../brand/microphone.png')})
+ elseif state=='recording' then stop_animation();C.update({message=C.t('正在聆听','Listening'),detail=C.t('短按用户键或点发送结束','Press the user key or Send'),record_label=C.t('结束并发送','Send recording'),activity=notes.resolve('../brand/microphone.png')});local cue=C.beep();if not cue then C.update({detail=C.t('麦克风已就绪，可以说话','Microphone ready; speak now')}) end
+ elseif state=='processing' then C.update({message=C.t('交给 Agent 处理','Your Agent is working'),detail=C.t('文字回复请留在此页\n短按可继续补充','Stay here for text replies\nPress to add more'),record_label=C.t('继续说话','Say more')});animate('busy')
  elseif state=='answer' then answer=detail or '';answerPage=1;if V.active() then return end;C.update({message=part(answer,1,32),detail=C.t('短按继续说话 · 长按2秒回桌面','Press to speak · Hold 2s for Home'),record_label=C.t('开始录音','Record')});animate('done')
  elseif state=='completed' then if phase~='done' then stop_animation() end
- elseif state=='failed' then stop_animation();C.update({message=C.t('请求未完成','Request failed'),detail=detail or '',record_label=C.t('重新录音','Try again'),activity=notes.resolve('../brand/logo.png')}) end
+ elseif state=='failed' then stop_animation();C.update({message=C.t('请求未完成','Request failed'),detail=detail or '',record_label=C.t('重新录音','Try again'),activity=notes.resolve('../brand/microphone.png')}) end
 end
 local function toggle()
  if V.active() then V.finish();return end

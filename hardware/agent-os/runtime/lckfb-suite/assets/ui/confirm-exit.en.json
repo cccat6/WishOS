@@ -1,0 +1,223 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 8,
+            "y": 4,
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png",
+                "fit": "contain"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 248
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "Leave settings?",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 65,
+            "width": 296,
+            "height": 30
+          },
+          "style": {
+            "fontSize": 20,
+            "lineHeight": 25,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "A browser is connected",
+            "longMode": "ellipsis"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 112,
+            "width": 296,
+            "height": 26
+          },
+          "style": {
+            "fontSize": 16,
+            "lineHeight": 21,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "This disconnects browser settings.",
+            "longMode": "ellipsis"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 146,
+            "width": 296,
+            "height": 23
+          },
+          "style": {
+            "fontSize": 13,
+            "lineHeight": 18,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "Hold user key again to force Home.",
+            "longMode": "ellipsis"
+          }
+        },
+        {
+          "type": "button",
+          "id": "stay",
+          "placement": {
+            "x": 8,
+            "y": 190,
+            "width": 148,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 16,
+                "lineHeight": 21,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Stay",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "leave",
+          "placement": {
+            "x": 164,
+            "y": 190,
+            "width": 148,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 16,
+                "lineHeight": 21,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Leave",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

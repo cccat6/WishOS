@@ -44,7 +44,7 @@ struct LcdBinding{
  DisplayBegin begin(LcdPresentation&j,uint64_t){
   if(!vfs.lockRead(j.file,j.id))return DisplayBegin::failed("asset_lease_capacity");uiLeaseOwner=j.id;
   j.frame=static_cast<uint16_t*>(core.resources().allocate(boardpack::DISPLAY_WIDTH*boardpack::DISPLAY_HEIGHT*2));j.dma=static_cast<uint8_t*>(core.resources().allocate(boardpack::DISPLAY_WIDTH*8*2,ResourceBudget::Region::Internal));
-  if(!j.frame||!j.dma)return DisplayBegin::deferred();
+  if(!j.frame||!j.dma){lv_image_cache_drop(nullptr);reapVectorFonts(false,0);return DisplayBegin::deferred();}
   auto layoutAt=uptime();if(!prepareUi(j.file,*j.view))return Core::containsMethod("ui_memory_budget,resource_busy,bus_busy,spi_busy",uiError)?DisplayBegin::deferred():DisplayBegin::failed(uiError);j.layoutMs=uptime()-layoutAt;
   UiSink sink{j.frame,[](void*ctx,const lv_area_t&a,const uint16_t*pixels){auto frame=static_cast<uint16_t*>(ctx);for(int y=a.y1;y<=a.y2;++y)for(int x=a.x1;x<=a.x2;++x){int px=x,py=y;switch(uiRenderedView.rotation){case 90:px=boardpack::DISPLAY_WIDTH-1-y;py=x;break;case 180:px=boardpack::DISPLAY_WIDTH-1-x;py=boardpack::DISPLAY_HEIGHT-1-y;break;case 270:px=y;py=boardpack::DISPLAY_HEIGHT-1-x;break;}frame[py*boardpack::DISPLAY_WIDTH+px]=pixels[(y-a.y1)*(a.x2-a.x1+1)+x-a.x1];}}};
   int w=uiRenderedView.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,h=uiRenderedView.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT;

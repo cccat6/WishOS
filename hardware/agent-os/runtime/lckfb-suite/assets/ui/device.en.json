@@ -12,44 +12,69 @@
           "type": "button",
           "id": "home",
           "placement": {
-            "x": 5,
+            "x": 8,
             "y": 4,
-            "width": 38,
-            "height": 35
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#F7F5EF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 3,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/back.png"
+                "src": "../icons/back.png",
+                "fit": "contain"
               }
-            },
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 4,
-                "width": -14
+                "align": "center",
+                "width": 248
               },
               "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
               },
               "labelProps": {
-                "text": ""
+                "text": "Device status",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -57,61 +82,37 @@
         {
           "type": "label",
           "placement": {
-            "x": 50,
-            "y": 7,
-            "width": 258
-          },
-          "style": {
-            "fontSize": 23,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "Device & sensors"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
             "x": 12,
-            "y": 46,
-            "width": 296
+            "y": 56,
+            "width": 150,
+            "height": 24
           },
           "style": {
             "fontSize": 14,
+            "lineHeight": 19,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "6-axis motion · Native drivers"
+            "text": "加速度 / g",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 74,
-            "width": 130
+            "y": 80,
+            "width": 296,
+            "height": 28
           },
           "style": {
-            "fontSize": 16,
-            "textColor": "#60645B"
-          },
-          "labelProps": {
-            "text": "加速度 / g"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 100,
-            "width": 296
-          },
-          "style": {
-            "fontSize": 20,
+            "fontSize": 18,
+            "lineHeight": 23,
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": "—"
+            "text": "—",
+            "longMode": "ellipsis"
           },
           "id": "accel"
         },
@@ -119,30 +120,36 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 134,
-            "width": 150
+            "y": 116,
+            "width": 170,
+            "height": 24
           },
           "style": {
-            "fontSize": 16,
+            "fontSize": 14,
+            "lineHeight": 19,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "角速度 / °/s"
+            "text": "角速度 / °/s",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 160,
-            "width": 296
+            "y": 140,
+            "width": 296,
+            "height": 28
           },
           "style": {
-            "fontSize": 20,
+            "fontSize": 18,
+            "lineHeight": 23,
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": "—"
+            "text": "—",
+            "longMode": "ellipsis"
           },
           "id": "gyro"
         },
@@ -150,15 +157,18 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 201,
-            "width": 296
+            "y": 186,
+            "width": 296,
+            "height": 24
           },
           "style": {
             "fontSize": 14,
+            "lineHeight": 19,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "—"
+            "text": "—",
+            "longMode": "ellipsis"
           },
           "id": "temperature"
         },
@@ -166,15 +176,18 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 222,
-            "width": 296
+            "y": 216,
+            "width": 296,
+            "height": 18
           },
           "style": {
-            "fontSize": 12,
+            "fontSize": 11,
+            "lineHeight": 16,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "—"
+            "text": "—",
+            "longMode": "ellipsis"
           },
           "id": "status"
         }

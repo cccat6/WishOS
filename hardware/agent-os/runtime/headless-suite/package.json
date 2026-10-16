@@ -10,7 +10,9 @@
     "/apps/launcher.json": "assets/apps/launcher.json",
     "/apps/launcher.lua": "assets/apps/launcher.lua",
     "/control/setup.html": "@runtime/control/setup.html",
-    "/control/locale.js": "@runtime/control/locale.js"
+    "/control/locale.js": "@runtime/control/locale.js",
+    "/control/settings.js": "@runtime/control/settings.js",
+    "/control/session.json": "@runtime/control/session.json"
   },
   "gzip_assets": [
     "/control/control.js",

@@ -1,0 +1,230 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 8,
+            "y": 4,
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png",
+                "fit": "contain"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 248
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "本机设置",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "ap",
+          "placement": {
+            "x": 8,
+            "y": 52,
+            "width": 304,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 17,
+                "lineHeight": 22,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "开启配网热点",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "language",
+          "placement": {
+            "x": 8,
+            "y": 100,
+            "width": 304,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 17,
+                "lineHeight": 22,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "语言 / Language",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "sharing",
+          "placement": {
+            "x": 8,
+            "y": 148,
+            "width": 304,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 17,
+                "lineHeight": 22,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "文件共享",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 205,
+            "width": 296,
+            "height": 30
+          },
+          "style": {
+            "fontSize": 12,
+            "lineHeight": 17,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "",
+            "longMode": "wrap"
+          },
+          "id": "hint"
+        }
+      ]
+    }
+  ]
+}

@@ -8,9 +8,10 @@
     "path": "hardware/agent-os/runtime/lckfb-suite"
   },
   "help": {
-    "controls": "触摸操作；短按用户键说话；长按用户键2秒返回桌面。"
+    "controls": "扫码在同一局域网配置；手机连接期间离开需确认。再次长按用户键可强制返回桌面。"
   },
   "memory_bytes": 196608,
   "instruction_budget": 200000,
-  "system_call_budget": 96
+  "system_call_budget": 96,
+  "icon": "../icons/settings.png"
 }

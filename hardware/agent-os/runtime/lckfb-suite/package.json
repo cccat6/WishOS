@@ -90,7 +90,19 @@
     "/suite/config.lua": "assets/suite/config.lua",
     "/suite/voice.lua": "assets/suite/voice.lua",
     "/ui/answer.en.json": "assets/ui/answer.en.json",
-    "/ui/answer.json": "assets/ui/answer.json"
+    "/ui/answer.json": "assets/ui/answer.json",
+    "/brand/lockup-compact.png": "assets/brand/lockup-compact.png",
+    "/brand/microphone.png": "assets/brand/microphone.png",
+    "/ui/confirm-exit.en.json": "assets/ui/confirm-exit.en.json",
+    "/ui/confirm-exit.json": "assets/ui/confirm-exit.json",
+    "/ui/file-info.en.json": "assets/ui/file-info.en.json",
+    "/ui/file-info.json": "assets/ui/file-info.json",
+    "/ui/settings-options.en.json": "assets/ui/settings-options.en.json",
+    "/ui/settings-options.json": "assets/ui/settings-options.json",
+    "/ui/sharing.en.json": "assets/ui/sharing.en.json",
+    "/ui/sharing.json": "assets/ui/sharing.json",
+    "/control/settings.js": "@runtime/control/settings.js",
+    "/control/session.json": "assets/control/session.json"
   },
   "gzip_assets": [
     "/control/control.js",

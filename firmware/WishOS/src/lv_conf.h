@@ -15,6 +15,7 @@
 #define LV_USE_LABEL 1
 #define LV_USE_BUTTON 1
 #define LV_USE_IMAGE 1
+#define LV_USE_QRCODE 1
 #define LV_USE_TJPGD 1
 #define LV_USE_LODEPNG 1
 /* Decoder allocations use the shared resource budget. Image admission is a

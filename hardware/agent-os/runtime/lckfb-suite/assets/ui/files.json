@@ -12,111 +12,194 @@
           "type": "button",
           "id": "home",
           "placement": {
-            "x": 5,
+            "x": 8,
             "y": 4,
-            "width": 38,
-            "height": 35
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#F7F5EF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 3,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/back.png"
-              }
-            },
-            {
-              "type": "label",
-              "placement": {
-                "x": 43,
-                "y": 4,
-                "width": -14
-              },
-              "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": ""
+                "src": "../icons/back.png",
+                "fit": "contain"
               }
             }
           ]
         },
         {
-          "type": "label",
+          "type": "container",
           "placement": {
-            "x": 50,
-            "y": 7,
-            "width": 258
+            "x": 64,
+            "y": 4,
+            "width": 192,
+            "height": 28
           },
           "style": {
-            "fontSize": 23,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "存储卡与文件"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 50,
-            "y": 44,
-            "width": 256
-          },
-          "style": {
-            "fontSize": 14,
-            "textColor": "#60645B"
-          },
-          "labelProps": {
-            "text": "/"
-          },
-          "id": "directory"
-        },
-        {
-          "type": "button",
-          "id": "file0",
-          "placement": {
-            "x": 12,
-            "y": 67,
-            "width": 296,
-            "height": 29
-          },
-          "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 10,
-            "padding": 0
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 3,
-                "width": 276
+                "align": "center",
+                "width": 192
               },
               "style": {
-                "fontSize": 14,
-                "textColor": "#262822"
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
               },
               "labelProps": {
-                "text": "—"
+                "text": "文件",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 32,
+            "width": 192,
+            "height": 18
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 192
               },
-              "id": "file0_title"
+              "style": {
+                "fontSize": 11,
+                "lineHeight": 16,
+                "textColor": "#60645B",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "/",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "directory"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "file0",
+          "placement": {
+            "x": 8,
+            "y": 54,
+            "width": 304,
+            "height": 44
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 282,
+                "height": 22
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 15,
+                    "lineHeight": 20,
+                    "textColor": "#262822",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "file0_title"
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 25,
+                "width": 282,
+                "height": 15
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 10,
+                    "lineHeight": 15,
+                    "textColor": "#60645B",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "file0_meta"
+                }
+              ]
             }
           ]
         },
@@ -124,34 +207,88 @@
           "type": "button",
           "id": "file1",
           "placement": {
-            "x": 12,
-            "y": 100,
-            "width": 296,
-            "height": 29
+            "x": 8,
+            "y": 101,
+            "width": 304,
+            "height": 44
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
-              "type": "label",
+              "type": "container",
               "placement": {
                 "x": 10,
                 "y": 3,
-                "width": 276
+                "width": 282,
+                "height": 22
               },
               "style": {
-                "fontSize": 14,
-                "textColor": "#262822"
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
               },
-              "labelProps": {
-                "text": "—"
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 15,
+                    "lineHeight": 20,
+                    "textColor": "#262822",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "file1_title"
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 25,
+                "width": 282,
+                "height": 15
               },
-              "id": "file1_title"
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 10,
+                    "lineHeight": 15,
+                    "textColor": "#60645B",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "file1_meta"
+                }
+              ]
             }
           ]
         },
@@ -159,102 +296,190 @@
           "type": "button",
           "id": "file2",
           "placement": {
-            "x": 12,
-            "y": 133,
-            "width": 296,
-            "height": 29
+            "x": 8,
+            "y": 148,
+            "width": 304,
+            "height": 44
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 282,
+                "height": 22
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 15,
+                    "lineHeight": 20,
+                    "textColor": "#262822",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "file2_title"
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 25,
+                "width": 282,
+                "height": 15
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 10,
+                    "lineHeight": 15,
+                    "textColor": "#60645B",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "file2_meta"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 68,
+            "width": 296,
+            "height": 72
+          },
+          "style": {
+            "fontSize": 16,
+            "lineHeight": 21,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "",
+            "longMode": "wrap"
+          },
+          "id": "empty"
+        },
+        {
+          "type": "button",
+          "id": "previous",
+          "placement": {
+            "x": 8,
+            "y": 195,
+            "width": 96,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 3,
-                "width": 276
+                "width": "content"
               },
               "style": {
                 "fontSize": 14,
+                "lineHeight": 19,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "—"
-              },
-              "id": "file2_title"
+                "text": "上一页",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
             }
           ]
         },
         {
           "type": "button",
-          "id": "file3",
+          "id": "filter",
           "placement": {
-            "x": 12,
-            "y": 166,
-            "width": 296,
-            "height": 29
+            "x": 112,
+            "y": 195,
+            "width": 96,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 3,
-                "width": 276
+                "width": "content"
               },
               "style": {
                 "fontSize": 14,
+                "lineHeight": 19,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "—"
-              },
-              "id": "file3_title"
-            }
-          ]
-        },
-        {
-          "type": "button",
-          "id": "parent",
-          "placement": {
-            "x": 12,
-            "y": 205,
-            "width": 44,
-            "height": 28
-          },
-          "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 10,
-            "padding": 0
-          },
-          "children": [
-            {
-              "type": "label",
-              "placement": {
-                "x": 10,
-                "y": 3,
-                "width": 24
-              },
-              "style": {
-                "fontSize": 14,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": ".."
+                "text": "全部类型",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -263,66 +488,82 @@
           "type": "button",
           "id": "next",
           "placement": {
-            "x": 63,
-            "y": 205,
+            "x": 216,
+            "y": 195,
             "width": 96,
-            "height": 28
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 3,
-                "width": 76
+                "width": "content"
               },
               "style": {
-                "fontSize": 13,
+                "fontSize": 14,
+                "lineHeight": 19,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "下一页"
+                "text": "下一页",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
         },
         {
           "type": "button",
-          "id": "nfs",
+          "id": "refresh",
           "placement": {
-            "x": 166,
-            "y": 205,
-            "width": 142,
-            "height": 28
+            "x": 268,
+            "y": 4,
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 3,
-                "width": 122
+                "width": "content"
               },
               "style": {
-                "fontSize": 13,
+                "fontSize": 12,
+                "lineHeight": 17,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "网络共享"
+                "text": "刷新",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]

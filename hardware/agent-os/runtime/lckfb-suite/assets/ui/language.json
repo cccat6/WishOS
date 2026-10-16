@@ -12,74 +12,91 @@
           "type": "image",
           "placement": {
             "x": 128,
-            "y": 12,
+            "y": 8,
             "width": 64,
             "height": 64
           },
           "imageProps": {
-            "src": "../brand/logo.png"
+            "src": "../brand/logo.png",
+            "fit": "contain"
           }
         },
         {
           "type": "label",
           "placement": {
-            "x": 107,
-            "y": 86,
-            "width": 210
+            "x": 12,
+            "y": 82,
+            "width": 296,
+            "height": 32
           },
           "style": {
             "fontSize": 22,
-            "textColor": "#262822"
+            "lineHeight": 27,
+            "textColor": "#262822",
+            "textAlign": "center"
           },
           "labelProps": {
-            "text": "选择语言"
+            "text": "选择语言",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "label",
           "placement": {
-            "x": 72,
-            "y": 120,
-            "width": 245
+            "x": 12,
+            "y": 117,
+            "width": 296,
+            "height": 26
           },
           "style": {
-            "fontSize": 18,
-            "textColor": "#60645B"
+            "fontSize": 16,
+            "lineHeight": 21,
+            "textColor": "#262822",
+            "textAlign": "center"
           },
           "labelProps": {
-            "text": "Choose your language"
+            "text": "Choose your language",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "button",
           "id": "zh",
           "placement": {
-            "x": 24,
-            "y": 169,
-            "width": 132,
-            "height": 46
+            "x": 8,
+            "y": 174,
+            "width": 148,
+            "height": 52
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 10,
-                "width": 112
+                "width": "content"
               },
               "style": {
                 "fontSize": 18,
+                "lineHeight": 23,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "简体中文"
+                "text": "简体中文",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -89,31 +106,39 @@
           "id": "en",
           "placement": {
             "x": 164,
-            "y": 169,
-            "width": 132,
-            "height": 46
+            "y": 174,
+            "width": 148,
+            "height": 52
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 10,
-                "width": 112
+                "width": "content"
               },
               "style": {
                 "fontSize": 18,
+                "lineHeight": 23,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "English"
+                "text": "English",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]

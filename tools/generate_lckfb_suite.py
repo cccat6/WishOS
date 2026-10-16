@@ -27,6 +27,7 @@ for phase in ('busy','done'):
  for frame in range(12):
   root=ET.fromstring((BRAND/'loading.svg').read_text());root.attrib['width']='64';root.attrib['height']='64'
   for n in list(root):
+   if n.attrib.get('class') not in ('wish-progress','wish-spark'):root.remove(n);continue
    if n.attrib.get('class')=='wish-progress':
     if phase=='done':root.remove(n)
     else:n.attrib.update({'stroke-dasharray':'28 72','stroke-dashoffset':str(-frame*100/12)})
@@ -49,23 +50,28 @@ for block in range(4):
  for i in range(0,640,2):data.append(codes[i]|codes[i+1]<<4)
  audio+=data
 (ASSETS/'brand/ready.adpcm').write_bytes(audio)
-def label(text,x,y,w,size=16,id=None,color=INK):
- d={'type':'label','placement':{'x':x,'y':y,'width':w},'style':{'fontSize':size,'textColor':color},'labelProps':{'text':text}}
+def label(text,x,y,w,size=16,id=None,color=INK,h=None,wrap=False):
+ d={'type':'label','placement':{'x':x,'y':y,'width':w,'height':h or size+10},'style':{'fontSize':size,'lineHeight':size+5,'textColor':color},'labelProps':{'text':text,'longMode':'wrap' if wrap else 'ellipsis'}}
  if id:d['id']=id
  return d
 def image(src,x,y,w,h,id=None):
- d={'type':'image','placement':{'x':x,'y':y,'width':w,'height':h},'imageProps':{'src':src}}
+ d={'type':'image','placement':{'x':x,'y':y,'width':w,'height':h},'imageProps':{'src':src,'fit':'contain'}}
  if id:d['id']=id
  return d
 def button(id,text,x,y,w,h,icon=None,fill='#FFFFFF',size=18):
  children=[]
- if icon:children.append(image('../icons/'+icon+'.png',9,(h-28)//2,28,28))
- children.append(label(text,43 if icon else 10,(h-size-8)//2,w-(52 if icon else 20),size))
- return {'type':'button','id':id,'placement':{'x':x,'y':y,'width':w,'height':h},'style':{'bgColor':fill,'borderWidth':1,'borderColor':LINE,'radius':10,'padding':0},'children':children}
+ if icon:
+  n=image('../icons/'+icon+'.png',0,0,28,28);n['placement'].pop('x');n['placement'].pop('y');children.append(n)
+ if text:
+  n=label(text,0,0,w-20,size);n['placement']={'width':'content'};n['labelProps']['metrics']='ink';children.append(n)
+ return {'type':'button','id':id,'placement':{'x':x,'y':y,'width':w,'height':h},'layout':{'type':'flex','flexFlow':'row','mainAlign':'center','crossAlign':'center','gap':10},'style':{'bgColor':fill,'borderWidth':1,'borderColor':LINE,'radius':7,'padding':0},'children':children}
 def screen(children):return {'version':'0.1.1','assets':[{'type':'viewScreen','style':{'bgColor':PAPER,'padding':0},'children':children}]}
-def header(title,subtitle=None):
- c=[button('home','',5,4,38,35,icon='back',fill=PAPER),label(title,50,7,258,23)]
- if subtitle:c.append(label(subtitle,12,46,296,14,color=MUTED))
+def slot(text,x,y,w,h,size=16,id=None,align='left',color=INK):
+ n=label(text,0,0,w,size,id,color);n['placement']={'align':'center','width':w};n['labelProps']['metrics']='ink';n['style']['textAlign']=align
+ return {'type':'container','placement':{'x':x,'y':y,'width':w,'height':h},'style':{'padding':0,'borderWidth':0,'bgOpacity':0},'children':[n]}
+def header(title,subtitle=None,subtitle_id=None):
+ c=[button('home','',8,4,44,44,'back',fill=PAPER),slot(title,64,4,248,28 if subtitle else 44,22)]
+ if subtitle:c.append(slot(subtitle,64,32,248,18,11,subtitle_id,color=MUTED))
  return c
 def write(name,nodes):
  page=screen(nodes);save(ASSETS/'ui'/f'{name}.json',page)
@@ -77,36 +83,47 @@ def write(name,nodes):
  for node in en['assets']:tr(node)
  save(ASSETS/'ui'/f'{name}.en.json',en)
 translations={'今天，想做些什么？':'What shall we make today?','对话':'Talk','应用':'Apps','设备':'Device','设置':'Settings','短按说话 · 长按2秒回桌面':'Press to talk · Hold 2s for Home','我的应用':'Your apps','点击打开应用':'Tap an app to open it','上一页':'Previous','下一页':'Next','设备与传感器':'Device & sensors','六轴姿态 · 原生驱动':'6-axis motion · Native drivers','存储卡与文件':'Files & storage','网络共享':'NFS sharing','打开网页管理文件':'Manage files in your browser','相机':'Camera','拍照':'Capture','保存到 SD':'Save to SD','正在准备相机':'Preparing camera','网络与服务':'Network & services','配网热点':'Wi-Fi setup AP','语言':'Language','与 Agent 对话':'Talk to your Agent','短按用户键开始或结束录音':'Press user key to start/stop','说出你想做的应用':'Describe the app you want','短按开始录音':'Press to record','开始录音':'Record','结束并发送':'Send recording','欢迎使用 WishOS':'Welcome to WishOS','短按用户键，与 Agent 对话':'Press the user key to talk','触摸图标，打开应用和设置':'Tap icons for apps and settings','长按用户键2秒，随时回桌面':'Hold the user key 2s for Home','进入桌面':'Open desktop','暂无应用':'No applications','选择语言':'Choose language','未连接 Agent':'Agent not connected'}
-write('home',[image('../brand/lockup.png',4,0,208,59),label('未连接 Agent',215,12,100,12,'connection',MUTED),label('',253,34,64,15,'clock',MUTED),label('今天，想做些什么？',12,61,296,18),button('voice','对话',12,87,144,52,'voice',fill='#F7E9DD'),button('apps','应用',164,87,144,52,'apps'),button('device','设备',12,147,144,52,'device'),button('settings','设置',164,147,144,52,'settings'),label('短按说话 · 长按2秒回桌面',12,214,296,14,color=MUTED)])
-write('welcome',[image('../brand/logo.png',128,8,64,64),label('欢迎使用 WishOS',56,79,238,23),label('短按用户键，与 Agent 对话',22,116,280,17),label('触摸图标，打开应用和设置',22,145,280,17),label('长按用户键2秒，随时回桌面',22,174,286,16),button('ready','进入桌面',80,204,160,32,size=16)])
-write('language',[image('../brand/logo.png',128,12,64,64),label('选择语言',107,86,210,22),label('Choose your language',72,120,245,18,color=MUTED),button('zh','简体中文',24,169,132,46),button('en','English',164,169,132,46)])
-write('apps',header('我的应用','点击打开应用')+[button('app0','对话',12,70,296,40,'voice'),button('app1','相机',12,118,296,40,'camera'),button('app2','设备',12,166,296,40,'device'),button('previous','上一页',12,213,140,25,size=13),button('next','下一页',164,213,144,25,size=13)])
-# Names are model fields independent of each row's activation ID.
+translations.update({'刷新':'Refresh','文件':'Files','本机设置':'Device options','文件共享':'File sharing','扫码进行完整设置':'Scan to configure','后台地址':'Address','同一局域网内访问':'On the same LAN','等待手机连接':'Waiting for browser','开启配网热点':'Enable setup AP','离开设置？':'Leave settings?','手机仍在连接设备设置':'A browser is connected','离开会断开手机设置会话。':'This disconnects browser settings.','再次长按用户键可强制回桌面。':'Hold user key again to force Home.','继续设置':'Stay','断开并离开':'Leave','全部类型':'All types','文件信息':'File info','点击拍照':'Tap Capture','桌面':'Home','设备状态':'Device status','设备设置':'Settings','点击开始，说完再点发送':'Tap Record, then Send when done','重新打开从15分钟开始':'Reopening resets the timer','上级':'Parent','共享':'Share','帮助':'Help','短按用户键：说话':'Press user key: talk','长按2秒：桌面':'Hold 2s: Home'})
+svg_png(BRAND/'lockup.svg',ASSETS/'brand/lockup-compact.png',176)
+svg_png(ASSETS/'icons/voice.svg',ASSETS/'brand/microphone.png',64)
+def field(text,x,y,w,size=16,id=None,align='left',h=None,wrap=False):
+ n=label(text,x,y,w,size,id,h=h,wrap=wrap);n['style']['textAlign']=align;return n
+write('home',[image('../brand/lockup-compact.png',12,6,150,43),slot('未连接 Agent',168,8,140,20,12,'connection','right',MUTED),slot('',168,28,140,24,16,'clock','right',MUTED),label('今天，想做些什么？',12,55,296,16),button('voice','对话',8,84,148,48,'voice',fill='#F7E9DD'),button('apps','应用',164,84,148,48,'apps'),button('device','设备',8,140,148,48,'device'),button('settings','设置',164,140,148,48,'settings'),label('短按说话 · 长按2秒回桌面',12,204,238,12,color=MUTED),button('help','帮助',260,196,52,44,size=14)])
+write('welcome',[image('../brand/logo.png',128,4,64,64),field('欢迎使用 WishOS',12,73,296,23,align='center'),field('短按用户键，与 Agent 对话',12,108,296,16,align='center'),field('触摸图标，打开应用和设置',12,136,296,16,align='center'),field('长按用户键2秒，随时回桌面',12,163,296,15,align='center'),button('ready','进入桌面',64,193,192,44,size=17)])
 for suffix in ('','.en'):
- p=ASSETS/'ui'/f'apps{suffix}.json';d=json.loads(p.read_text());
- for n in d['assets'][0]['children']:
-  if n.get('id','').startswith('app'):n['children'][-1]['id']=n['id']+'_title';n['children'][0]['id']=n['id']+'_icon'
- save(p,d)
-write('settings',header('网络与服务')+[label('Wi-Fi',12,47,70,14,color=MUTED),label('—',88,45,220,17,'ssid'),label('后台地址',12,78,75,14,color=MUTED),label('—',88,76,220,16,'address'),label('MAC',12,108,70,14,color=MUTED),label('—',88,106,220,15,'mac'),label('Agent',12,138,70,14,color=MUTED),label('—',88,136,220,16,'agent'),button('ap','配网热点',12,175,144,36,size=16),button('language','语言',164,175,144,36,size=16),label('—',12,218,296,12,'hint',MUTED)])
-write('device',header('设备与传感器','六轴姿态 · 原生驱动')+[label('加速度 / g',12,74,130,16,color=MUTED),label('—',12,100,296,20,'accel'),label('角速度 / °/s',12,134,150,16,color=MUTED),label('—',12,160,296,20,'gyro'),label('—',12,201,296,14,'temperature',MUTED),label('—',12,222,296,12,'status',MUTED)])
-write('files',header('存储卡与文件')+[label('/',50,44,256,14,'directory',MUTED)]+[button('file'+str(i),'—',12,67+i*33,296,29,size=14)for i in range(4)]+[button('parent','..',12,205,44,28,size=14),button('next','下一页',63,205,96,28,size=13),button('nfs','网络共享',166,205,142,28,size=13)])
+ p=ASSETS/'ui'/f'welcome{suffix}.json';d=json.loads(p.read_text());d['assets'][0]['children'][1]['id']='welcome_title';d['assets'][0]['children'][-1]['children'][-1]['id']='ready_label';save(p,d)
+write('language',[image('../brand/logo.png',128,8,64,64),field('选择语言',12,82,296,22,align='center'),field('Choose your language',12,117,296,16,align='center'),button('zh','简体中文',8,174,148,52),button('en','English',164,174,148,52)])
+appRows=[]
+for i in range(3):
+ row=button('app'+str(i),'—',8,52+i*48,304,44,'apps',size=17)
+ row['children'][-1]['placement']={'width':228};row['children'][-1]['style']['textAlign']='left';row['layout']['mainAlign']='start';row['style']['paddingLeft']=12
+ # Center alignment offsets are relative to the parent center.
+ row['children'][0]['id']='app'+str(i)+'_icon';row['children'][-1]['id']='app'+str(i)+'_title';appRows.append(row)
+write('apps',header('我的应用')+appRows+[button('previous','上一页',8,196,96,44,size=14),slot('',112,196,96,44,13,'page','center'),button('next','下一页',216,196,96,44,size=14)])
+qr={'type':'qrcode','id':'qr','placement':{'x':16,'y':64,'width':128,'height':128},'qrcodeProps':{'text':'http://192.168.4.1/control/setup.html'}}
+write('settings',header('设备设置')+[qr,label('扫码进行完整设置',156,58,156,15),label('Wi-Fi',156,91,156,11,color=MUTED),label('—',156,108,156,15,'ssid'),label('后台地址',156,139,156,11,color=MUTED),label('—',156,156,156,15,'address'),label('同一局域网内访问',156,181,156,11,color=MUTED),button('options','本机设置',8,196,116,44,size=15),slot('等待手机连接',132,196,180,44,12,'clients','right',MUTED)])
+write('settings-options',header('本机设置')+[button('ap','开启配网热点',8,52,304,44,size=17),button('language','语言 / Language',8,100,304,44,size=17),button('sharing','文件共享',8,148,304,44,size=17),label('',12,205,296,12,'hint',MUTED,h=30,wrap=True)])
+write('sharing',header('文件共享')+[label('NFS · 局域网存储访问',12,59,296,18),label('—',12,99,296,15,'share_status',h=72,wrap=True),button('share_toggle','开启共享',8,190,304,44,size=17)])
 for suffix in ('','.en'):
- p=ASSETS/'ui'/f'files{suffix}.json';d=json.loads(p.read_text());
- for n in d['assets'][0]['children']:
-  if n.get('id','').startswith('file'):n['children'][0]['id']=n['id']+'_title'
- save(p,d)
-write('camera',header('相机')+[image('../brand/logo.png',128,67,64,64,'frame'),label('正在准备相机',12,140,296,16,'status'),button('capture','拍照',12,197,144,36,size=16),button('save','保存到 SD',164,197,144,36,size=16)])
-# A QVGA frame fills the display below a compact action overlay; data remains a
-# transient RAM file, and saving is an explicit user operation.
+ p=ASSETS/'ui'/f'sharing{suffix}.json';d=json.loads(p.read_text());d['assets'][0]['children'][-1]['children'][-1]['id']='share_toggle';d['assets'][0]['children'][-1]['id']='toggle';save(p,d)
+write('confirm-exit',header('离开设置？')+[label('手机仍在连接设备设置',12,65,296,20),label('离开会断开手机设置会话。',12,112,296,16),label('再次长按用户键可强制回桌面。',12,146,296,13,color=MUTED),button('stay','继续设置',8,190,148,44,size=16),button('leave','断开并离开',164,190,148,44,size=16)])
+write('device',header('设备状态')+[label('加速度 / g',12,56,150,14,color=MUTED),label('—',12,80,296,18,'accel'),label('角速度 / °/s',12,116,170,14,color=MUTED),label('—',12,140,296,18,'gyro'),label('—',12,186,296,14,'temperature',MUTED),label('—',12,216,296,11,'status',MUTED,h=18)])
+fileRows=[]
+for i in range(3):
+ row=button('file'+str(i),'',8,54+i*47,304,44)
+ row.pop('layout');row['children']=[slot('',10,3,282,22,15,'file'+str(i)+'_title'),slot('',10,25,282,15,10,'file'+str(i)+'_meta',color=MUTED)];fileRows.append(row)
+write('files',header('文件','/','directory')+fileRows+[label('',12,68,296,16,'empty',h=72,wrap=True),button('previous','上一页',8,195,96,44,size=14),button('filter','全部类型',112,195,96,44,size=14),button('next','下一页',216,195,96,44,size=14)])
 for suffix in ('','.en'):
- p=ASSETS/'ui'/f'camera{suffix}.json';d=json.loads(p.read_text());node=d['assets'][0]['children'].pop(2);node['placement']={'x':0,'y':0,'width':320,'height':240};d['assets'][0]['children'].insert(0,node);save(p,d)
-write('voice',header('与 Agent 对话')+[image('../brand/logo.png',128,52,64,64,'activity'),label('说出你想做的应用',20,125,280,20,'message'),label('短按用户键开始或结束录音',20,157,280,14,'detail',MUTED),button('record','开始录音',12,193,296,40,'voice')])
+ p=ASSETS/'ui'/f'files{suffix}.json';d=json.loads(p.read_text());nodes=d['assets'][0]['children']
+ for n in nodes[1:3]:n['placement']['width']=192;n['children'][0]['placement']['width']=192
+ refresh=button('refresh','刷新' if not suffix else 'Refresh',268,4,44,44,size=12)
+ nodes.append(refresh);save(p,d)
+write('file-info',header('文件信息')+[label('',12,56,296,17,'filename',h=78,wrap=True),label('',12,140,296,13,'fileinfo',h=42,wrap=True),button('previous','上一页',8,196,96,44,size=14),slot('',112,196,96,44,13,'page','center'),button('next','下一页',216,196,96,44,size=14)])
+write('camera',header('相机','点击拍照','status')+[image('../icons/camera.png',8,54,304,132,'frame'),button('capture','拍照',8,192,148,44,size=17),button('save','保存到 SD',164,192,148,44,size=16)])
+write('voice',header('与 Agent 对话')+[image('../brand/microphone.png',16,66,32,32,'activity'),label('说出你想做的应用',60,66,248,20,'message',h=62,wrap=True),label('点击开始，说完再点发送',12,135,296,14,'detail',MUTED,h=40,wrap=True),button('record','开始录音',8,184,304,48,'voice')])
 for suffix in ('','.en'):
  p=ASSETS/'ui'/f'voice{suffix}.json';d=json.loads(p.read_text());d['assets'][0]['children'][-1]['children'][-1]['id']='record_label';save(p,d)
-write('answer',header('与 Agent 对话')+[label('',12,54,296,18,'answer'),label('',12,177,296,13,'page',MUTED),button('previous','上一页',12,203,144,34,size=15),button('next','下一页',164,203,144,34,size=15)])
-# Keep camera controls readable above a full-size frame.
-for suffix in ('','.en'):
- p=ASSETS/'ui'/f'camera{suffix}.json';d=json.loads(p.read_text());children=d['assets'][0]['children'];children.insert(1,{'type':'container','placement':{'x':0,'y':0,'width':320,'height':43},'style':{'bgColor':PAPER,'padding':0}});children.insert(2,{'type':'container','placement':{'x':0,'y':132,'width':320,'height':108},'style':{'bgColor':PAPER,'padding':0,'bgOpacity':210}});save(p,d)
+write('answer',header('与 Agent 对话')+[label('',12,56,296,17,'answer',h=118,wrap=True),label('',12,173,296,12,'page',MUTED,h=18),button('previous','上一页',8,196,148,44,size=16),button('next','下一页',164,196,148,44,size=16)])
 # Asset paths are ordinary writable files, not compiled UI tables.
 p=BASE/'package.json';package=json.loads(p.read_text());assets=package['assets']
 for file in sorted(ASSETS.rglob('*')):

@@ -10,6 +10,11 @@ int main(){char dir[]="/tmp/wishos-posix-XXXXXX";assert(mkdtemp(dir));bool mount
  // Cached readers cannot outlive an in-place write, rename/removal or remount.
  assert(!p.write("/子目录/a.txt",0,(const uint8_t*)"xyz",3,true,n));assert(!p.read("/子目录/a.txt",0,bytes,3,n)&&n==3&&!memcmp(bytes,"xyz",3));
  p.volume("fat32",512);assert(!p.read("/子目录/a.txt",0,bytes,3,n)&&n==3&&!memcmp(bytes,"xyz",3));
+ // Interleaved readers retain independent offsets/identity, and a mutation
+ // invalidates every cached descriptor before the path can be reused.
+ assert(!p.write("/second",0,(const uint8_t*)"12345",5,true,n));
+ assert(!p.read("/子目录/a.txt",1,bytes,2,n)&&n==2&&!memcmp(bytes,"yz",2));assert(!p.read("/second",2,bytes,2,n)&&n==2&&!memcmp(bytes,"34",2));assert(!p.read("/子目录/a.txt",0,bytes,3,n)&&!memcmp(bytes,"xyz",3));
+ assert(!p.write("/second",0,(const uint8_t*)"new",3,true,n));assert(!p.read("/second",0,bytes,8,n)&&n==3&&!memcmp(bytes,"new",3));assert(!p.remove("/second"));assert(!strcmp(p.read("/second",0,bytes,8,n),"not_found"));
  char canonical[256];FileInfo canonicalInfo;assert(!p.canonicalPath("/子目录/a.txt",canonical,sizeof canonical,canonicalInfo));assert(!strcmp(canonical,"/子目录/a.txt")&&canonicalInfo.size==3);
  assert(!strcmp(p.createFile("/子目录/a.txt"),"exists"));p.background(true);assert(!strcmp(p.read("/子目录/a.txt",0,bytes,8,n),"resource_busy")&&n==0);p.background(false);
  p.writable=false;n=99;assert(!strcmp(p.write("/子目录/a.txt",0,bytes,8,true,n),"read_only")&&n==0);assert(!strcmp(p.remove("/子目录/a.txt"),"read_only"));p.writable=true;

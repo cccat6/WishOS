@@ -6,7 +6,7 @@ The current build renders an explicitly supported Brookesia JSON UI 0.1.x subset
 
 Call `/sys/ui capabilities`, `/sys/ui fonts`, `/dev/display drivers`, `/sys/storage read`, `/sys/stats read`, and `/sys/config read`. Check writable mounts, quotas, actual memory, display geometry/palette/latency and supported nodes/styles. The present build permits 16 KiB per document, 32 nodes, 8 levels; future builds may advertise different limits. Unknown capacity or CPU readings remain unknown.
 
-Supported nodes: viewScreen, container, label, button, image. Absolute placement and row/column flex layouts are available. Styles cover colors, text alignment, padding per side, corner radius, borders, background/image opacity and registered fonts. Unsupported styles/layouts fail explicitly. The button node describes appearance; hardware button actions belong to rules or the application program.
+Supported nodes: viewScreen, container, label, button, image, qrcode. Absolute placement and row/column flex layouts are available. Styles cover colors, text alignment, padding per side, corner radius, borders, background/image opacity and registered fonts. Unsupported styles/layouts fail explicitly. The button node describes appearance; hardware button actions belong to rules or the application program.
 
 ## Prepare images for bounded rendering
 
@@ -89,3 +89,13 @@ allowed text. Defaults come from the selected composition; larger caches consume
 more managed memory. Native display completion may include adapter-specific
 `timings`; discover them on that adapter rather than assuming every screen has
 layout/raster/transfer phases or the S3's measured latency.
+
+## Layout acceptance
+
+- Use flex `mainAlign` / `crossAlign` (`start`, `center`, `end`) for aligned control groups. `placement.width/height:"content"` requests intrinsic size.
+- A font can have large asymmetric leading. Single-line labels can select `labelProps.metrics:"ink"` for an intrinsic glyph-ink height, then align the group; do not guess vertical padding from fontSize. Paragraphs retain font line metrics; `style.lineHeight` sets their line advance in pixels.
+- Check actual rendered text and icon centers, shared header baselines/padding, localized text, truncation and empty/loading/error states. Button bounds alone are insufficient.
+- Use `labelProps.longMode:"ellipsis"` for bounded lists and a detail view for full names; preserve file type/size and directory navigation. Do not load an entire book to show a file row.
+- Read application manifest `icon` (resolved relative to its manifest); use a generic fallback when absent, not a hardcoded app-ID-to-icon map.
+- Use page Back for the current navigation hierarchy; explain the independent protected Home gesture. A settings confirmation is ordinary application content, never a special renderer page.
+- `qrcode` nodes accept `qrcodeProps.text` or a model string keyed by node id. Keep a quiet area around the code and verify the actual raster decodes to the current reachable LAN URL.

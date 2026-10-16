@@ -12,5 +12,6 @@
   },
   "memory_bytes": 196608,
   "instruction_budget": 200000,
-  "system_call_budget": 96
+  "system_call_budget": 96,
+  "icon": "../icons/voice.png"
 }

@@ -12,44 +12,69 @@
           "type": "button",
           "id": "home",
           "placement": {
-            "x": 5,
+            "x": 8,
             "y": 4,
-            "width": 38,
-            "height": 35
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#F7F5EF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 3,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/back.png"
+                "src": "../icons/back.png",
+                "fit": "contain"
               }
-            },
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 4,
-                "width": -14
+                "align": "center",
+                "width": 248
               },
               "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
               },
               "labelProps": {
-                "text": ""
+                "text": "Talk to your Agent",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -57,31 +82,19 @@
         {
           "type": "label",
           "placement": {
-            "x": 50,
-            "y": 7,
-            "width": 258
-          },
-          "style": {
-            "fontSize": 23,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "Talk to your Agent"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
             "x": 12,
-            "y": 54,
-            "width": 296
+            "y": 56,
+            "width": 296,
+            "height": 118
           },
           "style": {
-            "fontSize": 18,
+            "fontSize": 17,
+            "lineHeight": 22,
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": ""
+            "text": "",
+            "longMode": "wrap"
           },
           "id": "answer"
         },
@@ -89,15 +102,18 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 177,
-            "width": 296
+            "y": 173,
+            "width": 296,
+            "height": 18
           },
           "style": {
-            "fontSize": 13,
+            "fontSize": 12,
+            "lineHeight": 17,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": ""
+            "text": "",
+            "longMode": "ellipsis"
           },
           "id": "page"
         },
@@ -105,32 +121,40 @@
           "type": "button",
           "id": "previous",
           "placement": {
-            "x": 12,
-            "y": 203,
-            "width": 144,
-            "height": 34
+            "x": 8,
+            "y": 196,
+            "width": 148,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 5,
-                "width": 124
+                "width": "content"
               },
               "style": {
-                "fontSize": 15,
+                "fontSize": 16,
+                "lineHeight": 21,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Previous"
+                "text": "Previous",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -140,31 +164,39 @@
           "id": "next",
           "placement": {
             "x": 164,
-            "y": 203,
-            "width": 144,
-            "height": 34
+            "y": 196,
+            "width": 148,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 5,
-                "width": 124
+                "width": "content"
               },
               "style": {
-                "fontSize": 15,
+                "fontSize": 16,
+                "lineHeight": 21,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Next"
+                "text": "Next",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]

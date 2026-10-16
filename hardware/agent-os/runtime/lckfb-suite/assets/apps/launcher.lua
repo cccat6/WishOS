@@ -5,14 +5,14 @@ local function update_clock()
  local ui=C.call('/sys/ui');if not ui or ui.view_id~=C.view or ui.path~=C.path('home') then return end
  local text=clock_text();if text~=C.model.clock then C.update({clock=text}) end
 end
-local function desktop() C.open('home',{connection=C.agent_status(),clock=clock_text()});C.action('voice',function() C.launch('voice') end);C.action('apps',function() page=0;starts={[0]=0};C.show_apps() end);C.action('device',function() C.launch('device') end);C.action('settings',function() C.launch('settings') end) end
+local function desktop() C.open('home',{connection=C.agent_status(),clock=clock_text()});C.action('voice',function() C.launch('voice') end);C.action('apps',function() page=0;starts={[0]=0};C.show_apps() end);C.action('device',function() C.launch('device') end);C.action('settings',function() C.launch('settings') end);C.action('help',function() C.open('welcome',{welcome_title=C.t('使用帮助','Quick help'),ready_label=C.t('返回桌面','Back Home')});C.action('ready',desktop) end) end
 function C.show_apps()
  rows={};local cursor=starts[page] or 0;local more=false;local own=C.call('/sys/apps','read') or {}
  repeat local r=C.call('/sys/apps','list',{cursor=cursor,limit=3-#rows});if not r then break end;for _,a in ipairs(r.applications) do if a.id~=own.current then rows[#rows+1]=a end end;cursor=r.next_cursor;more=r.more until #rows==3 or not more
  starts[page+1]=cursor
- local v={};for i=0,2 do local a=rows[i+1];v['app'..i..'_title']=a and a.title or C.t('暂无应用','No applications');v['app'..i..'_icon']=notes.resolve('../icons/'..(a and (a.id=='voice' or a.id=='camera' or a.id=='device' or a.id=='settings' or a.id=='files') and a.id or 'apps')..'.png') end
- C.open('apps',v);for i=0,2 do C.action('app'..i,function() local a=rows[i+1];if a then C.launch(a.id) end end) end
- C.action('next',function() if more then page=page+1;C.show_apps() end end);C.action('previous',function() if page>0 then page=page-1;C.show_apps() else desktop() end end)
+ local v={page=tostring(page+1)};for i=0,2 do local a=rows[i+1];v['app'..i..'_title']=a and a.title or '';local app=a and C.call('/sys/apps','inspect',{id=a.id});local icon=app and app.application.icon;local found=icon and C.call('/fs','stat',{file=icon});v['app'..i..'_icon']=found and icon or notes.resolve('../icons/apps.png') end
+ local hidden={};if page==0 then hidden[#hidden+1]='previous' end;if not more then hidden[#hidden+1]='next' end;for i=#rows,2 do hidden[#hidden+1]='app'..i end;C.open('apps',v,hidden);for i=0,2 do C.action('app'..i,function() local a=rows[i+1];if a then C.launch(a.id) end end) end
+ C.action('next',function() if more then page=page+1;C.show_apps() end end);C.action('previous',function() if page>0 then page=page-1;C.show_apps() end end)
 end
 local function welcome() C.open('welcome');C.action('ready',function() C.preferences.onboarded=true;C.save_preferences();desktop() end) end
 local function choose(lang) C.preferences.language=lang;C.save_preferences();welcome() end

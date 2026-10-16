@@ -12,105 +12,132 @@
           "type": "image",
           "placement": {
             "x": 128,
-            "y": 8,
+            "y": 4,
             "width": 64,
             "height": 64
           },
           "imageProps": {
-            "src": "../brand/logo.png"
+            "src": "../brand/logo.png",
+            "fit": "contain"
           }
         },
         {
           "type": "label",
           "placement": {
-            "x": 56,
-            "y": 79,
-            "width": 238
+            "x": 12,
+            "y": 73,
+            "width": 296,
+            "height": 33
           },
           "style": {
             "fontSize": 23,
-            "textColor": "#262822"
+            "lineHeight": 28,
+            "textColor": "#262822",
+            "textAlign": "center"
           },
           "labelProps": {
-            "text": "Welcome to WishOS"
-          }
+            "text": "Welcome to WishOS",
+            "longMode": "ellipsis"
+          },
+          "id": "welcome_title"
         },
         {
           "type": "label",
           "placement": {
-            "x": 22,
-            "y": 116,
-            "width": 280
-          },
-          "style": {
-            "fontSize": 17,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "Press the user key to talk"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 22,
-            "y": 145,
-            "width": 280
-          },
-          "style": {
-            "fontSize": 17,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "Tap icons for apps and settings"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 22,
-            "y": 174,
-            "width": 286
+            "x": 12,
+            "y": 108,
+            "width": 296,
+            "height": 26
           },
           "style": {
             "fontSize": 16,
-            "textColor": "#262822"
+            "lineHeight": 21,
+            "textColor": "#262822",
+            "textAlign": "center"
           },
           "labelProps": {
-            "text": "Hold the user key 2s for Home"
+            "text": "Press the user key to talk",
+            "longMode": "ellipsis"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 136,
+            "width": 296,
+            "height": 26
+          },
+          "style": {
+            "fontSize": 16,
+            "lineHeight": 21,
+            "textColor": "#262822",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "Tap icons for apps and settings",
+            "longMode": "ellipsis"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 163,
+            "width": 296,
+            "height": 25
+          },
+          "style": {
+            "fontSize": 15,
+            "lineHeight": 20,
+            "textColor": "#262822",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "Hold the user key 2s for Home",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "button",
           "id": "ready",
           "placement": {
-            "x": 80,
-            "y": 204,
-            "width": 160,
-            "height": 32
+            "x": 64,
+            "y": 193,
+            "width": 192,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 4,
-                "width": 140
+                "width": "content"
               },
               "style": {
-                "fontSize": 16,
+                "fontSize": 17,
+                "lineHeight": 22,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Open desktop"
-              }
+                "text": "Open desktop",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "ready_label"
             }
           ]
         }

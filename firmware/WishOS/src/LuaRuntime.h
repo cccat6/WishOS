@@ -168,10 +168,10 @@ private:
     cleanup();
     if(status!=LUA_OK){releaseOwned();if(!copy(error_,sizeof(error_),status==LUA_YIELD?"instruction_budget_exhausted":lua_tostring(thread,-1)))copy(error_,sizeof(error_),"lua_execution_error");fault_=true;}
     lua_sethook(thread,nullptr,0,0);lua_pop(state_,1);
-    // Callback coroutines and conversion tables are temporary. Reclaim at the
-    // bounded VM boundary so a burst of valid events cannot exhaust the heap
-    // merely because the next incremental collection has not run yet.
-    lua_gc(state_,LUA_GCCOLLECT);executing_=false;return status==LUA_OK&&!fault_;
+    // Allocations drive Lua's incremental collector. Advance it at callback
+    // boundaries rather than rescanning the entire live VM for every input
+    // sample/timer; Lua also retries allocations through its emergency GC.
+    lua_gc(state_,LUA_GCSTEP,0);executing_=false;return status==LUA_OK&&!fault_;
   }
 public:
   LuaRuntime(Core&core,size_t budget=0,uint32_t steps=20000,uint32_t calls=32):core_(core),budget_(budget?budget:core.resources().defaultVmLimit()),stepLimit_(steps),callLimit_(calls),owner_(core.acquireOwner()){reservation_=core_.resources().acquireApplication(budget_,owner_);if(!reservation_)copy(error_,sizeof error_,"system_memory_budget");}

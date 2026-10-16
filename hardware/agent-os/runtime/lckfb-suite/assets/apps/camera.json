@@ -8,9 +8,10 @@
     "path": "hardware/agent-os/runtime/lckfb-suite"
   },
   "help": {
-    "controls": "触摸拍照或保存；短按用户键拍照；长按用户键2秒返回桌面。"
+    "controls": "触摸拍照、保存；短按用户键说话；长按用户键2秒返回桌面。"
   },
   "memory_bytes": 196608,
   "instruction_budget": 200000,
-  "system_call_budget": 96
+  "system_call_budget": 96,
+  "icon": "../icons/camera.png"
 }

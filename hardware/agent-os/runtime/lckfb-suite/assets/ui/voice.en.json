@@ -12,105 +12,122 @@
           "type": "button",
           "id": "home",
           "placement": {
-            "x": 5,
+            "x": 8,
             "y": 4,
-            "width": 38,
-            "height": 35
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#F7F5EF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 3,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/back.png"
-              }
-            },
-            {
-              "type": "label",
-              "placement": {
-                "x": 43,
-                "y": 4,
-                "width": -14
-              },
-              "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": ""
+                "src": "../icons/back.png",
+                "fit": "contain"
               }
             }
           ]
         },
         {
-          "type": "label",
+          "type": "container",
           "placement": {
-            "x": 50,
-            "y": 7,
-            "width": 258
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
           },
           "style": {
-            "fontSize": 23,
-            "textColor": "#262822"
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
-          "labelProps": {
-            "text": "Talk to your Agent"
-          }
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 248
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "Talk to your Agent",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
         },
         {
           "type": "image",
           "placement": {
-            "x": 128,
-            "y": 52,
-            "width": 64,
-            "height": 64
+            "x": 16,
+            "y": 66,
+            "width": 32,
+            "height": 32
           },
           "imageProps": {
-            "src": "../brand/logo.png"
+            "src": "../brand/microphone.png",
+            "fit": "contain"
           },
           "id": "activity"
         },
         {
           "type": "label",
           "placement": {
-            "x": 20,
-            "y": 125,
-            "width": 280
+            "x": 60,
+            "y": 66,
+            "width": 248,
+            "height": 62
           },
           "style": {
             "fontSize": 20,
+            "lineHeight": 25,
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": "Describe the app you want"
+            "text": "Describe the app you want",
+            "longMode": "wrap"
           },
           "id": "message"
         },
         {
           "type": "label",
           "placement": {
-            "x": 20,
-            "y": 157,
-            "width": 280
+            "x": 12,
+            "y": 135,
+            "width": 296,
+            "height": 40
           },
           "style": {
             "fontSize": 14,
+            "lineHeight": 19,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "Press user key to start/stop"
+            "text": "Tap Record, then Send when done",
+            "longMode": "wrap"
           },
           "id": "detail"
         },
@@ -118,44 +135,51 @@
           "type": "button",
           "id": "record",
           "placement": {
-            "x": 12,
-            "y": 193,
-            "width": 296,
-            "height": 40
+            "x": 8,
+            "y": 184,
+            "width": 304,
+            "height": 48
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 6,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/voice.png"
+                "src": "../icons/voice.png",
+                "fit": "contain"
               }
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 7,
-                "width": 244
+                "width": "content"
               },
               "style": {
                 "fontSize": 18,
+                "lineHeight": 23,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Record"
+                "text": "Record",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               },
               "id": "record_label"
             }

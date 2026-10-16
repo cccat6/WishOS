@@ -100,6 +100,15 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  assert(!files.write("/assets/screen.json",0,(const uint8_t*)external,strlen(external),true,wrote));
  const char*root=R"({"version":"0.1.1","assets":["assets/screen.json"]})";assert(!files.write("/external.json",0,(const uint8_t*)root,strlen(root),true,wrote));
  assert(prepareUi("/storage/ram/external.json"));assert(renderUiBand(0,stripe));
+ // A compressed source spanning many output bands is decoded once when
+ // admitted to the cache. A file replacement must invalidate that decode.
+ {std::ifstream png("hardware/agent-os/runtime/lckfb-suite/assets/brand/logo.png",std::ios::binary);std::vector<uint8_t>data((std::istreambuf_iterator<char>(png)),{});assert(!files.write("/cached.png",0,data.data(),data.size(),true,wrote));
+  const char*page=R"({"version":"0.1.1","assets":[{"type":"viewScreen","style":{"padding":0},"children":[{"type":"image","placement":{"x":0,"y":0,"width":480,"height":720},"imageProps":{"src":"cached.png","fit":"contain"}}]}]})";assert(!files.write("/cached-ui.json",0,(const uint8_t*)page,strlen(page),true,wrote));
+  JsonDocument policy,result;policy["changes"][0]["resource"]="/sys/ui";auto settings=policy["changes"][0]["settings"].to<JsonObject>();UiSink sink{nullptr,[](void*,const lv_area_t&,const uint16_t*){}};
+  auto draw=[&](unsigned cache){settings["image_cache_bytes"]=cache;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(prepareUi("/storage/ram/cached-ui.json"));files.readOps=0;assert(renderUiRegion({0,0,479,719},sink));return files.readOps;};
+  auto uncached=draw(0),cached=draw(65536);std::cerr<<"PNG provider reads: uncached="<<uncached<<" cached="<<cached<<"\n";assert(cached<uncached);
+  assert(!files.write("/cached.png",0,(const uint8_t*)"invalid",7,true,wrote));assert(!prepareUi("/storage/ram/cached-ui.json"));settings["image_cache_bytes"]=0;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));
+ }
  // Indexed glyphs remain seekable and leased. Malformed user files fail at
  // the format boundary rather than entering an unchecked outline parser.
  std::vector<uint8_t> fontData(16+95*16+95*7);memcpy(fontData.data(),"NMF1",4);
@@ -225,6 +234,10 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  assert(prepareUi("/storage/ram/complete-font-ui.json"));JsonDocument fontMemory;fontMemory["memory_limit_bytes"]=uint32_t(core.resources().promised()+1);assert(!core.resources().configure(fontMemory.as<JsonObjectConst>()));assert(!renderUiBand(32,stripe));assert(!strcmp(uiError,"ui_memory_budget"));fontMemory["memory_limit_bytes"]=nullptr;assert(!core.resources().configure(fontMemory.as<JsonObjectConst>()));assert(renderUiBand(32,stripe));
  resetUiRenderer();assert(core.resources().promised()==0);std::cout<<"Complete font streaming, arbitrary sizes, default selection, I/O rejection and font allocation rollback passed\n";
  std::cout<<"Full-screen image bytes="<<bin.size()<<", largest provider read="<<files.largestRead<<", image reads="<<imageReadBytes<<", image read calls="<<imageReadOps<<"\n";
+ // An opaque sibling overlay blocks controls behind it. Hit IDs bubble
+ // through the selected branch only, while uncovered controls remain usable.
+ {const char*overlay=R"({"version":"0.1.1","assets":[{"type":"viewScreen","id":"root","style":{"padding":0},"children":[{"type":"button","id":"under","placement":{"x":10,"y":10,"width":100,"height":80},"style":{"padding":0}},{"type":"container","placement":{"x":10,"y":10,"width":50,"height":80},"style":{"bgColor":"#ffffff","padding":0}}]}]})";assert(!files.write("/overlay.json",0,(const uint8_t*)overlay,strlen(overlay),true,wrote));a.clear();a["path"]="/storage/ram/overlay.json";a["history"]="replace";assert(!uiHandler("open",a.as<JsonObjectConst>(),r.to<JsonObject>()));auto view=r["view_id"].as<uint32_t>();assert(prepareUi("/storage/ram/overlay.json",uiDocument(view)->view));presentationState.completed(presentationState.stamp(view));commitUiGeometry(presentationState.stamp(view));
+  a.clear();a["x"]=20;a["y"]=20;assert(!uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["ids"].size()==1&&r["ids"][0]=="root");a["x"]=90;assert(!uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["ids"][0]=="under"&&r["ids"][1]=="root");}
  // An implicit system replacement must not inherit a foreground VM's view.
  // Repeated owner/system replacements release document slots and allocations.
  {for(unsigned i=0;i<PresentationState::Capacity;++i){auto id=presentationState.at(i).id;if(id)assert(!presentationState.close(id,0));}

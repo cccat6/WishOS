@@ -5,18 +5,18 @@
 #include <new>
 namespace notesos {
 struct NfsOptions {
- char provider[49]="user",path[64]="/sd";
+ char provider[49]="user",path[64]="/sd",lifetime[16]="owner";
  esp32_nfs::Config wire;esp32_nfs::MemoryLimits memory{65536,32768};
  static const char*parse(JsonObjectConst j,NfsOptions&o){
-   for(auto field:j)if(!Core::containsMethod("provider,export_path,port,block_size,bytes_per_second,io_bytes_per_poll,directory_entries,connections,idle_timeout_ms,record_timeout_ms,replay_window_ms,read_only,memory_max_bytes,heap_reserve_bytes",field.key().c_str()))return "unknown_nfs_setting";
-   for(auto key:{"provider","export_path"})if(j.containsKey(key)&&(!j[key].is<const char*>()||j[key].as<JsonString>().size()!=strlen(j[key].as<const char*>())))return "invalid_nfs_config";
+   for(auto field:j)if(!Core::containsMethod("provider,export_path,lifetime,port,block_size,bytes_per_second,io_bytes_per_poll,directory_entries,connections,idle_timeout_ms,record_timeout_ms,replay_window_ms,read_only,memory_max_bytes,heap_reserve_bytes",field.key().c_str()))return "unknown_nfs_setting";
+   for(auto key:{"provider","export_path","lifetime"})if(j.containsKey(key)&&(!j[key].is<const char*>()||j[key].as<JsonString>().size()!=strlen(j[key].as<const char*>())))return "invalid_nfs_config";
    struct Range{const char*key;uint32_t min,max;};
    for(auto r:{Range{"port",1,65535},Range{"block_size",512,32768},Range{"bytes_per_second",0,UINT32_MAX},Range{"io_bytes_per_poll",1,262144},Range{"directory_entries",1,256},Range{"connections",1,ESP32_NFS_CONNECTION_COUNT},Range{"idle_timeout_ms",1,INT32_MAX},Range{"record_timeout_ms",1,INT32_MAX},Range{"replay_window_ms",1,INT32_MAX}}){if(j.containsKey(r.key)&&(!j[r.key].is<uint32_t>()||j[r.key].as<uint32_t>()<r.min||j[r.key].as<uint32_t>()>r.max))return "invalid_nfs_config";}
    if(j.containsKey("read_only")&&!j["read_only"].is<bool>())return "invalid_nfs_config";
    const char*p=j["provider"]|"user",*path=j["export_path"]|"/sd";
    char normal[64];if(!*p||strlen(p)>=sizeof(o.provider))return "invalid_provider";
    if(!normalizePath("/",path,normal,sizeof(normal))||strcmp(path,normal)||strchr(path,' '))return "invalid_export_path";
-   strcpy(o.provider,p);strcpy(o.path,path);
+   strcpy(o.provider,p);strcpy(o.path,path);const char*lifetime=j["lifetime"]|"owner";if(strcmp(lifetime,"owner")&&strcmp(lifetime,"system"))return "invalid_nfs_lifetime";strcpy(o.lifetime,lifetime);
    if((j.containsKey("memory_max_bytes")&&!j["memory_max_bytes"].is<uint32_t>())||(j.containsKey("heap_reserve_bytes")&&!j["heap_reserve_bytes"].is<uint32_t>()))return "invalid_nfs_memory";
    o.memory.maxBytes=j["memory_max_bytes"]|65536u;o.memory.reserveBytes=j["heap_reserve_bytes"]|32768u;if(o.memory.maxBytes<4096||o.memory.maxBytes>8388608||o.memory.reserveBytes>8388608)return "invalid_nfs_memory";
    auto&c=o.wire;c.readOnly=j["read_only"]|false;c.port=j["port"]|2049u;
@@ -29,13 +29,13 @@ struct NfsOptions {
  }
  void describe(JsonObject o)const{
    o["memory_max_bytes"]=memory.maxBytes;o["heap_reserve_bytes"]=memory.reserveBytes;
-   o["provider"]=provider;o["export_path"]=path;o["read_only"]=wire.readOnly;o["port"]=wire.port;
+   o["lifetime"]=lifetime;o["provider"]=provider;o["export_path"]=path;o["read_only"]=wire.readOnly;o["port"]=wire.port;
    o["block_size"]=wire.blockSize;o["bytes_per_second"]=wire.bytesPerSecond;o["io_bytes_per_poll"]=wire.ioBytesPerPoll;
    o["directory_entries"]=wire.directoryEntriesPerRpc;o["connections"]=wire.connections;
    o["idle_timeout_ms"]=wire.idleTimeoutMs;o["record_timeout_ms"]=wire.recordTimeoutMs;o["replay_window_ms"]=wire.replayWindowMs;
  }
 };
-// Transport is owned by the application; one cooperative poll shares the OS loop.
+// A service session owns the transport; one cooperative poll shares the OS loop.
 class NfsService {
  struct Session {
    NfsOptions options;esp32_nfs::Memory memory;esp32_nfs::PathVfs::Registry registry;NfsProviderStorage storage;NfsProviderVfs fs;esp32_nfs::Server server;
@@ -47,6 +47,7 @@ class NfsService {
 public:
  explicit NfsService(Vfs&v,ResourceBudget&budget,Core*core=nullptr):vfs_(v),budget_(budget),core_(core){if(core_)core_->onOwnerRelease(this,[](void*p,uint32_t owner){auto&s=*static_cast<NfsService*>(p);if(s.owner_==owner)s.releaseRequested_=true;});}
  ~NfsService(){if(core_)core_->removeOwnerHook(this);stop();}
+ static void describe(JsonObject o){o["session_lifetimes"]="owner,system";o["lifetime_setting"]="start.lifetime";o["default_lifetime"]="owner";}
  bool active()const{return session_!=nullptr;}
  bool uses(const char*id)const{return session_&&!strcmp(id,session_->options.provider);}
  const char*start(const NfsOptions&o,esp32_nfs::Transport&t,uint64_t epoch){
@@ -60,7 +61,7 @@ public:
    if(!vfs_.pin(*p,OWNER)){destroy(next);return "service_lease_capacity";}
    auto config=o.wire;config.exportPath=next->options.path;
    if(!next->server.begin(t,config,epoch)){vfs_.unpin(OWNER);destroy(next);return "nfs_listen_failed";}
-   session_=next;owner_=core_?core_->callerOwner():0;releaseRequested_=false;invalidations_=0;stopping_=false;stopStatus_=esp32_nfs::Ok;return nullptr;
+   session_=next;owner_=core_&&strcmp(o.lifetime,"system")?core_->callerOwner():0;releaseRequested_=false;invalidations_=0;stopping_=false;stopStatus_=esp32_nfs::Ok;return nullptr;
  }
  const char*stop(){if(session_){stopping_=true;stopStatus_=session_->server.stop();if(stopStatus_!=esp32_nfs::Ok)return "nfs_stop_pending";destroy(session_);session_=nullptr;}stopping_=false;releaseRequested_=false;owner_=0;vfs_.unpin(OWNER);return nullptr;}
  const char*memory(JsonObjectConst args,JsonObject out){

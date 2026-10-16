@@ -1,0 +1,165 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 8,
+            "y": 4,
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png",
+                "fit": "contain"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 248
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "文件共享",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 59,
+            "width": 296,
+            "height": 28
+          },
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "NFS · 局域网存储访问",
+            "longMode": "ellipsis"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 99,
+            "width": 296,
+            "height": 72
+          },
+          "style": {
+            "fontSize": 15,
+            "lineHeight": 20,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "—",
+            "longMode": "wrap"
+          },
+          "id": "share_status"
+        },
+        {
+          "type": "button",
+          "id": "toggle",
+          "placement": {
+            "x": 8,
+            "y": 190,
+            "width": 304,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 17,
+                "lineHeight": 22,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "开启共享",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "share_toggle"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

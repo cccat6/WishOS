@@ -11,104 +11,153 @@
         {
           "type": "image",
           "placement": {
-            "x": 4,
-            "y": 0,
-            "width": 208,
-            "height": 59
+            "x": 12,
+            "y": 6,
+            "width": 150,
+            "height": 43
           },
           "imageProps": {
-            "src": "../brand/lockup.png"
+            "src": "../brand/lockup-compact.png",
+            "fit": "contain"
           }
         },
         {
-          "type": "label",
+          "type": "container",
           "placement": {
-            "x": 215,
-            "y": 12,
-            "width": 100
+            "x": 168,
+            "y": 8,
+            "width": 140,
+            "height": 20
           },
           "style": {
-            "fontSize": 12,
-            "textColor": "#60645B"
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
-          "labelProps": {
-            "text": "Agent not connected"
-          },
-          "id": "connection"
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 140
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 17,
+                "textColor": "#60645B",
+                "textAlign": "right"
+              },
+              "labelProps": {
+                "text": "Agent not connected",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "connection"
+            }
+          ]
         },
         {
-          "type": "label",
+          "type": "container",
           "placement": {
-            "x": 253,
-            "y": 34,
-            "width": 64
+            "x": 168,
+            "y": 28,
+            "width": 140,
+            "height": 24
           },
           "style": {
-            "fontSize": 15,
-            "textColor": "#60645B"
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
-          "labelProps": {
-            "text": ""
-          },
-          "id": "clock"
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 140
+              },
+              "style": {
+                "fontSize": 16,
+                "lineHeight": 21,
+                "textColor": "#60645B",
+                "textAlign": "right"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "clock"
+            }
+          ]
         },
         {
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 61,
-            "width": 296
+            "y": 55,
+            "width": 296,
+            "height": 26
           },
           "style": {
-            "fontSize": 18,
+            "fontSize": 16,
+            "lineHeight": 21,
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": "What shall we make today?"
+            "text": "What shall we make today?",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "button",
           "id": "voice",
           "placement": {
-            "x": 12,
-            "y": 87,
-            "width": 144,
-            "height": 52
+            "x": 8,
+            "y": 84,
+            "width": 148,
+            "height": 48
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#F7E9DD",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 12,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/voice.png"
+                "src": "../icons/voice.png",
+                "fit": "contain"
               }
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 13,
-                "width": 92
+                "width": "content"
               },
               "style": {
                 "fontSize": 18,
+                "lineHeight": 23,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Talk"
+                "text": "Talk",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -118,43 +167,50 @@
           "id": "apps",
           "placement": {
             "x": 164,
-            "y": 87,
-            "width": 144,
-            "height": 52
+            "y": 84,
+            "width": 148,
+            "height": 48
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 12,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/apps.png"
+                "src": "../icons/apps.png",
+                "fit": "contain"
               }
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 13,
-                "width": 92
+                "width": "content"
               },
               "style": {
                 "fontSize": 18,
+                "lineHeight": 23,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Apps"
+                "text": "Apps",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -163,44 +219,51 @@
           "type": "button",
           "id": "device",
           "placement": {
-            "x": 12,
-            "y": 147,
-            "width": 144,
-            "height": 52
+            "x": 8,
+            "y": 140,
+            "width": 148,
+            "height": 48
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 12,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/device.png"
+                "src": "../icons/device.png",
+                "fit": "contain"
               }
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 13,
-                "width": 92
+                "width": "content"
               },
               "style": {
                 "fontSize": 18,
+                "lineHeight": 23,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Device"
+                "text": "Device",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -210,43 +273,50 @@
           "id": "settings",
           "placement": {
             "x": 164,
-            "y": 147,
-            "width": 144,
-            "height": 52
+            "y": 140,
+            "width": 148,
+            "height": 48
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 12,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/settings.png"
+                "src": "../icons/settings.png",
+                "fit": "contain"
               }
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 13,
-                "width": 92
+                "width": "content"
               },
               "style": {
                 "fontSize": 18,
+                "lineHeight": 23,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "Settings"
+                "text": "Settings",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
@@ -255,16 +325,61 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 214,
-            "width": 296
+            "y": 204,
+            "width": 238,
+            "height": 22
           },
           "style": {
-            "fontSize": 14,
+            "fontSize": 12,
+            "lineHeight": 17,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "Press to talk · Hold 2s for Home"
+            "text": "Press to talk · Hold 2s for Home",
+            "longMode": "ellipsis"
           }
+        },
+        {
+          "type": "button",
+          "id": "help",
+          "placement": {
+            "x": 260,
+            "y": 196,
+            "width": 52,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Help",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
         }
       ]
     }

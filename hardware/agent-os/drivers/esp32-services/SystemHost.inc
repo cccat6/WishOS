@@ -107,9 +107,9 @@ void begin(){
  {"/net/http","read,request,receive,cancel,release","HTTP client",networkHandler,httpAsyncDescription},
  {"/net/ws","read,connect,send,receive,close","WS/WSS transport",wsHandler,wsNativeDescription},
  {"/net/tcp","read,status,listen,connect,write,close","TCP transport",[](const char*m,JsonObjectConst a,JsonObject o){return sockets.invoke(m,a,o);}},
- {"/net/http-server","read,route,respond,remove,release,stop","application routes",[](const char*m,JsonObjectConst a,JsonObject o){return routes.invoke(m,a,o);}},
+ {"/net/http-server","read,route,respond,remove,release,stop,session","application routes",[](const char*m,JsonObjectConst a,JsonObject o){return routes.invoke(m,a,o);},[](JsonObject o){routes.describe(o);},"read"},
  {"/services/remote","read,submit,peek,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},remoteAsyncDescription},
- {"/services/nfs","read,start,stop,memory","on-demand NFS",nfs},
+ {"/services/nfs","read,start,stop,memory","on-demand NFS",nfs,NfsService::describe,"read"},
  {"/dev/flash","read,mount,format,space,cancel","internal LittleFS volume",[](const char*m,JsonObjectConst a,JsonObject o){return flashVolume.invoke(m,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
  {"/sys/storage","read,configure,mount,format,space,cancel","storage providers",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure")){if(auto e=argumentFields(a,"provider,quota_bytes"))return e;if(a["provider"]!="ram"||!a["quota_bytes"].is<uint32_t>())return "memory_volume_setting";if(!ramFiles.budget(a["quota_bytes"].as<uint32_t>()))return "memory_volume_in_use";ramFiles.describe(o);return nullptr;}if(strcmp(m,"read"))return nativeStorage(m,a,o);return describeEspStorage(vfs,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
  {"/fs",FileService::Methods,"VFS files",files,[](JsonObject o){fileService.describe(o);}},
@@ -123,7 +123,7 @@ for(auto d:devices){for(auto r:reads)if(!strcmp(d.path,r.path))d.readMethods=r.m
  registerNativeDevices();
  connections.restore(preferences.getString("connections","{}").c_str());restoreServiceLink();Network.begin();uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);snprintf(apSsid,sizeof apSsid,"Agentic-Notes-%02X%02X%02X",mac[3],mac[4],mac[5]);restoreWifi();core.clock(uptime());wifiManager.poll(uptime());restoreApplications();timeService.restore(preferences.getString("time_sync","{}").c_str());
  registerManagedServices();
- for(auto route:boardpack::CONTROL_ASSETS){String path=route;http.on(path.c_str(),HTTP_GET,[path]{serveRuntimeAsset(path.c_str(),path.endsWith(".html")?"text/html; charset=utf-8":"application/javascript; charset=utf-8");});}
+ for(auto route:boardpack::CONTROL_ASSETS){String path=route;http.on(path.c_str(),HTTP_GET,[path]{serveRuntimeAsset(path.c_str(),path.endsWith(".html")?"text/html; charset=utf-8":path.endsWith(".json")?"application/json":"application/javascript; charset=utf-8");});}
  http.on("/",HTTP_GET,[]{JsonDocument r;if(routes.handle("/","GET","",uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}serveRuntimeAsset("/control/setup.html","text/html; charset=utf-8");});
  http.on("/os/invoke",HTTP_POST,[]{JsonDocument request,reply;if(http.arg("plain").length()>4096||deserializeJson(request,http.arg("plain"))){http.send(400,"application/json","{\"ok\":false,\"error\":\"invalid_json\"}");return;}respond(request.as<JsonObjectConst>(),reply);String data;serializeJson(reply,data);http.send(200,"application/json",data);});
  http.onNotFound([]{JsonDocument r;if(routes.handle(http.uri().c_str(),http.method()==HTTP_GET?"GET":http.method()==HTTP_POST?"POST":http.method()==HTTP_PUT?"PUT":http.method()==HTTP_DELETE?"DELETE":"OTHER",http.arg("plain").c_str(),uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}http.sendHeader("Location","/",true);http.send(302,"text/plain","");});http.begin();event("/sys/board","boot");

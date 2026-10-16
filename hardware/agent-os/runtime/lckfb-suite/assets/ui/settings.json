@@ -12,270 +12,272 @@
           "type": "button",
           "id": "home",
           "placement": {
-            "x": 5,
+            "x": 8,
             "y": 4,
-            "width": 38,
-            "height": 35
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#F7F5EF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 3,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/back.png"
-              }
-            },
-            {
-              "type": "label",
-              "placement": {
-                "x": 43,
-                "y": 4,
-                "width": -14
-              },
-              "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": ""
+                "src": "../icons/back.png",
+                "fit": "contain"
               }
             }
           ]
         },
         {
-          "type": "label",
+          "type": "container",
           "placement": {
-            "x": 50,
-            "y": 7,
-            "width": 258
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
           },
           "style": {
-            "fontSize": 23,
-            "textColor": "#262822"
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
-          "labelProps": {
-            "text": "网络与服务"
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 248
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "设备设置",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "qrcode",
+          "id": "qr",
+          "placement": {
+            "x": 16,
+            "y": 64,
+            "width": 128,
+            "height": 128
+          },
+          "qrcodeProps": {
+            "text": "http://192.168.4.1/control/setup.html"
           }
         },
         {
           "type": "label",
           "placement": {
-            "x": 12,
-            "y": 47,
-            "width": 70
+            "x": 156,
+            "y": 58,
+            "width": 156,
+            "height": 25
           },
           "style": {
-            "fontSize": 14,
+            "fontSize": 15,
+            "lineHeight": 20,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "扫码进行完整设置",
+            "longMode": "ellipsis"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 156,
+            "y": 91,
+            "width": 156,
+            "height": 21
+          },
+          "style": {
+            "fontSize": 11,
+            "lineHeight": 16,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "Wi-Fi"
+            "text": "Wi-Fi",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "label",
           "placement": {
-            "x": 88,
-            "y": 45,
-            "width": 220
+            "x": 156,
+            "y": 108,
+            "width": 156,
+            "height": 25
           },
           "style": {
-            "fontSize": 17,
+            "fontSize": 15,
+            "lineHeight": 20,
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": "—"
+            "text": "—",
+            "longMode": "ellipsis"
           },
           "id": "ssid"
         },
         {
           "type": "label",
           "placement": {
-            "x": 12,
-            "y": 78,
-            "width": 75
+            "x": 156,
+            "y": 139,
+            "width": 156,
+            "height": 21
           },
           "style": {
-            "fontSize": 14,
+            "fontSize": 11,
+            "lineHeight": 16,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "后台地址"
+            "text": "后台地址",
+            "longMode": "ellipsis"
           }
         },
         {
           "type": "label",
           "placement": {
-            "x": 88,
-            "y": 76,
-            "width": 220
+            "x": 156,
+            "y": 156,
+            "width": 156,
+            "height": 25
           },
           "style": {
-            "fontSize": 16,
+            "fontSize": 15,
+            "lineHeight": 20,
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": "—"
+            "text": "—",
+            "longMode": "ellipsis"
           },
           "id": "address"
         },
         {
           "type": "label",
           "placement": {
-            "x": 12,
-            "y": 108,
-            "width": 70
+            "x": 156,
+            "y": 181,
+            "width": 156,
+            "height": 21
           },
           "style": {
-            "fontSize": 14,
+            "fontSize": 11,
+            "lineHeight": 16,
             "textColor": "#60645B"
           },
           "labelProps": {
-            "text": "MAC"
+            "text": "同一局域网内访问",
+            "longMode": "ellipsis"
           }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 88,
-            "y": 106,
-            "width": 220
-          },
-          "style": {
-            "fontSize": 15,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "—"
-          },
-          "id": "mac"
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 138,
-            "width": 70
-          },
-          "style": {
-            "fontSize": 14,
-            "textColor": "#60645B"
-          },
-          "labelProps": {
-            "text": "Agent"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 88,
-            "y": 136,
-            "width": 220
-          },
-          "style": {
-            "fontSize": 16,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "—"
-          },
-          "id": "agent"
         },
         {
           "type": "button",
-          "id": "ap",
+          "id": "options",
           "placement": {
-            "x": 12,
-            "y": 175,
-            "width": 144,
-            "height": 36
+            "x": 8,
+            "y": 196,
+            "width": 116,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 6,
-                "width": 124
+                "width": "content"
               },
               "style": {
-                "fontSize": 16,
+                "fontSize": 15,
+                "lineHeight": 20,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "配网热点"
+                "text": "本机设置",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]
         },
         {
-          "type": "button",
-          "id": "language",
+          "type": "container",
           "placement": {
-            "x": 164,
-            "y": 175,
-            "width": 144,
-            "height": 36
+            "x": 132,
+            "y": 196,
+            "width": 180,
+            "height": 44
           },
           "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 10,
-            "padding": 0
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 6,
-                "width": 124
+                "align": "center",
+                "width": 180
               },
               "style": {
-                "fontSize": 16,
-                "textColor": "#262822"
+                "fontSize": 12,
+                "lineHeight": 17,
+                "textColor": "#60645B",
+                "textAlign": "right"
               },
               "labelProps": {
-                "text": "语言"
-              }
+                "text": "等待手机连接",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "clients"
             }
           ]
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 218,
-            "width": 296
-          },
-          "style": {
-            "fontSize": 12,
-            "textColor": "#60645B"
-          },
-          "labelProps": {
-            "text": "—"
-          },
-          "id": "hint"
         }
       ]
     }

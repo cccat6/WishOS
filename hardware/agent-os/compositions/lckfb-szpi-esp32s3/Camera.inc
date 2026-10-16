@@ -1,3 +1,3 @@
 static const char*cameraPower(bool on){return expander.write(4,on?0:4);}
 static camera_config_t cameraConfiguration(){camera_config_t c{};c.pin_pwdn=-1;c.pin_reset=-1;c.pin_xclk=pins::CAM_XCLK;c.pin_sccb_sda=-1;c.pin_sccb_scl=-1;c.sccb_i2c_port=0;c.pin_d0=pins::CAM_D0;c.pin_d1=pins::CAM_D1;c.pin_d2=pins::CAM_D2;c.pin_d3=pins::CAM_D3;c.pin_d4=pins::CAM_D4;c.pin_d5=pins::CAM_D5;c.pin_d6=pins::CAM_D6;c.pin_d7=pins::CAM_D7;c.pin_vsync=pins::CAM_VSYNC;c.pin_href=pins::CAM_HREF;c.pin_pclk=pins::CAM_PCLK;c.xclk_freq_hz=24000000;c.ledc_timer=LEDC_TIMER_0;c.ledc_channel=LEDC_CHANNEL_0;c.pixel_format=PIXFORMAT_RGB565;c.frame_size=FRAMESIZE_QVGA;c.fb_count=1;c.fb_location=CAMERA_FB_IN_PSRAM;c.grab_mode=CAMERA_GRAB_WHEN_EMPTY;return c;}
-static drivers::EspCamera camera(core,wireI2c.bus,cameraConfiguration(),cameraPower);
+static drivers::EspCamera camera(core,vfs,wireI2c.bus,cameraConfiguration(),cameraPower);

@@ -12,121 +12,125 @@
           "type": "button",
           "id": "home",
           "placement": {
-            "x": 5,
+            "x": 8,
             "y": 4,
-            "width": 38,
-            "height": 35
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#F7F5EF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 3,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/back.png"
-              }
-            },
-            {
-              "type": "label",
-              "placement": {
-                "x": 43,
-                "y": 4,
-                "width": -14
-              },
-              "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": ""
+                "src": "../icons/back.png",
+                "fit": "contain"
               }
             }
           ]
         },
         {
-          "type": "label",
+          "type": "container",
           "placement": {
-            "x": 50,
-            "y": 7,
-            "width": 258
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
           },
           "style": {
-            "fontSize": 23,
-            "textColor": "#262822"
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
-          "labelProps": {
-            "text": "我的应用"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 46,
-            "width": 296
-          },
-          "style": {
-            "fontSize": 14,
-            "textColor": "#60645B"
-          },
-          "labelProps": {
-            "text": "点击打开应用"
-          }
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 248
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "我的应用",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
         },
         {
           "type": "button",
           "id": "app0",
           "placement": {
-            "x": 12,
-            "y": 70,
-            "width": 296,
-            "height": 40
+            "x": 8,
+            "y": 52,
+            "width": 304,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "start",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
-            "padding": 0
+            "radius": 7,
+            "padding": 0,
+            "paddingLeft": 12
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 6,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/voice.png"
+                "src": "../icons/apps.png",
+                "fit": "contain"
               },
               "id": "app0_icon"
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 7,
-                "width": 244
+                "width": 228
               },
               "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
+                "fontSize": 17,
+                "lineHeight": 22,
+                "textColor": "#262822",
+                "textAlign": "left"
               },
               "labelProps": {
-                "text": "对话"
+                "text": "—",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               },
               "id": "app0_title"
             }
@@ -136,45 +140,54 @@
           "type": "button",
           "id": "app1",
           "placement": {
-            "x": 12,
-            "y": 118,
-            "width": 296,
-            "height": 40
+            "x": 8,
+            "y": 100,
+            "width": 304,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "start",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
-            "padding": 0
+            "radius": 7,
+            "padding": 0,
+            "paddingLeft": 12
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 6,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/camera.png"
+                "src": "../icons/apps.png",
+                "fit": "contain"
               },
               "id": "app1_icon"
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 7,
-                "width": 244
+                "width": 228
               },
               "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
+                "fontSize": 17,
+                "lineHeight": 22,
+                "textColor": "#262822",
+                "textAlign": "left"
               },
               "labelProps": {
-                "text": "相机"
+                "text": "—",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               },
               "id": "app1_title"
             }
@@ -184,45 +197,54 @@
           "type": "button",
           "id": "app2",
           "placement": {
-            "x": 12,
-            "y": 166,
-            "width": 296,
-            "height": 40
+            "x": 8,
+            "y": 148,
+            "width": 304,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "start",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
-            "padding": 0
+            "radius": 7,
+            "padding": 0,
+            "paddingLeft": 12
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "x": 9,
-                "y": 6,
                 "width": 28,
                 "height": 28
               },
               "imageProps": {
-                "src": "../icons/device.png"
+                "src": "../icons/apps.png",
+                "fit": "contain"
               },
               "id": "app2_icon"
             },
             {
               "type": "label",
               "placement": {
-                "x": 43,
-                "y": 7,
-                "width": 244
+                "width": 228
               },
               "style": {
-                "fontSize": 18,
-                "textColor": "#262822"
+                "fontSize": 17,
+                "lineHeight": 22,
+                "textColor": "#262822",
+                "textAlign": "left"
               },
               "labelProps": {
-                "text": "设备"
+                "text": "—",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               },
               "id": "app2_title"
             }
@@ -232,33 +254,76 @@
           "type": "button",
           "id": "previous",
           "placement": {
-            "x": 12,
-            "y": 213,
-            "width": 140,
-            "height": 25
+            "x": 8,
+            "y": 196,
+            "width": 96,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 2,
-                "width": 120
+                "width": "content"
               },
               "style": {
-                "fontSize": 13,
+                "fontSize": 14,
+                "lineHeight": 19,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "上一页"
+                "text": "上一页",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 112,
+            "y": 196,
+            "width": 96,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 96
+              },
+              "style": {
+                "fontSize": 13,
+                "lineHeight": 18,
+                "textColor": "#262822",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "page"
             }
           ]
         },
@@ -266,32 +331,40 @@
           "type": "button",
           "id": "next",
           "placement": {
-            "x": 164,
-            "y": 213,
-            "width": 144,
-            "height": 25
+            "x": 216,
+            "y": 196,
+            "width": 96,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
           },
           "style": {
             "bgColor": "#FFFFFF",
             "borderWidth": 1,
             "borderColor": "#D9DACF",
-            "radius": 10,
+            "radius": 7,
             "padding": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "x": 10,
-                "y": 2,
-                "width": 124
+                "width": "content"
               },
               "style": {
-                "fontSize": 13,
+                "fontSize": 14,
+                "lineHeight": 19,
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "下一页"
+                "text": "下一页",
+                "longMode": "ellipsis",
+                "metrics": "ink"
               }
             }
           ]

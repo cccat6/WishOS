@@ -16,19 +16,19 @@ private:
 public:
  CompressedCapture(Core&c,const char*boot,Begin begin,Release release,const char*path="/dev/mic",const char*roles="M"):core_(c),buffer_(c.resources()),boot_(boot),path_(path),roles_(roles),begin_(begin),release_(release){c.onOwnerRelease(this,[](void*p,uint32_t owner){auto&s=*static_cast<CompressedCapture*>(p);std::lock_guard<std::mutex>lock(s.mutex_);if(s.recording_&&s.owner_==owner)s.stop_=true;s.buffer_.discardOwner(owner);});}
  ~CompressedCapture(){core_.removeOwnerHook(this);}
- void poll(){buffer_.reap(core_.now());}
+ void poll(){std::lock_guard<std::mutex>lock(mutex_);if(recording_&&stop_&&!started_)finishLocked(nullptr);buffer_.reap(core_.now());}
  bool active()const{std::lock_guard<std::mutex>lock(mutex_);return recording_;}
  void sink(Sink sink){sink_=sink;}
  const char*id()const{return id_;}
  void failed(const char*e){std::lock_guard<std::mutex>lock(mutex_);if(recording_)finishLocked(e);}
  void process(const CaptureFrame&frame){std::lock_guard<std::mutex>lock(mutex_);if(!recording_)return;if(stop_||(maxMs_&&samples_*1000>=uint64_t(maxMs_)*rate_)){finishLocked(nullptr);return;}size_t channels=strlen(frame.roles);if(channel_>=channels||frame.rate!=rate_){finishLocked("capture_format_changed");return;}
-  if(!started_){started_=true;JsonDocument d;d["recording_id"]=id_;core_.emit(path_,"started",d.as<JsonObjectConst>(),owner_);}size_t frames=std::min<size_t>(frame.frames,160);if(!frames)return;
+  size_t frames=std::min<size_t>(frame.frames,160);if(!frames)return;if(!started_){started_=true;JsonDocument d;d["recording_id"]=id_;core_.emit(path_,"started",d.as<JsonObjectConst>(),owner_);}
   RecordingBuffer<>::Chunk chunk{};chunk.sequence=sequence_++;chunk.sampleStart=samples_;chunk.samples=frames;chunk.bytes=11+(frames+1)/2;chunk.data[0]=0x42;
   for(unsigned i=0;i<4;++i)chunk.data[1+i]=uint8_t(chunk.sequence>>(8*i));chunk.data[5]=uint8_t(codec_.predictor);chunk.data[6]=uint8_t(uint16_t(codec_.predictor)>>8);chunk.data[7]=codec_.index;chunk.data[9]=uint8_t(frames);chunk.data[10]=uint8_t(frames>>8);
   for(size_t i=0;i<frames;++i){uint8_t value=codec_.encode(frame.data[i*channels+channel_]);if(i&1)chunk.data[11+i/2]|=value<<4;else chunk.data[11+i/2]=value;}bool notify=!buffer_.queued();samples_+=frames;buffer_.push(chunk);if(sink_)sink_(id_,chunk);
   if(notify){JsonDocument d;d["recording_id"]=id_;core_.emit(path_,"readable",d.as<JsonObjectConst>(),owner_);}
  }
- void describe(JsonObject o)const{o["encodings"]="ima-adpcm-block";o["input_roles"]=roles_;o["recording_channels"]=1;o["channel_selection"]="start.channel indexes input_roles";o["maximum_block_samples"]=160;o["buffer_policy"]="caller-sized compressed RAM ring; oldest blocks discarded with explicit loss";o["buffer_scope"]="recording";o["settings"]["delivery_ttl_ms"]="uint32; zero follows runtime lifetime, positive retains RAM delivery after runtime exit until acknowledgement/release or expiry";asyncContract(o,"start",path_,{"stopped","failed"})["recording_id"]="recording_id";}
+ void describe(JsonObject o)const{o["encodings"]="ima-adpcm-block";o["readiness"]="started_after_first_nonempty_input_frame";o["events"]="started,readable,stopped,failed";o["input_roles"]=roles_;o["recording_channels"]=1;o["channel_selection"]="start.channel indexes input_roles";o["maximum_block_samples"]=160;o["buffer_policy"]="caller-sized compressed RAM ring; oldest blocks discarded with explicit loss";o["buffer_scope"]="recording";o["settings"]["delivery_ttl_ms"]="uint32; zero follows runtime lifetime, positive retains RAM delivery after runtime exit until acknowledgement/release or expiry";asyncContract(o,"start",path_,{"stopped","failed"})["recording_id"]="recording_id";}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject o){
   if(!strcmp(m,"describe")){describe(o);return nullptr;}
   if(!strcmp(m,"read")||!strcmp(m,"read_chunk")||!strcmp(m,"ack")||!strcmp(m,"release")||!strcmp(m,"list"))return buffer_.invoke(m,a,o,core_.callerOwner());
