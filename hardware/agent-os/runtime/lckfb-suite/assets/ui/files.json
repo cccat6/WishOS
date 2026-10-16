@@ -108,7 +108,8 @@
               "labelProps": {
                 "text": "/",
                 "longMode": "ellipsis",
-                "metrics": "ink"
+                "metrics": "ink",
+                "missingGlyph": "replace"
               },
               "id": "directory"
             }
@@ -196,7 +197,8 @@
                   "labelProps": {
                     "text": "",
                     "longMode": "ellipsis",
-                    "metrics": "ink"
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
                   },
                   "id": "file0_meta"
                 }
@@ -286,7 +288,8 @@
                   "labelProps": {
                     "text": "",
                     "longMode": "ellipsis",
-                    "metrics": "ink"
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
                   },
                   "id": "file1_meta"
                 }
@@ -376,7 +379,8 @@
                   "labelProps": {
                     "text": "",
                     "longMode": "ellipsis",
-                    "metrics": "ink"
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
                   },
                   "id": "file2_meta"
                 }
