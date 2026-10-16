@@ -275,11 +275,6 @@ public:
     return nullptr;
   }
   const char *setRule(JsonObjectConst a, JsonObject out) {
-    const char *source = a["source"] | "", *event = a["event"] | "", *target = a["target"] | "",
-               *method = a["method"] | "";
-    const Device *d = find(target);
-    if (!find(source) || !d || !supports(*d, method) || !*event)
-      return "invalid_rule";
     uint32_t id = a["id"] | 0;
     Rule *r = nullptr;
     for (auto &x : rules_)

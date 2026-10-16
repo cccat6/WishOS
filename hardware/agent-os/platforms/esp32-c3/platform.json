@@ -34,5 +34,8 @@
   "package_pins": {},
   "drivers": [
     "esp32-services"
+  ],
+  "flags": [
+    "-flto"
   ]
 }

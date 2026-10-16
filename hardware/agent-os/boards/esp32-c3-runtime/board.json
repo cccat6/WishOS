@@ -20,5 +20,15 @@
   "composition": "../../compositions/headless-runtime",
   "fqbn": "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=custom,FlashMode=dio",
   "application_bytes": 2097152,
-  "partition_file": "partitions.csv"
+  "partition_file": "partitions.csv",
+  "application_providers": [
+    "flash"
+  ],
+  "runtime_filesystem": {
+    "format": "littlefs",
+    "partition": "nfs_test",
+    "root": "/factory",
+    "mount": "/storage/flash"
+  },
+  "flash_bytes": 4194304
 }

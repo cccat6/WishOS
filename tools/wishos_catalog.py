@@ -39,7 +39,7 @@ def select(changed=None, board=None, entries=None, previous_lock=None):
     if changed is None:return sorted(entries)
     common=('firmware/WishOS/','.github/workflows/')
     build_tools={'tools/build_wishos.py','tools/build_wishos.sh','tools/prepare_board_package.py',
-                 'tools/wishos_catalog.py','tools/prepare_os_dependencies.py','tools/prepare_library_snapshot.py',
+                 'tools/wishos_catalog.py','tools/flash_layout.py','tools/prepare_filesystem.py','tools/dependencies/filesystem.json','tools/prepare_os_dependencies.py','tools/prepare_library_snapshot.py',
                  'tools/prepare_arduino.py','tools/release_wishos.py'}
     selected=set()
     for name in changed:

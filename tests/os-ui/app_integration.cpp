@@ -63,6 +63,13 @@ function on_stop() notes.call('/effect','write',{stopped=true}) end
  // Dynamic HTTP route -> event -> Lua read/response, without invoking a remote Agent.
  auto httpScript=parse(R"({"source":"function on_start() notes.subscribe('/net/http-server'); assert(notes.call('/net/http-server','route',{path='/app/test',dynamic=true}).ok) end function on_event(e) if e.source=='/net/http-server' then local r=notes.call('/net/http-server','read',{id=e.data.id}); assert(r.ok); notes.call('/net/http-server','respond',{id=e.data.id,body=r.result.body..'!'}); return true end end"})");
  assert(!h.invoke("load",httpScript.as<JsonObjectConst>(),out.to<JsonObject>()));cursor=c.sequence();assert(apps.handle("/app/test","GET","hello",31,out.to<JsonObject>()));c.dispatch(cursor);auto q=parse(R"({"id":1})");assert(!apps.invoke("read",q.as<JsonObjectConst>(),out.to<JsonObject>()));assert(out["body"]=="hello!"&&out["done"]==true);
+ // HTTP allocations share VM/native admission and are fully reclaimed on exit.
+ assert(!h.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(!apps.active());assert(c.resources().promised()==0);
+ auto constrained=parse(R"({"memory_limit_bytes":1024})");assert(!c.resources().configure(constrained.as<JsonObjectConst>()));
+ auto route=parse(R"({"path":"/app/budget","dynamic":true})");assert(!strcmp(apps.invoke("route",route.as<JsonObjectConst>(),out.to<JsonObject>()),"memory_low"));assert(!apps.active()&&c.resources().promised()==0);
+ constrained["memory_limit_bytes"]=4096;assert(!c.resources().configure(constrained.as<JsonObjectConst>()));assert(!apps.invoke("route",route.as<JsonObjectConst>(),out.to<JsonObject>()));
+ assert(apps.handle("/app/budget","GET","",31,out.to<JsonObject>()));assert(out["status"]==503);apps.clear();assert(c.resources().promised()==0);
+ constrained["memory_limit_bytes"]=nullptr;assert(!c.resources().configure(constrained.as<JsonObjectConst>()));
  // A running compute worker cannot call a driver; normal main-loop timers continue.
  auto work=parse(R"({"source":"function compute(x) local sum=0 for i=1,x.n do sum=sum+i end return {sum=sum,clear=notes.null} end","input":{"n":10000},"core":1,"instruction_budget":1000000})");
  assert(!workers.invoke("submit",work.as<JsonObjectConst>(),out.to<JsonObject>()));auto id=out["id"].as<unsigned>();assert(out["core"]==1);

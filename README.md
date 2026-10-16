@@ -46,9 +46,9 @@ of either public repository.
 - Current requirements, audit gaps and completion gates: [system plan](docs/agent-os-plan.md)
 
 Build using `tools/build_wishos.sh`; select a board with `WISHOS_BOARD`.
-The default board is `e6-nova-c6`. `esp32-c3-runtime` is a headless development port
+Minimum Flash is 4 MiB. The default board is `e6-nova-c6` with its complete implemented driver set. Factory UI and applications are normal writable LittleFS files, not a separate native UI. `esp32-c3-runtime` is a headless development port
 for testing the same Core/Lua/Workers/Wi-Fi/VFS/NFS code. Missing display/audio devices
-are not falsely advertised. Build output never flashes automatically.
+are not falsely advertised. `esp32-s3-runtime` checks the same system on an N16R8 SDK target; it is not a completed physical Xiaozhi port. Build output never flashes automatically.
 
 `tools/test_wishos.sh` runs host tests, including fault injection and real
 filesystem images. Set `ARDUINO_LIBRARIES` to the pinned Arduino dependency directory.

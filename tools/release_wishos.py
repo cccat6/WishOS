@@ -17,6 +17,7 @@ def package(build, output):
         if name.endswith('.bin') or name in ('partitions.csv','flash_args') or name.startswith('notices/'):files[name]=raw
     required={'WishOS.ino.bin','WishOS.ino.bootloader.bin','WishOS.ino.partitions.bin','boot_app0.bin','partitions.csv','flash_args'}
     if not required.issubset(files):raise ValueError('incomplete firmware set')
+    if manifest.get('filesystem') and manifest['filesystem']['image'] not in files:raise ValueError('factory filesystem image missing')
     files['firmware-manifest.json']=(build/'firmware-manifest.json').read_bytes()
     files['README.txt']=(
         f"Board: {manifest['board']}\nMCU: {manifest['mcu']}\nRevision: {manifest['revision']}\n"
@@ -24,6 +25,8 @@ def package(build, output):
         "flash_args records the compiler's addresses and Flash settings. Verify device identity\n"
         "and partition layout before flashing. Full-image flashing replaces the partition table;\n"
         "application-only updates require an already compatible table. No automatic flashing occurs.\n"
+        "runtime.littlefs.bin is an INITIAL factory filesystem. Writing it replaces existing files.\n"
+        "Normal firmware updates must preserve it; update application packages through /fs or MCP.\n"
         "See notices/ and the repository for source/provenance and dependency licenses.\n"
     ).encode()
     files['release-manifest.json']=json.dumps({'format':'notes-firmware-release/1','board':manifest['board'],

@@ -24,7 +24,7 @@ else
 fi
 NFS_LIB=$("$PYTHON" "$ROOT/tools/prepare_os_dependencies.py")
 SDFAT_LIB=$("$PYTHON" "$ROOT/tools/prepare_sdfat.py" "$LIBS/SdFat")
-"$PYTHON" "$ROOT/tools/prepare_board_package.py" --output "$ROOT/build/os-host/include"
+"$PYTHON" "$ROOT/tools/prepare_board_package.py" --output "$ROOT/build/os-host/include" --full-runtime
 export CPLUS_INCLUDE_PATH="$ROOT/hardware/agent-os:$ROOT/firmware/WishOS/src:$ROOT/build/os-host/include:$NFS_LIB/src${SDK:+:$SDK/usr/include/c++/v1}${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
 mkdir -p build/previews
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_core_test.cpp -o build/os-core-test
@@ -47,6 +47,8 @@ build/os-core-test
 build/os-flash-lifecycle-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$LIBS/ArduinoJson/src" tests/os_files_test.cpp -o build/os-files-test
 build/os-files-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" tests/os_lz4_test.cpp -o build/os-lz4-test
+build/os-lz4-test
 build/os-littlefs-test
 build/os-retention-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_voice_test.cpp -o build/os-voice-test
@@ -92,6 +94,7 @@ build/os-power-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_conditions_test.cpp -o build/os-conditions-test
 build/os-conditions-test
 "$PYTHON" -m unittest discover -s tests -p 'test_os_assets.py' -v
+"$PYTHON" -m unittest discover -s tests -p 'test_font_codec.py' -v
 cmake -S tests/os-ui -B build/os-ui -G Ninja -DCMAKE_C_COMPILER="${CXX%++}" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_OSX_SYSROOT="$SDK" -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/os-ui -j 4
 "$PYTHON" -m unittest discover -s tests -p 'test_os_client.py' -v

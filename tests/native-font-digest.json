@@ -1,0 +1,6 @@
+{
+  "glyphs": 2058,
+  "payload_sha256": "b73aea4c5d7c370dbfefff37653dc35ff956c4aed955cbc5429e538dce9fc61f",
+  "algorithm": "metrics_le_then_original_raw_or_lz4_per_glyph",
+  "bitmap_sha256": "c0324a622e5ed20f08616dffd287dec33b9b23489083ffd68294109d30314af4"
+}

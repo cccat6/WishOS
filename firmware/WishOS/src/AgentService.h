@@ -51,14 +51,15 @@ class AgentService {
   return nullptr;
  }
  // Return a complete action or EOF; a transient bus wait preserves the partial line.
- const char*nextAction(Task&t,bool&end){end=false;t.action.clear();if(!t.filePlan){auto list=t.envelope["actions"].as<JsonArrayConst>();if(t.index>=list.size()){end=true;return nullptr;}t.action.set(list[t.index]);}
+ const char*nextAction(Task&t,bool&end,bool&ready){end=false;ready=false;t.action.clear();if(!t.filePlan){auto list=t.envelope["actions"].as<JsonArrayConst>();if(t.index>=list.size()){end=ready=true;return nullptr;}t.action.set(list[t.index]);}
   else{const char*relative;vfs_.resolve(t.plan,relative);uint8_t bytes[256];bool lineReady=false;
-   while(t.position<t.fileSize&&!lineReady){size_t got=0,n=std::min<uint64_t>(sizeof bytes,t.fileSize-t.position);auto e=t.provider->read(relative,t.position,bytes,n,got);if(e)return e;if(!got)return "ai_sequence_short_read";
+   if(t.position<t.fileSize){size_t got=0,n=std::min<uint64_t>(sizeof bytes,t.fileSize-t.position);auto e=t.provider->read(relative,t.position,bytes,n,got);if(e)return e;if(!got)return "ai_sequence_short_read";
     for(size_t i=0;i<got;++i){++t.position;if(bytes[i]=='\n'){if(t.lineSize){lineReady=true;break;}continue;}if(t.lineSize>=t.lineLimit)return "ai_action_limit";t.line[t.lineSize++]=bytes[i];}
    }
-   if(!t.lineSize){end=true;return nullptr;}auto e=deserializeJson(t.action,t.line,t.lineSize,DeserializationOption::NestingLimit(16));t.lineSize=0;if(e)return "ai_sequence_json";
+   if(!lineReady&&t.position<t.fileSize)return nullptr;
+   if(!t.lineSize){end=ready=true;return nullptr;}auto e=deserializeJson(t.action,t.line,t.lineSize,DeserializationOption::NestingLimit(16));t.lineSize=0;if(e)return "ai_sequence_json";
   }
-  if(t.action.overflowed())return "memory_low";if(!t.action.is<JsonObject>()||measureJson(t.action)>t.lineLimit)return "ai_action_limit";return validateAction(t.action.as<JsonObjectConst>());
+  ready=true;if(t.action.overflowed())return "memory_low";if(!t.action.is<JsonObject>()||measureJson(t.action)>t.lineLimit)return "ai_action_limit";return validateAction(t.action.as<JsonObjectConst>());
  }
  const char*expand(Task&t,JsonVariant v,unsigned depth=0){if(depth>16)return "ai_reference_depth";if(v.is<JsonArray>()){for(auto child:v.as<JsonArray>())if(auto e=expand(t,child,depth+1))return e;return nullptr;}if(!v.is<JsonObject>())return nullptr;auto object=v.as<JsonObject>();
   if(object.containsKey("$asset")){if(object.size()!=1||!object["$asset"].is<const char*>()||!*t.root)return "ai_asset_reference";const char*name=object["$asset"];char file[256];if(!*name||*name=='/'||!normalizePath(t.root,name,file,sizeof file,t.root))return "ai_asset_reference";v.set(file);return nullptr;}
@@ -67,7 +68,7 @@ class AgentService {
  }
  void advance(Task&t,JsonVariantConst result){t.previous.set(result);if(t.previous.overflowed()){finish(t,"memory_low");return;}++t.index;t.appPending=false;t.recipient=0;t.action.clear();strcpy(t.state,"executing");notify(t,"step_completed");}
  uint32_t foreground(){JsonDocument o;if(core_.invoke("/sys/runtime","read",JsonObjectConst(),o.to<JsonObject>()))return 0;return o["loaded"]==true?o["owner"]|0u:0;}
- void execute(Task&t){bool end;auto error=nextAction(t,end);if(error){if(Core::containsMethod("spi_busy,resource_busy",error))return;finish(t,error);return;}if(end){finish(t);return;}
+ void execute(Task&t){bool end,ready;auto error=nextAction(t,end,ready);if(error){if(Core::containsMethod("spi_busy,resource_busy",error))return;finish(t,error);return;}if(!ready)return;if(end){finish(t);return;}
   if(auto e=expand(t,t.action.as<JsonVariant>())){finish(t,e);return;}if(t.action.overflowed()||measureJson(t.action)>t.lineLimit){finish(t,"ai_action_limit");return;}if(auto e=validateAction(t.action.as<JsonObjectConst>())){finish(t,e);return;}
   if(t.action["type"]=="application"){
    t.recipient=t.action["recipient"]=="foreground"?foreground():t.detached?0:t.origin;if(!t.recipient){finish(t,"ai_application_unavailable");return;}t.appPending=true;strcpy(t.state,"awaiting_application");notify(t,"application_action",t.recipient);
@@ -107,7 +108,7 @@ public:
   if(t.follows){if(auto r=receipt(t.operation)){t.follows=0;t.index=r->completed;finish(t,*r->error?r->error:nullptr);}else if(auto leader=find(t.follows)){if(terminal(*leader)){t.index=leader->index;finish(t,*leader->error?leader->error:nullptr);}}else finish(t,"ai_operation_receipt_missing");continue;}
   if(t.effect){JsonDocument done;auto e=core_.completions().read(t.effect,0,done.to<JsonObject>());if(e){t.effect=0;finish(t,e);continue;}if(done["ready"]!=true)continue;core_.completions().release(t.effect,0);t.effect=0;t.previous.set(done["data"]);if(t.stop){finish(t,*t.error?t.error:"cancelled");continue;}JsonDocument schema;core_.describe(t.effectPath,schema.to<JsonObject>());bool success=false;for(auto name:schema["async"][t.effectMethod]["success_events"].as<JsonArrayConst>())if(name==done["event"])success=true;if(!success||done["data"]["ok"]==false){finish(t,done["data"]["error"]|"ai_system_action_failed");continue;}advance(t,done["data"]);continue;}
   if(t.appPending){if(!t.recipient)finish(t,"ai_application_unavailable");continue;}
-  if(!strcmp(t.state,"validating")){bool end;auto e=nextAction(t,end);if(e){if(!Core::containsMethod("spi_busy,resource_busy",e))finish(t,e);continue;}if(end){t.count=t.index;t.index=0;t.position=0;t.lineSize=0;t.action.clear();strcpy(t.state,"executing");notify(t,"result_ready");}else ++t.index;continue;}
+  if(!strcmp(t.state,"validating")){bool end,ready;auto e=nextAction(t,end,ready);if(e){if(!Core::containsMethod("spi_busy,resource_busy",e))finish(t,e);continue;}if(!ready)continue;if(end){t.count=t.index;t.index=0;t.position=0;t.lineSize=0;t.action.clear();strcpy(t.state,"executing");notify(t,"result_ready");}else ++t.index;continue;}
   if(!strcmp(t.state,"executing")){execute(t);continue;}
   if(strcmp(t.state,"queued"))continue;JsonDocument args,reply;args["id"]=t.remote;auto e=core_.invoke("/services/remote","read",args.as<JsonObjectConst>(),reply.to<JsonObject>(),owner_);if(e){finish(t,e);continue;}if(reply["state"]=="queued")continue;
   if(reply["state"]=="failed"){t.previous.set(reply["result"]);finish(t,reply["result"]["error"]|"ai_remote_failed");}else if(auto error=envelope(t,reply["result"]))finish(t,error);else{

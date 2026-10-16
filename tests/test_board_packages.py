@@ -2,8 +2,10 @@ import importlib.util
 import json
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'tools'))
 spec=importlib.util.spec_from_file_location('board_pack',ROOT/'tools/prepare_board_package.py')
 pack=importlib.util.module_from_spec(spec);spec.loader.exec_module(pack)
 class PackageTests(unittest.TestCase):
@@ -52,7 +54,7 @@ class PackageTests(unittest.TestCase):
  def test_browser_assets_are_compressed_without_changing_source(self):
   import gzip
   _,_,_,_,assets=pack.load(pack.DEFAULT)
-  for path in ('/setup.html','/control/control.js','/control/display.js'):
+  for path in ('/control/setup.html','/control/control.js','/control/display.js','/control/locale.js'):
    source=pack.asset_sources(pack.DEFAULT,pack.read_json(pack.DEFAULT/'board.json'))[path]
    self.assertEqual(gzip.decompress(assets[path+'.gz']),source.read_bytes())
    self.assertNotIn(path,assets)
@@ -101,4 +103,23 @@ class PackageTests(unittest.TestCase):
    (port/'composition.json').write_text(json.dumps(p));b.update(composition='composition',drivers=[],pins={'SDA':6,'SECOND_SDA':6},buttons=[],display=None,hardware={});self.write(root,b)
    with self.assertRaisesRegex(ValueError,'conflicting'):pack.load(root)
    p['shared_pin_groups']=[['SDA','SECOND_SDA']];(port/'composition.json').write_text(json.dumps(p));pack.load(root)
+ def test_flash_floor_and_partition_capacity_are_checked_before_staging(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);b=self.fixture(root);b['flash_bytes']=2*1024*1024;self.write(root,b)
+   with self.assertRaisesRegex(ValueError,'at least 4'):pack.load(root)
+   b=self.fixture(root);b['application_bytes']+=4096;self.write(root,b)
+   with self.assertRaisesRegex(ValueError,'application budget'):pack.load(root)
+   b=self.fixture(root);b['fqbn']=b['fqbn'].replace('FlashSize=4M','FlashSize=8M');self.write(root,b)
+   with self.assertRaisesRegex(ValueError,'capacity mismatch'):pack.load(root)
+   b=self.fixture(root);(root/'partitions.csv').write_text((root/'partitions.csv').read_text().replace('0x3FF000','0x400000'));self.write(root,b)
+   with self.assertRaisesRegex(ValueError,'exceeds declared'):pack.load(root)
+ def test_4_8_16_mib_layouts_keep_user_storage_independent_of_kernel(self):
+  source=pack.HARDWARE/'boards/esp32-c3-runtime'
+  for mib in (4,8,16):
+   with self.subTest(mib=mib),tempfile.TemporaryDirectory() as folder:
+    root=Path(folder);b=json.loads((source/'board.json').read_text())
+    for key in ('composition','runtime'):b[key]=str((source/b[key]).resolve())
+    b['flash_bytes']=mib*1048576;b['fqbn']=b['fqbn'].replace('FlashSize=4M',f'FlashSize={mib}M');b['application_bytes']=0x200000
+    (root/'partitions.csv').write_text(f'nvs,data,nvs,0x9000,0x5000\napp0,app,ota_0,0x10000,0x200000\nnfs_test,data,spiffs,0x210000,{hex(mib*1048576-0x210000)}\n')
+    self.write(root,b);_,actual,_,_,_=pack.load(root);self.assertEqual(actual['flash_bytes'],mib*1048576);self.assertEqual(actual['application_providers'],['flash'])
 if __name__=='__main__':unittest.main()

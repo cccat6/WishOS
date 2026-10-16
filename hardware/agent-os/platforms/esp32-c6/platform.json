@@ -57,5 +57,8 @@
   },
   "drivers": [
     "esp32-services"
+  ],
+  "flags": [
+    "-flto"
   ]
 }

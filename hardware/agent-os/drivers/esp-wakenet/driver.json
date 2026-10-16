@@ -6,7 +6,9 @@
     "esp32"
   ],
   "targets": [
-    "esp32c6"
+    "esp32c3",
+    "esp32c6",
+    "esp32s3"
   ],
   "flags": [
     "-DNOTES_WAKENET=1"

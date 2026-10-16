@@ -1,0 +1,16 @@
+{
+  "version": "4.0.2",
+  "sources": {
+    "builder": {
+      "url": "https://codeload.github.com/earlephilhower/mklittlefs/tar.gz/db0513ade5d4ffb757b0529ce277d0be93e4e46a",
+      "sha256": "d885e7bae6f9e2f9c70810fb85d240c7c410db7c4c6dcabbf31d172611d6c5fb"
+    },
+    "littlefs": {
+      "url": "https://codeload.github.com/ARMmbed/littlefs/tar.gz/d01280e64934a09ba16cac60cf9d3a37e228bb66",
+      "sha256": "0bb99817c5dcb838319cc4e4a7e711f933d45cdb51de4983de837c19dcf3b565"
+    }
+  },
+  "cache_bytes": 512,
+  "lookahead_bytes": 128,
+  "block_bytes": 4096
+}

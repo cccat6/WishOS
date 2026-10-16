@@ -1,0 +1,37 @@
+{
+  "format": "notes-board/1",
+  "id": "esp32-s3-runtime",
+  "name": "ESP32-S3 N16R8 SDK runtime validation target",
+  "mcu": "ESP32-S3",
+  "pins": {},
+  "hardware": {},
+  "buttons": [],
+  "display": null,
+  "resources": {
+    "heap_reserve_bytes": 20000,
+    "external_heap_reserve_bytes": 0,
+    "default_vm_memory_bytes": 32768,
+    "application_memory": "auto",
+    "memory_limit_bytes": null
+  },
+  "runtime": "../../runtime/headless-suite",
+  "drivers": [],
+  "platform": "esp32-s3",
+  "composition": "../../compositions/headless-runtime",
+  "fqbn": "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi",
+  "application_bytes": 6291456,
+  "partition_file": "partitions.csv",
+  "application_providers": [
+    "flash"
+  ],
+  "runtime_filesystem": {
+    "format": "littlefs",
+    "partition": "nfs_test",
+    "root": "/factory",
+    "mount": "/storage/flash"
+  },
+  "flash_bytes": 16777216,
+  "assets": {
+    "/services.json": "services.json"
+  }
+}

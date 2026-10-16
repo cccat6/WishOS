@@ -13,12 +13,12 @@ public:
  explicit FileService(Vfs&v):vfs_(v){}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out){
   if(!Policies::choice(Methods,m))return "unsupported_method";
-  const char*fields=!strcmp(m,"mounts")?"":!strcmp(m,"list")?"file,path,cursor,limit":!strcmp(m,"read")?"file,path,offset,length":!strcmp(m,"write")?"file,path,offset,text,hex,truncate":!strcmp(m,"resize")?"file,path,size":!strcmp(m,"rename")?"file,path,to":"file,path";
+  const char*fields=!strcmp(m,"mounts")?"cursor,limit":!strcmp(m,"list")?"file,path,cursor,limit":!strcmp(m,"read")?"file,path,offset,length":!strcmp(m,"write")?"file,path,offset,text,hex,truncate":!strcmp(m,"resize")?"file,path,size":!strcmp(m,"rename")?"file,path,to":"file,path";
   for(auto f:a)if(!Policies::choice(fields,f.key().c_str()))return "unknown_file_argument";
   for(auto key:{"file","path","to","text","hex"})if(a.containsKey(key)&&(!a[key].is<const char*>()||((strcmp(key,"text"))&&a[key].as<JsonString>().size()!=strlen(a[key].as<const char*>()))))return "file_argument_type";
   for(auto key:{"cursor","limit","length"})if(a.containsKey(key)&&!a[key].is<uint32_t>())return "file_argument_type";
   if(a.containsKey("truncate")&&!a["truncate"].is<bool>())return "file_argument_type";
-  if(!strcmp(m,"mounts")){vfs_.describe(out["providers"].to<JsonArray>());return nullptr;}
+  if(!strcmp(m,"mounts")){unsigned cursor=a["cursor"]|0u,limit=a["limit"]|4u;if(!limit||limit>8)return "mount_page_limit";auto providers=out["providers"].to<JsonArray>();vfs_.describe(providers,cursor,limit);out["next_cursor"]=cursor+providers.size();out["more"]=cursor+providers.size()<vfs_.count();return nullptr;}
   if(!a.containsKey("file")&&!a.containsKey("path"))return "file_path_required";
   if(a.containsKey("file")&&a.containsKey("path")&&a["file"]!=a["path"])return "conflicting_file_paths";
   char full[256];const char*rel;FileProvider*p;if(auto e=resolve(a["file"]|(a["path"]|""),full,rel,p))return e;if(!p->available())return "provider_unavailable";

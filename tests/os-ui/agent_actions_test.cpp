@@ -8,8 +8,9 @@
 using namespace notesos;
 static ScriptHost* observedHost=nullptr;
 static JsonDocument json(const char*s){JsonDocument d;assert(!deserializeJson(d,s));return d;}
+struct ObservedMemoryFiles:MemoryFiles{unsigned reads=0;ObservedMemoryFiles():MemoryFiles("ram","/ram","ram"){}const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{++reads;return MemoryFiles::read(p,at,b,n,got);}};
 struct Fixture {
- Core core;Vfs fs;MemoryFiles files{"ram","/ram","ram"};AssetTransfers assets{core,fs,"boot"};RemoteRequests remote{core};AgentService ai{core,assets,fs};
+ Core core;Vfs fs;ObservedMemoryFiles files;AssetTransfers assets{core,fs,"boot"};RemoteRequests remote{core};AgentService ai{core,assets,fs};
  ScriptHost*host=nullptr;unsigned writes=0;uint32_t current=0,native=0;bool busy=false;std::vector<int>values;
  Fixture(){fs.add(files);assert(assets.restore(R"({"targets":[{"provider":"ram","root":"/downloads","quota_bytes":"100000"}]})"));current=core.acquireOwner();
   core.add(Device::bind("/services/ai",AgentService::Methods,"",ai,"read,read_action,read_result"));
@@ -60,10 +61,16 @@ int main(){
  {
  Fixture f;ScriptHost host(f.core,f.fs);f.host=&host;observedHost=&host;f.core.setEventObserver([](const Event&e){return observedHost?observedHost->event(e):false;});
  f.core.add({"/sys/timers","write,remove","",nullptr,nullptr,"",&f,[](void*p,const char*m,JsonObjectConst a,JsonObject o)->const char*{auto&s=*static_cast<Fixture*>(p);if(!strcmp(m,"remove")){s.core.removeTimer(a["id"]);return nullptr;}return s.core.timer(a,o);}});
- std::ifstream input("hardware/agent-os/runtime/lib/ai.lua");assert(input);std::string library((std::istreambuf_iterator<char>(input)),{});size_t wrote;assert(!f.files.write("/ai.lua",0,(const uint8_t*)library.data(),library.size(),true,wrote));
+ std::ifstream input("firmware/WishOS/lib/ai.lua");assert(input);std::string library((std::istreambuf_iterator<char>(input)),{});size_t wrote;assert(!f.files.write("/ai.lua",0,(const uint8_t*)library.data(),library.size(),true,wrote));
  const char*source="local ai=notes.require('./ai.lua') function on_start() receiver=ai.listen(function(a) assert(notes.call('/test','write',{value=a.data.value}).ok) end) end";
  assert(!f.files.write("/main.lua",0,(const uint8_t*)source,strlen(source),true,wrote));JsonDocument a,o;a["file"]="/ram/main.lua";a["memory_bytes"]=65536;assert(!host.invoke("load",a.as<JsonObjectConst>(),o.to<JsonObject>()));auto owner=o["owner"].as<uint32_t>();auto id=f.submit(owner);uint32_t cursor=f.core.sequence();
  f.respond(R"({"format":"wishos-result/2","actions":[{"type":"application","data":{"value":17}}]})");f.polls();assert(f.read(id)["state"]=="awaiting_application");JsonDocument noise;for(int i=0;i<100;++i)f.core.emit("/noise","message",noise.to<JsonObject>());f.core.dispatch(cursor);assert(f.writes==0);f.core.clock(1000);f.core.tick();f.core.dispatch(cursor);host.tick(1000);f.polls();assert(f.writes==1&&f.values.back()==17&&f.read(id)["state"]=="completed");f.core.clock(2000);f.core.tick();f.core.dispatch(cursor);assert(f.writes==1);host.invoke("stop",JsonObjectConst(),o.to<JsonObject>());observedHost=nullptr;
+ }
+ {
+ Fixture f;std::string plan(4096,'\n');plan+="{\"type\":\"system\",\"path\":\"/test\",\"method\":\"write\",\"args\":{}}\n";
+ auto transfer=f.stage(plan),id=f.submit();auto result="{\"format\":\"wishos-result/2\",\"transfer_id\":"+std::to_string(transfer)+",\"sequence\":{\"path\":\"actions.jsonl\",\"format\":\"jsonl\"}}";f.respond(result.c_str());f.ai.poll();
+ for(unsigned turn=0;turn<10;++turn){f.files.reads=0;f.ai.poll();assert(f.files.reads<=1&&f.writes==0);}
+ f.polls(100);assert(f.writes==1&&f.read(id)["state"]=="completed");
  }
  std::cout<<"Ordered application/system actions, acknowledgement barriers, instance replacement, native cancellation, preflight and incremental long plans passed\n";
 }

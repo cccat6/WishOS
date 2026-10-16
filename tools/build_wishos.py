@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from prepare_board_package import ROOT, DEFAULT, load, stage as stage_board, driver_packages, inside
+from prepare_filesystem import build as build_filesystem
 from prepare_arduino import prepare_library, cli_path, cli_config, verify_cli, lock
 
 
@@ -83,6 +84,11 @@ def build(package, stage, output):
     for key,value in overrides.items():command.extend(['--build-property',key+'='+value])
     command.extend(['--warnings','none','--build-path',str(output),str(stage)])
     subprocess.run(command,check=True)
+    image_bytes=(output/'WishOS.ino.bin').stat().st_size
+    if image_bytes>port['application_bytes']:raise ValueError('Executable image exceeds declared application budget')
+    filesystem=build_filesystem(package,output)
+    if filesystem:
+        args=output/'flash_args';args.write_text(args.read_text()+f"0x{filesystem['offset']:x} {filesystem['image']}\n")
     notices=output/'notices'
     if notices.exists():shutil.rmtree(notices)
     shutil.copytree(ROOT/'firmware/WishOS/licenses',notices/'system')
@@ -98,11 +104,13 @@ def build(package, stage, output):
     dirty=bool(subprocess.check_output([git,'status','--porcelain','--untracked-files=normal'],cwd=ROOT,text=True))
     manifest={'format':'notes-firmware-build/1','board':board['id'],'mcu':board['mcu'],'target':port['target'],
               'platform':port['platform_id'],'composition':port['id'],'drivers':list(drivers),'runtime':board.get('runtime'),
+              'flash_bytes':board['flash_bytes'],'application_bytes':port['application_bytes'],'image_bytes':image_bytes,
               'revision':revision,'worktree_dirty':dirty,'fqbn':port['fqbn'],
               'arduino_cli':lock()['cli_version'],'arduino_core':toolchain,
               'source_sha256':tree_digest(stage/'src'),'lock_sha256':hashlib.sha256(json.dumps(lock(),sort_keys=True).encode()).hexdigest(),
               'dependencies':{name:{'directory':path.name,'sha256':tree_digest(path)} for name,path in libraries.items()},
               'files':{file.relative_to(output).as_posix():hashlib.sha256(file.read_bytes()).hexdigest() for file in sorted(output.rglob('*')) if file.is_file() and (file.is_relative_to(notices) or (file.parent==output and (file.suffix in ('.bin','.elf') or file.name in ('partitions.csv','flash_args'))))}}
+    if filesystem:manifest['filesystem']=filesystem
     (output/'firmware-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     return manifest
 

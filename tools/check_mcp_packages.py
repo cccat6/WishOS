@@ -14,7 +14,11 @@ def drain_serial():
   if line and not line.lstrip().startswith(b'{'):
    serial_lines.append(line.decode('utf-8',errors='replace').strip()[:512]);del serial_lines[:-48]
 try:
- board=c.call('/sys/board');assert board['mac']==a.serial_id.upper();original=c.call('/services/link')['desired'];c.call('/sys/runtime','stop');c.call('/dev/wifi','resume_auto');end=time.monotonic()+30
+ board=c.call('/sys/board');assert board['mac']==a.serial_id.upper();original=c.call('/services/link')['desired'];end=time.monotonic()+30
+ while c.call('/sys/apps').get('pending'):
+  if time.monotonic()>end:raise TimeoutError('Application transition unavailable')
+  time.sleep(.05)
+ c.call('/sys/runtime','stop');c.call('/dev/wifi','resume_auto');end=time.monotonic()+30
  while not c.call('/dev/wifi')['connected']:
   if time.monotonic()>end:raise TimeoutError('Wi-Fi unavailable')
   time.sleep(.1)

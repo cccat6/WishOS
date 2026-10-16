@@ -84,9 +84,24 @@ def asset_sources(root, board):
     sources.update({k:(root,v) for k,v in board.get('assets',{}).items()})
     return {k:inside(HARDWARE/'runtime',v[9:]) if isinstance(v,str) and v.startswith('@runtime/') else inside(base,v) for k,(base,v) in sources.items()}
 
+def compiled_assets(root,board,assets):
+    directory,runtime=runtime_package(root,board)
+    standard={'/lib/'+file.name:file.read_text() for file in (ROOT/'firmware/WishOS/lib').glob('*.lua')}
+    if 'compiled_assets' not in runtime:return {**standard,**assets}
+    if not board.get('runtime_filesystem'):raise ValueError('compiled recovery requires filesystem runtime')
+    selected={}
+    for key,relative in runtime['compiled_assets'].items():
+        if not isinstance(key,str) or not key.startswith('/') or '..' in key.split('/'):raise ValueError('compiled recovery path')
+        raw=inside(directory,relative).read_bytes()
+        selected[key]=raw.decode() if Path(relative).suffix in ('.json','.lua','.html') else raw
+    selected['/components.json']=assets['/components.json']
+    return {**standard,**selected}
+
 def load(package):
     root = Path(package).resolve()
     b = read_json(root / 'board.json')
+    flash=b.get('flash_bytes')
+    if type(flash) is not int or flash<4194304 or flash&(flash-1):raise ValueError('WishOS requires declared Flash capacity of at least 4 MiB')
     if b.get('format') != 'notes-board/1' or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', b.get('id','')):
         raise ValueError('invalid board format/id')
     _,platform=platform_package(b)
@@ -99,9 +114,12 @@ def load(package):
     p={**composition,'platform_id':platform['id'],'platform':platform['family'],
        'target':platform['target'],'toolchain':platform['toolchain'],
        'available_gpios':platform['available_gpios'],'package_pins':platform.get('package_pins',{}),
-       'drivers':platform.get('drivers',[])+composition.get('drivers',[])}
+       'drivers':platform.get('drivers',[])+composition.get('drivers',[]),
+       'flags':list(dict.fromkeys(platform.get('flags',[])+composition.get('flags',[])))}
     p.update({k:b[k] for k in ('fqbn','application_bytes','partition_file')})
     if not inside(root,b['partition_file']).is_file():raise ValueError('device partition table missing')
+    from flash_layout import validate as validate_flash_layout
+    validate_flash_layout(root,b)
     if not inside(port, p['entry']).is_file():
         raise ValueError('native composition entry missing')
     if b.get('display') != p.get('display'):
@@ -152,11 +170,14 @@ def load(package):
     generated=json.dumps(component_index(root,b,p),ensure_ascii=False,separators=(',',':'))
     if p.get('asset_file_limit_bytes') and len(generated.encode())>p['asset_file_limit_bytes']:raise ValueError('system asset limit')
     assets['/components.json']=generated
-    if p.get('asset_budget_bytes') and sum(len(x.encode()) if isinstance(x,str) else len(x) for x in assets.values())>p['asset_budget_bytes']:
+    selected=compiled_assets(root,b,assets)
+    if p.get('asset_budget_bytes') and sum(len(x.encode()) if isinstance(x,str) else len(x) for x in selected.values())>p['asset_budget_bytes']:
         raise ValueError('compiled asset budget')
     defaults = json.loads(assets.get('/defaults.json','{}'))
     if not isinstance(defaults,dict):
         raise ValueError('defaults object required')
+    providers=b.get('application_providers',[])
+    if not isinstance(providers,list) or len(set(providers))!=len(providers) or any(not isinstance(x,str) or not re.fullmatch(r'[a-z][a-z0-9_-]{0,47}',x) for x in providers):raise ValueError('invalid application providers')
     memory=b.get('resources',{})
     if not isinstance(memory,dict) or set(memory)-{'heap_reserve_bytes','external_heap_reserve_bytes','default_vm_memory_bytes','application_memory','memory_limit_bytes'}:
         raise ValueError('invalid resource defaults')
@@ -170,6 +191,7 @@ def load(package):
     if b.get('startup') or runtime.get('startup'):
         raise ValueError('startup is defined by applications.json launcher reference')
     applications=json.loads(assets.get('/applications.json','{}'))
+    if runtime and (not applications or not applications.get('launcher')):raise ValueError('runtime package requires a factory launcher')
     if applications:
         records=applications.get('applications',[])
         if not isinstance(records,list):raise ValueError('invalid application catalog')
@@ -186,6 +208,14 @@ def load(package):
             if not entry.startswith('/system/') or not isinstance(assets.get(entry[7:]),str) or len(assets[entry[7:]].encode())>8192:raise ValueError('application entry missing or too large')
         for role in ('launcher','voice'):
             if applications.get(role) and applications[role] not in ids:raise ValueError('application role not installed')
+    filesystem=b.get('runtime_filesystem')
+    if filesystem is not None:
+        if not isinstance(filesystem,dict) or set(filesystem)!={'format','partition','root','mount'} or filesystem['format']!='littlefs':raise ValueError('runtime filesystem configuration')
+        import posixpath
+        for key in ('root','mount'):
+            value=filesystem[key]
+            if not isinstance(value,str) or not value.startswith('/') or value=='/' or posixpath.normpath(value)!=value or '..' in value.split('/'):raise ValueError('runtime filesystem path')
+        if not isinstance(filesystem['partition'],str) or not filesystem['partition'] or ',' in filesystem['partition']:raise ValueError('runtime filesystem partition')
     stack=b.get('system_stack_bytes',p.get('system_stack_bytes',8192))
     if type(stack) is not int or stack<max(1024,p.get('minimum_system_stack_bytes',1024)) or stack%16 or stack>0xffffffff:raise ValueError('native system stack configuration')
     b['system_stack_bytes']=stack
@@ -235,7 +265,7 @@ def component_index(root, board, composition):
         components.append(item)
     return {'format':'wishos-components/1','resource_discovery':'/sys/capabilities','components':components}
 
-def generate(package, output):
+def generate(package, output, full_runtime=False):
     root,b,port,p,assets=load(package)
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     port_hashes={str(f.relative_to(port)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(port.rglob('*')) if f.is_file()}
@@ -247,13 +277,20 @@ def generate(package, output):
     fingerprint=hashlib.sha256(json.dumps({'board':b,'composition':p,'platform':platform,'partitions':partition_hash,'assets':asset_hashes,'composition_files':port_hashes,'drivers':driver_hashes},sort_keys=True).encode()).hexdigest()
     lines=['#pragma once','#include <stddef.h>','#include <stdint.h>','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};','struct Asset {const char*path;const char*data;size_t size;size_t stored;};','inline constexpr Asset ASSETS[]={']
     insertion=lines.index('struct Asset {const char*path;const char*data;size_t size;size_t stored;};')
+    filesystem=b.get('runtime_filesystem',{})
+    lines.insert(insertion,f'inline constexpr char RUNTIME_PATH[]={literal(filesystem.get("mount","")+filesystem.get("root",""))};')
+    lines.insert(insertion,f'inline constexpr char APPLICATION_PROVIDERS[]={literal(",".join(b.get("application_providers",[])))};')
+    lines.insert(insertion,f'inline constexpr size_t FLASH_BYTES={b["flash_bytes"]};')
     lines.insert(insertion,f'inline constexpr size_t SYSTEM_STACK_BYTES={b["system_stack_bytes"]};')
     _,runtime=runtime_package(root,b)
     lines.insert(insertion,f'inline constexpr char RUNTIME_ID[]={literal(runtime.get("id","board-local"))};')
     lines.insert(insertion,f'inline constexpr char DRIVERS[]={literal(",".join(drivers))};')
     lines.insert(insertion,f'inline constexpr char PLATFORM_ID[]={literal(b["platform"])};')
     lines.insert(insertion,f'inline constexpr char COMPOSITION_ID[]={literal(p["id"])};')
-    for key,value in sorted(assets.items()):
+    lines.insert(insertion,'inline constexpr const char* CONTROL_ASSETS[]={'+','.join(literal(k[:-3] if k.endswith('.gz') else k) for k in sorted(assets) if k.startswith('/control/'))+'};')
+    compiled=compiled_assets(root,b,assets)
+    if full_runtime:compiled={**compiled,**assets}
+    for key,value in sorted(compiled.items()):
         raw=value.encode() if isinstance(value,str) else value
         logical=len(raw);compressed=raw
         if isinstance(value,str) and (key.startswith(('/ui/','/suite/','/lib/')) or key.endswith('.lua') or key=='/components.json'):
@@ -296,7 +333,7 @@ def stage(package, sketch):
     return b,p
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('package',nargs='?',default=str(DEFAULT));parser.add_argument('--output');a=parser.parse_args()
-    if a.output:generate(a.package,a.output)
+    parser=argparse.ArgumentParser();parser.add_argument('package',nargs='?',default=str(DEFAULT));parser.add_argument('--output');parser.add_argument('--full-runtime',action='store_true');a=parser.parse_args()
+    if a.output:generate(a.package,a.output,a.full_runtime)
     else:load(a.package)
     print('Board package valid')

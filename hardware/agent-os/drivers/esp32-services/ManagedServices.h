@@ -35,7 +35,7 @@ static void registerManagedServices(){
  core.add({"/sys/transfers","read,configure,begin,file,copy_file,chunk,close_file,commit,abort,release","verified streamed resources",transferHandler,[](JsonObject o){transfers.describe(o);},"read"});
  core.add({"/services/ai",AgentService::Methods,"managed AI tasks and result application",agentHandler,[](JsonObject o){agentService.describe(o);},"read,read_action,read_result"});
  core.diagnostics(&diagnostics,[](void*p,const char*s,const char*e,JsonObjectConst d,uint32_t owner){static_cast<Diagnostics*>(p)->event(s,e,d,owner);},[](void*p,const char*s,const char*m,const char*e,uint32_t owner){static_cast<Diagnostics*>(p)->call(s,m,e,owner);});
- JsonDocument config,logs;const char*download=nullptr;String downloadText;
+ JsonDocument config,logs;
  for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/services.json")){deserializeJson(config,a.data,a.size);break;}
  if(config["logs"].is<JsonObjectConst>())logs["settings"]=config["logs"];if(logs["settings"].isNull())logs["settings"].to<JsonObject>();JsonDocument out;diagnostics.invoke("configure",logs.as<JsonObjectConst>(),out.to<JsonObject>());
  auto saved=preferences.getString("logs","");if(saved.length()){JsonDocument a,b;if(!deserializeJson(b,saved)){a["settings"]=b;diagnostics.invoke("configure",a.as<JsonObjectConst>(),out.to<JsonObject>());}}

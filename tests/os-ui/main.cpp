@@ -11,6 +11,8 @@
 #include "DisplayScheduler.h"
 #include "drivers/e6/E6Profiles.h"
 #include "ScriptHost.h"
+#include "Sha256.h"
+#include "display/NativeFont.h"
 #include "Vfs.h"
 #include "compositions/agentic-notes-e6/Defaults.h"
 #include "SystemFiles.h"
@@ -35,6 +37,10 @@ static const char*validateUiDriver(const char*){return nullptr;}
 static DisplayAdmission queueUi(const char*,const char*,bool,JsonObject out,const char*,const UiView*,PresentationState::Stamp stamp){if(deferUi)return DisplayAdmission::deferred("display_busy");++uiQueueCalls;lastUiStamp=stamp;out["job_id"]=uiQueueCalls;out["status"]="queued";return {};}
 }
 int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
+ { JsonDocument input;nm::Scene scene;assert(!deserializeJson(input,R"({"format":"scene-v1","background":1,"commands":[{"op":"fill","x":0,"y":0,"w":40,"h":50,"color":3}]})"));assert(nm::parseScene(input.as<JsonObjectConst>(),scene));assert(scene.count==1&&scene.commands[0].color==3);input["commands"][0]["color"]=4;assert(!nm::parseScene(input.as<JsonObjectConst>(),scene));input["commands"][0]["color"]=3;input["next_poll_s"]=60;assert(!nm::parseScene(input.as<JsonObjectConst>(),scene)); }
+
+ // All original glyph pixels survive the lossless payload repacking.
+ { std::ifstream goldenFile("tests/native-font-digest.json");JsonDocument golden;assert(!deserializeJson(golden,goldenFile));Sha256 hash;unsigned count=0;for(const auto&g:nm::NATIVE_GLYPHS){uint8_t bitmap[512];nm::FontMetrics metrics;assert(nm::nativeGlyphBitmap(g.code,g.fontSize(),bitmap,sizeof bitmap,metrics));size_t bytes=((g.w+7)/8)*g.h;hash.update(bitmap,bytes);assert(metrics.w==g.w&&metrics.h==g.h&&metrics.advance==g.advance&&metrics.x==g.x&&metrics.y==g.y);++count;}char digest[65];hash.finish(digest);assert(count==golden["glyphs"].as<unsigned>()&&golden["bitmap_sha256"]==digest);}
  // Native compositions may install additional image decoders before the UI starts.
  assert(bindUiMemory(core.resources()));lv_init();for(unsigned i=0;i<2;++i){auto decoder=lv_image_decoder_create();assert(decoder);lv_image_decoder_set_info_cb(decoder,[](lv_image_decoder_t*,lv_image_decoder_dsc_t*,lv_image_header_t*){return LV_RESULT_INVALID;});}
 
@@ -129,7 +135,7 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  for(;;){JsonDocument state;presentationState.describe(state.to<JsonObject>());if(!state["views"].size())break;uint32_t id=state["views"][0]["id"];unsigned slot=presentationState.slot(id);assert(!presentationState.close(id,0));freeUiDocument(slot);}resetUiRenderer();assert(core.resources().promised()==0);
  // The real factory entrypoint uses the exact runtime/GUI loader used by a user
  // replacement. No special native boot path or system-owned button bindings.
- core.add({"/sys/ui","read,app_load,open,update,refresh,back,close", "",uiHandler,uiAsyncDescription});
+ core.add({"/sys/ui","read,app_load,open,update,refresh,back,close,font_register,font_unregister,fonts", "",uiHandler,uiAsyncDescription});
  core.add({"/dev/buttons","read","",[](const char*,JsonObjectConst,JsonObject)->const char*{return nullptr;}});
  core.add({"/dev/mic","start,stop","",[](const char*m,JsonObjectConst,JsonObject)->const char*{if(!strcmp(m,"start"))++micStarts;return nullptr;}});
  core.add({"/sys/rules","write","",[](const char*,JsonObjectConst a,JsonObject o){return core.setRule(a,o);}});
@@ -170,6 +176,13 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  if(auto error=runtime.invoke("load",a.as<JsonObjectConst>(),r.to<JsonObject>())){std::cerr<<error<<" ";serializeJson(r,std::cerr);assert(false);}assert(micStarts==callbacksBefore);
  core.dispatch(cursor);assert(micStarts==callbacksBefore+2);a.clear();assert(!runtime.invoke("read",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["callbacks"]==0&&!r["fault"].as<bool>());
  assert(!runtime.invoke("stop",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(core.resources().promised()==0);core.setEventObserver(nullptr);callbackRuntime=nullptr;deferUi=false;
+ // Font registrations share application ownership. An in-flight renderer
+ // retains an old binding until safe disposal; a new app may reuse its name.
+ { auto old=core.acquireOwner();a.clear();a["id"]="custom";a["file"]="/storage/ram/font.nmf";a["size"]=22;assert(!core.invoke("/sys/ui","font_register",a.as<JsonObjectConst>(),r.to<JsonObject>(),old));
+   a.clear();a["path"]="/storage/ram/font-ui.json";assert(!core.invoke("/sys/ui","open",a.as<JsonObjectConst>(),r.to<JsonObject>(),old));auto oldView=r["view_id"].as<uint32_t>();assert(prepareUi("/storage/ram/font-ui.json",uiDocument(oldView)->view));uiLeaseOwner=0xfffffff1;core.releaseOwner(old);assert(!vfs.canMutate("/storage/ram/font.nmf"));
+   auto next=core.acquireOwner();a.clear();a["id"]="custom";a["file"]="/storage/ram/font.nmf";a["size"]=22;assert(!core.invoke("/sys/ui","font_register",a.as<JsonObjectConst>(),r.to<JsonObject>(),next));a.clear();a["path"]="/storage/ram/font-ui.json";assert(!core.invoke("/sys/ui","open",a.as<JsonObjectConst>(),r.to<JsonObject>(),next));auto nextView=r["view_id"].as<uint32_t>();assert(prepareUi("/storage/ram/font-ui.json",uiDocument(nextView)->view));for(const auto&f:fontFiles)assert(!f.font||f.owner!=old);assert(renderUiBand(0,stripe));
+   core.releaseOwner(next);assert(!vfs.canMutate("/storage/ram/font.nmf"));vfs.release(uiLeaseOwner);uiLeaseOwner=0;resetUiRenderer();assert(vfs.canMutate("/storage/ram/font.nmf"));assert(core.resources().promised()==0);
+ }
  std::cout<<"Full-screen image bytes="<<bin.size()<<", largest provider read="<<files.largestRead<<", image reads="<<imageReadBytes<<", image read calls="<<imageReadOps<<"\n";
  std::cout<<"LVGL runtime-loaded UI, native stripe render, VFS hot replacement, refresh/back history passed\n";
 }

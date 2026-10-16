@@ -17,6 +17,7 @@
 #include "../BoardPackage.h"
 #include "../Core.h"
 #include "drivers/esp32-services/EspMemory.h"
+#include "drivers/esp32-services/EspStorage.h"
 #include "../RpcEnvelope.h"
 #include "../RpcLink.h"
 #include "../ScriptHost.h"
@@ -76,6 +77,7 @@ static const char*nfs(const char*m,JsonObjectConst a,JsonObject out){if(!strcmp(
  else if(!strcmp(m,"stop")){if(auto e=nfsService.stop())return e;}else if(!strcmp(m,"memory"))return nfsService.memory(a,out);else if(strcmp(m,"read"))return "unsupported_method";nfsService.read(out);return nullptr;}
 static void respond(JsonObjectConst request,JsonDocument&reply){invokeEnvelope(core,request,reply,bootId,uptime());}
 static audio::RecordingArchive recordingArchive(vfs);
+#include "drivers/esp32-services/RuntimeAssets.h"
 void begin(){
  core.clockSource(uptime);
  Serial.setRxBufferSize(4096);Serial.begin(115200);preferences.begin("agent-os",false);snprintf(bootId,sizeof bootId,"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());
@@ -83,7 +85,7 @@ void begin(){
  core.onOwnerRelease(&nextJob,[](void*,uint32_t owner){if(networkJob&&networkJob->owner==owner){networkJob->cancel=true;networkJob->orphan=true;}if(wsOwner==owner)stopWebSocket();});
  Device devices[]={
  {"/sys/capabilities","list,describe","resource discovery",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"describe"))return core.describe(a["path"]|"",o);unsigned start=a["cursor"]|0u,limit=a["limit"]|4u;if(!limit||limit>48)return "limit";core.list(o["devices"].to<JsonArray>(),start,limit,a["details"]|false);o["next_cursor"]=start+o["devices"].size();o["more"]=start+o["devices"].size()<core.deviceCount();return nullptr;}},
- {"/sys/board","read","native board identity",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["board"]=boardpack::ID;o["mcu"]=boardpack::MCU;o["system_stack_bytes"]=boardpack::SYSTEM_STACK_BYTES;o["package_fingerprint"]=boardpack::FINGERPRINT;o["component_index"]["file"]="/system/components.json";o["component_index"]["format"]="wishos-components/1";o["native_drivers"]=boardpack::DRIVERS;o["platform"]=boardpack::PLATFORM_ID;o["hardware_composition"]=boardpack::COMPOSITION_ID;o["initial_runtime"]=boardpack::RUNTIME_ID;o["mac"]=WiFi.macAddress();o["cores"]=1;o["reset_reason"]=int(esp_reset_reason());return nullptr;}},
+ {"/sys/board","read","native board identity",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["board"]=boardpack::ID;o["mcu"]=boardpack::MCU;o["configured_flash_bytes"]=boardpack::FLASH_BYTES;o["system_stack_bytes"]=boardpack::SYSTEM_STACK_BYTES;o["package_fingerprint"]=boardpack::FINGERPRINT;o["component_index"]["file"]="/system/components.json";o["component_index"]["format"]="wishos-components/1";o["native_drivers"]=boardpack::DRIVERS;o["platform"]=boardpack::PLATFORM_ID;o["hardware_composition"]=boardpack::COMPOSITION_ID;o["initial_runtime"]=boardpack::RUNTIME_ID;o["mac"]=WiFi.macAddress();o["cores"]=CONFIG_FREERTOS_NUMBER_OF_CORES;o["reset_reason"]=int(esp_reset_reason());return nullptr;}},
  {"/sys/stats","read","resource telemetry",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["heap_free_bytes"]=ESP.getFreeHeap();o["largest_free_block_bytes"]=ESP.getMaxAllocHeap();o["minimum_free_heap_bytes"]=ESP.getMinFreeHeap();o["uptime_ms"]=uptime();o["stack_free_bytes"]=uxTaskGetStackHighWaterMark(nullptr);return nullptr;}},
  {"/sys/resources","read,configure","shared reservations",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure")){if(core.callerOwner())return "system_policy_required";if(auto e=core.resources().configure(a))return e;}core.resources().read(o);return nullptr;}},
  {"/services/recordings","read,read_chunk,remove","compressed recording archive",[](const char*m,JsonObjectConst a,JsonObject o){return recordingArchive.invoke(m,a,o);},audio::RecordingArchive::describe,"read,read_chunk"},
@@ -105,7 +107,7 @@ void begin(){
  {"/services/remote","read,submit,peek,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},remoteAsyncDescription},
  {"/services/nfs","read,start,stop,memory","on-demand NFS",nfs},
  {"/dev/flash","read,mount,format,space,cancel","internal LittleFS volume",[](const char*m,JsonObjectConst a,JsonObject o){return flashVolume.invoke(m,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
- {"/sys/storage","read,mount,format,space,cancel","storage providers",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(strcmp(m,"read"))return flashVolume.invoke(m,a,o);vfs.describe(o["providers"].to<JsonArray>());return nullptr;},[](JsonObject o){flashVolume.describe(o);},"read"},
+ {"/sys/storage","read,mount,format,space,cancel","storage providers",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(strcmp(m,"read"))return flashVolume.invoke(m,a,o);return describeEspStorage(vfs,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
  {"/fs",FileService::Methods,"VFS files",files},
  {"/services/time","read,describe,configure,sync","asynchronous NTP",timeHandler},
  {"/sys/clock","read,write","wall and monotonic clock",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write")){ClockChange c;if(auto e=validateClockChange(a,c))return e;if(c.cpu)return "use_power_adapter";if(c.wall){timeval t{time_t(c.unixSeconds),0};if(settimeofday(&t,nullptr))return "clock_failed";timeWasSet=true;}}o["monotonic_ms"]=uptime();o["unix_s"]=int64_t(time(nullptr));o["wall_clock_valid"]=timeWasSet.load()||time(nullptr)>1700000000;return nullptr;}},
@@ -116,8 +118,8 @@ void begin(){
 for(auto d:devices){for(auto r:reads)if(!strcmp(d.path,r.path))d.readMethods=r.methods;core.add(d);}
  connections.restore(preferences.getString("connections","{}").c_str());restoreServiceLink();Network.begin();uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);snprintf(apSsid,sizeof apSsid,"Agentic-Notes-%02X%02X%02X",mac[3],mac[4],mac[5]);restoreWifi();core.clock(uptime());wifiManager.poll(uptime());restoreApplications();timeService.restore(preferences.getString("time_sync","{}").c_str());
  registerManagedServices();
- for(auto asset:boardpack::ASSETS)if(!strncmp(asset.path,"/control/",9)){String path=asset.path;bool compressed=path.endsWith(".gz");if(compressed)path.remove(path.length()-3);http.on(path.c_str(),HTTP_GET,[asset,compressed]{if(compressed)http.sendHeader("Content-Encoding","gzip");http.send_P(200,"application/javascript; charset=utf-8",asset.data,asset.size);});}
- http.on("/",HTTP_GET,[]{JsonDocument r;if(routes.handle("/","GET","",uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/setup.html")||!strcmp(a.path,"/setup.html.gz")){if(!strcmp(a.path,"/setup.html.gz"))http.sendHeader("Content-Encoding","gzip");http.send_P(200,"text/html; charset=utf-8",a.data,a.size);return;}http.send(404,"text/plain","UI package missing");});
+ for(auto route:boardpack::CONTROL_ASSETS){String path=route;http.on(path.c_str(),HTTP_GET,[path]{serveRuntimeAsset(path.c_str(),path.endsWith(".html")?"text/html; charset=utf-8":"application/javascript; charset=utf-8");});}
+ http.on("/",HTTP_GET,[]{JsonDocument r;if(routes.handle("/","GET","",uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}serveRuntimeAsset("/control/setup.html","text/html; charset=utf-8");});
  http.on("/os/invoke",HTTP_POST,[]{JsonDocument request,reply;if(http.arg("plain").length()>4096||deserializeJson(request,http.arg("plain"))){http.send(400,"application/json","{\"ok\":false,\"error\":\"invalid_json\"}");return;}respond(request.as<JsonObjectConst>(),reply);String data;serializeJson(reply,data);http.send(200,"application/json",data);});
  http.onNotFound([]{JsonDocument r;if(routes.handle(http.uri().c_str(),http.method()==HTTP_GET?"GET":http.method()==HTTP_POST?"POST":http.method()==HTTP_PUT?"PUT":http.method()==HTTP_DELETE?"DELETE":"OTHER",http.arg("plain").c_str(),uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}http.sendHeader("Location","/",true);http.send(302,"text/plain","");});http.begin();event("/sys/board","boot");
 }

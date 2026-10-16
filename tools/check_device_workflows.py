@@ -82,6 +82,14 @@ async def main():
         r=await rpc('/services/link')
         return r if r['connected'] and not r['activation_pending'] and r['endpoint_id']==name else None
     async def operation(path,method):
+        async def prepared():
+            state=await rpc(path)
+            return state if state.get('operation',{}).get('state')!='running' else None
+        if method=='mount':
+            async def settled():return not (await rpc('/sys/apps')).get('pending')
+            await wait(settled)
+        state=await wait(prepared)
+        if method=='mount' and state.get('mounted'):return {'ok':True}
         ident=(await rpc('/sys/operations','request',{'path':path,'method':method,'args':{}}))['completion_id']
         async def done():
             r=await rpc('/sys/operations','read',{'id':ident});return r if r['ready'] else None
@@ -97,6 +105,8 @@ async def main():
     try:
         report['board']=await rpc('/sys/board');assert report['board']['mcu']=='ESP32-C3'
         original=(await rpc('/services/link'))['desired']
+        async def application_idle():return not (await rpc('/sys/apps')).get('pending')
+        await wait(application_idle)
         await rpc('/sys/runtime','stop');await rpc('/dev/wifi','resume_auto')
         async def online():
             r=await rpc('/dev/wifi');return r if r['connected'] else None

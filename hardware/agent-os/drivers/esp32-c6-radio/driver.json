@@ -11,5 +11,8 @@
   "build_hook": "build.py",
   "build_inputs": [
     "tools/prepare_radio_sdk.py"
+  ],
+  "flags": [
+    "-DWISHOS_C6_MESH=1"
   ]
 }

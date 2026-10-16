@@ -99,6 +99,9 @@ jobs:
           if-no-files-found: error
 
   driver-sdk:
+    strategy:
+      matrix:
+        target: [esp32c3, esp32c6, esp32s3]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -108,7 +111,7 @@ jobs:
         with:
           version: '1.5.1'
       - run: python3 tools/prepare_arduino.py --install-core
-      - run: python3 tools/test_native_drivers.py --target esp32s3
+      - run: python3 tools/test_native_drivers.py --target ${{ matrix.target }}
 
   release:
     needs: [host, build, driver-sdk]

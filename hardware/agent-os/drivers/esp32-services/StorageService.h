@@ -197,11 +197,7 @@ static const char* policyHandler(const char*m,JsonObjectConst a,JsonObject out){
   }return "unsupported_method";
 }
 static const char* storageHandler(const char*m,JsonObjectConst a,JsonObject out){
-  if(!strcmp(m,"read")||!strcmp(m,"list")){vfs.describe(out["providers"].to<JsonArray>());
-    out["internal_heap_free"]=ESP.getFreeHeap();out["psram_physical_bytes"]=ESP.getPsramSize();out["psram_free"]=ESP.getFreePsram();
-    out["flash_physical_bytes"]=ESP.getFlashChipSize();out["firmware_bytes"]=ESP.getSketchSize();out["partition_resize_supported"]=false;
-    auto partitions=out["flash_partitions"].to<JsonArray>();auto it=esp_partition_find(ESP_PARTITION_TYPE_ANY,ESP_PARTITION_SUBTYPE_ANY,nullptr);
-    while(it){auto part=esp_partition_get(it);auto item=partitions.add<JsonObject>();item["label"]=part->label;item["type"]=int(part->type);item["subtype"]=int(part->subtype);sizeText(item,"offset",part->address);sizeText(item,"capacity_bytes",part->size);item["encrypted"]=part->encrypted;it=esp_partition_next(it);}return nullptr;}
+  if(!strcmp(m,"read")||!strcmp(m,"list"))return describeEspStorage(vfs,a,out);
   return "unsupported_method";
 }
 static bool shutdownOnLowBattery(){JsonDocument d;policies.resolve("/sys/power","system",d.to<JsonObject>());return !strcmp(d["low_battery_action"]|"notify","shutdown");}

@@ -13,7 +13,7 @@ int main(){Vfs vfs;MemoryFiles ram("ram","/storage/ram","ram");vfs.add(ram);Scri
  core.add({"/dev/buttons","read,configure","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure"))return buttons.configure(a,o);buttons.read(o);return nullptr;},nullptr,"read"});
  core.add({"/sys/timers","write,remove","",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write"))return core.timer(a,o);core.removeTimer(a["id"]|0u);return nullptr;}});
  core.add({"/effect","write","",[](const char*,JsonObjectConst a,JsonObject)->const char*{++counts[a["id"]|""];return nullptr;}});
- std::ifstream lib("hardware/agent-os/runtime/lib/input.lua");std::string code((std::istreambuf_iterator<char>(lib)),{});size_t written;assert(!ram.write("/input.lua",0,(const uint8_t*)code.data(),code.size(),true,written));
+ std::ifstream lib("firmware/WishOS/lib/input.lua");std::string code((std::istreambuf_iterator<char>(lib)),{});size_t written;assert(!ram.write("/input.lua",0,(const uint8_t*)code.data(),code.size(),true,written));
  const char*program=R"lua(
 local input=notes.require('input.lua')
 function on_start()

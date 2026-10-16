@@ -129,7 +129,11 @@ class Client:
         root=mount.rstrip('/')+'/app-'+uuid.uuid4().hex[:12]
         if any(len(root+'/'+name)>=256 for _,name,_,_ in assets):raise ValueError('Package path exceeds device path limit')
         if persist:
-            providers=self.call('/fs','mounts')['providers']
+            providers=[];cursor=0
+            while True:
+                page=self.call('/fs','mounts',{'cursor':cursor,'limit':4});providers.extend(page['providers'])
+                if not page.get('more'):break
+                cursor=page['next_cursor']
             provider=next((p for p in providers if p['mount']==mount.rstrip('/')),None)
             if not provider or not provider['persistent']:raise ValueError('Persistent installation requires persistent storage')
         self.call('/fs','mkdir',{'path':root})

@@ -38,14 +38,7 @@ static BoardWifi boardWifi;static WifiManager wifiManager(boardWifi,core);
 static bool persistWifi(const char*data,size_t n){return preferences.putString("wifi_profiles",data)==n;}
 static void restoreWifi(){
  if(!wifiEventsRegistered){WiFi.onEvent([](WiFiEvent_t event,WiFiEventInfo_t info){if(event==ARDUINO_EVENT_WIFI_STA_DISCONNECTED)wifiDisconnectReason=info.wifi_sta_disconnected.reason;});wifiEventsRegistered=true;}
- String current=preferences.getString("wifi_profiles","");if(current.length()){wifiManager.restore(current.c_str());return;}
- JsonDocument legacy;String saved=preferences.getString("wifi","");const char*ssid="",*password="";
- String oldSsid,oldPassword;
- if(saved.length()&&!deserializeJson(legacy,saved)){ssid=legacy["ssid"]|"";password=legacy["password"]|"";}
- else{oldSsid=preferences.getString("ssid","");oldPassword=preferences.getString("password","");ssid=oldSsid.c_str();password=oldPassword.c_str();}
- if(!*ssid||strlen(ssid)>32||!WifiConfig::passwordValid(password))return;
- JsonDocument next,result;auto p=next["profiles"].to<JsonArray>().add<JsonObject>();p["id"]="legacy";p["ssid"]=ssid;p["password"]=password;next["persist"]=true;
- wifiManager.configure(next.as<JsonObjectConst>(),result.to<JsonObject>(),persistWifi);
+ String current=preferences.getString("wifi_profiles","");if(current.length())wifiManager.restore(current.c_str());
 }
 static const char*profileChange(const char*m,JsonObjectConst a,JsonObject out){
  JsonDocument change,full;wifiManager.config().write(full.to<JsonObject>(),true);change["profiles"]=full["profiles"];

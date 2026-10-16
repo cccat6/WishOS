@@ -1,0 +1,15 @@
+{
+  "launcher": "launcher",
+  "voice": "",
+  "applications": [
+    {
+      "id": "launcher",
+      "title": "WishOS",
+      "manifest": "/system/apps/launcher.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "hardware/agent-os/runtime/headless-suite"
+      }
+    }
+  ]
+}

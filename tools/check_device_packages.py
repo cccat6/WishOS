@@ -9,7 +9,7 @@ from os_client import Client, RpcError
 
 p=argparse.ArgumentParser();p.add_argument('--serial-id',required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--esptool',type=Path);args=p.parse_args()
 ports=[v.device for v in comports() if (v.serial_number or '').upper()==args.serial_id.upper()];assert len(ports)==1
-client=Client(port=ports[0],timeout=15);report={'checks':[]};roots=[];app_id='check-'+uuid.uuid4().hex[:10];report['test_app_id']=app_id;copied_bytes=0
+client=Client(port=ports[0],timeout=15);report={'checks':[]};roots=[];app_id='check-'+uuid.uuid4().hex[:10];report['test_app_id']=app_id;copied_bytes=0;extra_apps=[];catalog_root="/storage/flash/catalog-"+uuid.uuid4().hex[:10];catalog_files=[];catalog_created=False
 
 def trace_client(c):
     read=c.serial.readline
@@ -30,6 +30,9 @@ def wait(fn,seconds=30):
         time.sleep(.01)
     raise TimeoutError('Package fixture condition did not settle')
 def operation(path,method):
+    if method=='mount':wait(lambda:not call('/sys/apps').get('pending'))
+    state=wait(lambda:(r if (r:=call(path)).get('operation',{}).get('state')!='running' else None))
+    if method=='mount' and state.get('mounted'):return {'ok':True}
     r=call('/sys/operations','request',{'path':path,'method':method,'args':{}});ident=r['completion_id']
     try:
         result=wait(lambda:(r if (r:=call('/sys/operations','read',{'id':ident}))['ready'] else None))
@@ -100,7 +103,7 @@ try:
         parts=call('/fs','read',{'file':index['file'],'offset':str(len(raw)),'length':1024});raw.extend(bytes.fromhex(parts['hex']))
     components=json.loads(raw);assert components['format']=='wishos-components/1' and {c['layer'] for c in components['components']}=={'system','driver','application'}
     report['checks'].append('live_layered_component_index')
-    call('/sys/runtime','stop');operation('/dev/flash','mount')
+    wait(lambda:not call('/sys/apps').get('pending'));call('/sys/runtime','stop');operation('/dev/flash','mount')
     files=package("function on_start() assert(notes.call('/sys/logs','write',{message='package v1'}).ok) end")
     root=deliver(files);ident,checked=validate(root);assert checked['state']=='validated',checked;install(root,ident,checked['revision']);launch()
     runtime=call('/sys/runtime');owner=runtime['owner'];assert not runtime['fault'];report['checks'].append('native_package_validation_install_and_activation')
@@ -120,6 +123,17 @@ try:
     report['checks'].append('whole_file_update_copies_unchanged_payload_locally')
     report['checks'].append('stale_revision_rejected_before_catalog_commit')
     report['copied_payload_bytes']=copied_bytes
+    # NVS strings have a smaller limit than the advertised application catalog.
+    # Exercise durable catalogs beyond 4 KiB using normal install calls, then
+    # verify the same records survive the reset already used below.
+    call('/fs','mkdir',{'path':catalog_root});catalog_created=True;catalog_files.append(catalog_root+'/main.lua')
+    call('/fs','write',{'file':catalog_files[-1],'offset':'0','text':'function on_start() end','truncate':True})
+    for i in range(8):
+        ident=app_id+'-catalog-'+str(i);file=catalog_root+'/'+str(i)+'.json';catalog_files.append(file)
+        descriptor={'format':'wishos-app/1','id':ident,'title':'Catalog fixture '+str(i),'entry':'main.lua','source':{'repository':'https://example.invalid/reference','path':'reference/'+('x'*480),'ref':'test'}}
+        call('/fs','write',{'file':file,'offset':'0','text':json.dumps(descriptor),'truncate':True});call('/fs','flush',{'file':file})
+        call('/sys/apps','install',{'manifest':file,'persist':True});extra_apps.append(ident)
+    assert set(extra_apps)<={a['id']for a in list_apps()};assert len(json.dumps(list_apps()).encode())>4096;report['checks'].append('durable_catalog_exceeds_4k_string_limit')
     if args.esptool:
         call('/sys/runtime','stop');operation('/dev/flash','space');pending=transfer('begin',{'bytes':str(len(changed['kept.bin'])),'files':1});roots.append((pending['root'],{'interrupted.bin':b''}))
         transfer('copy_file',{'id':pending['id'],'path':'interrupted.bin','source':updated+'/kept.bin','bytes':str(len(changed['kept.bin'])),'sha256':digest(changed['kept.bin'])})
@@ -134,6 +148,7 @@ try:
         assert next(a for a in list_apps() if a['id']==app_id)['manifest']==updated+'/app.json'
         assert call('/sys/transfers')['state']=='idle';operation('/dev/flash','mount');launch();assert not call('/sys/runtime')['fault']
         report['checks'].append('restart_during_copy_keeps_last_committed_package')
+        assert set(extra_apps)<={a['id']for a in list_apps()};report['checks'].append('large_catalog_restores_after_reset')
     report['resources']=call('/sys/resources');report['stats']=call('/sys/stats');report['ok']=True
 except Exception:
     try:report['runtime']=call('/sys/runtime');report['applications']=call('/sys/apps');report['transfer']=call('/sys/transfers');report['resources']=call('/sys/resources')
@@ -146,6 +161,12 @@ finally:
         if state.get('validation_operation_id'):call('/sys/apps','release_validation',{'operation_id':state['validation_operation_id']})
         t=call('/sys/transfers')
         if t['state'] not in ('idle','aborted'):call('/sys/transfers','abort',{'id':t['id']})
+        for ident in extra_apps:call('/sys/apps','remove',{'id':ident,'persist':True})
+        for file in catalog_files:
+            try:call('/fs','remove',{'file':file})
+            except RpcError as e:
+                if str(e)!='not_found':raise
+        if catalog_created:call('/fs','remove',{'file':catalog_root})
         if any(a['id']==app_id for a in list_apps()):call('/sys/apps','remove',{'id':app_id,'persist':True})
         for root,files in reversed(roots):
             for name in [*files,*(name+'.part' for name in files)]:

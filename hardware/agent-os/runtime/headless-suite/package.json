@@ -3,16 +3,19 @@
   "id": "headless-suite",
   "assets": {
     "/defaults.json": "assets/defaults.json",
-    "/setup.html": "@runtime/control/setup.html",
-    "/lib/input.lua": "@runtime/lib/input.lua",
     "/control/control.js": "@runtime/control/control.js",
     "/control/display.js": "@runtime/control/display.js",
     "/services.json": "assets/services.json",
-    "/lib/ai.lua": "@runtime/lib/ai.lua"
+    "/applications.json": "assets/applications.json",
+    "/apps/launcher.json": "assets/apps/launcher.json",
+    "/apps/launcher.lua": "assets/apps/launcher.lua",
+    "/control/setup.html": "@runtime/control/setup.html",
+    "/control/locale.js": "@runtime/control/locale.js"
   },
   "gzip_assets": [
-    "/setup.html",
     "/control/control.js",
-    "/control/display.js"
+    "/control/display.js",
+    "/control/setup.html",
+    "/control/locale.js"
   ]
 }

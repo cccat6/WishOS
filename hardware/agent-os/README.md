@@ -35,9 +35,12 @@ crystal and peripheral voltage assumptions remain native-port responsibilities.
 
 The initial runtime package is an ordinary application reference, with no special
 execution layer or privileges. `runtime` links to a directory with `package.json` (`notes-runtime-package/1`). Its
-`assets` maps VFS paths below `/system` to package text or binary assets. UI documents, Lua
-entry/modules and default policy snapshots are compiled read-only. User apps/assets
-can instead be replaced at runtime on writable providers. `/defaults.json` is a
+`assets` maps package paths to normal LittleFS files below `/storage/flash/factory`.
+The build produces a separate initial filesystem image and verifies every file by
+unpacking it. UI, application code and browser controls are writable files, with
+leases while executing or presenting. `/system` retains immutable metadata, standard
+Lua modules and a small ordinary recovery application. Do not flash the initial
+filesystem image over an existing installation during an ordinary firmware update. `/defaults.json` is a
 normal `Policies` restore snapshot, not an unchecked bypass; saved settings override
 package defaults. `/applications.json` selects ordinary launcher and voice application descriptors and their initial catalog. The application manager owns boot/activation selection. A descriptor's `memory_bytes` is an optional VM ceiling, not a preallocated partition.
 The E6 suite requests 81920 bytes; other applications retain the system default.
@@ -55,7 +58,9 @@ A device's `board.json` independently references:
 - `composition`: compiled native service/driver instances and initialization, bus,
   power and error-recovery coordination for that device topology.
 - `pins` and `hardware`: wiring and electrical parameters for that composition.
-- `fqbn`, `partition_file`, `application_bytes`: this device's memory/build layout.
+- `flash_bytes`, `fqbn`, `partition_file`, `application_bytes`: Flash capacity (minimum 4 MiB) and executable budget; partitions are checked before staging.
+- `runtime_filesystem`: LittleFS partition, mount and factory directory.
+- `application_providers`: default volumes for user-installed applications; system configuration may change this policy at runtime.
 - `runtime`: its initial UI/interaction package, independent of MCU and drivers.
 
 A new design using an existing MCU reuses its platform and the applicable drivers.
@@ -127,8 +132,8 @@ capability/event interface. External power does not mean charge completion.
 rotation and the optional voice route. `assets/suite/main.lua` implements those
 choices through public resource calls. `assets/ui/` has portrait/landscape pages;
 small indexed icons are streamed from the VFS. Copy the suite to a writable provider
-and change the startup reference to replace it without rebuilding. `tools/generate_basic_ui.py`
-and `tools/compile_os_font.py` reproduce the packaged assets. See the agent's
+and change the startup reference to replace it without rebuilding. The runtime files are the maintained source. `tools/compile_os_font.py` compiles
+extension fonts; it does not overwrite page layouts or the runtime manifest. See the agent's
 [display guide](../../skills/agentic-notes-hardware/references/e6-display.md).
 
 Host asset compiler dependencies are pinned in `requirements-os-assets.txt`.
@@ -242,3 +247,5 @@ constants are generated for convenience. Intentional signal aliases use explicit
 `shared_pin_groups`; undeclared pin collisions remain errors.
 
 Runtime packages can list `gzip_assets` for HTML/JS/CSS. The builder retains only deterministic `.gz` assets in the image; the HTTP adapter sends their encoding and the browser decompresses them. Other runtime files remain directly accessible. `applications.json` carries launcher/voice references, package provenance and device-selected recovery bindings.
+
+Default product images select the implemented feature set for their hardware, including the C6 radio protocols and wake engine. Build-time composition is for port maintainers, not an installation burden for ordinary users. Larger 8/16 MiB devices can declare larger code partitions and writable volumes. `esp32-s3-runtime` is an N16R8 SDK validation target, not a completed Xiaozhi hardware port.

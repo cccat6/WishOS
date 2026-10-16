@@ -2,6 +2,9 @@
 #include <cassert>
 #include <iostream>
 using namespace notesos;
+static unsigned allocations=0;static size_t live=0;static bool deny=false;static unsigned denyFrom=0;
+static void*allocate(size_t bytes){++allocations;if(deny||(denyFrom&&allocations>=denyFrom))return nullptr;auto p=(size_t*)malloc(bytes+sizeof(size_t));if(!p)return nullptr;*p=bytes;live+=bytes;return p+1;}
+static void release(void*ptr){if(ptr){auto p=(size_t*)ptr-1;live-=*p;free(p);}}
 int main(){
  Vfs vfs;MemoryFiles memory("ram","/storage/ram","ram");vfs.add(memory);FileService service(vfs);
  JsonDocument args,result;auto call=[&](const char*method,const char*json){args.clear();assert(!deserializeJson(args,json));return service.invoke(method,args.as<JsonObjectConst>(),result.to<JsonObject>());};
@@ -33,5 +36,14 @@ int main(){
  assert(!call("write",R"({"file":"/book","text":"root data"})"));
  assert(vfs.lockRead("/book",19));assert(!strcmp(call("remove",R"({"file":"/book"})"),"file_in_use"));
  vfs.release(19);assert(!call("read",R"({"file":"/book"})"));assert(result["hex"]=="726f6f742064617461");
+ // Empty adapters do not preallocate file indexes. Metadata grows only for
+ // actual files and is reclaimed, including a rejected data allocation.
+ { MemoryFiles dynamic("dynamic","/dynamic","ram",true,allocate,release);JsonDocument state;dynamic.describe(state.to<JsonObject>());assert(allocations==0&&live==0);
+   for(unsigned i=0;i<40;++i){char name[32];snprintf(name,sizeof name,"/file%u",i);assert(!dynamic.createFile(name));}assert(live>0);for(unsigned i=0;i<40;++i){char name[32];snprintf(name,sizeof name,"/file%u",i);assert(!dynamic.remove(name));}assert(live==0);
+   deny=true;size_t wrote=0;assert(dynamic.write("/denied",0,(const uint8_t*)"data",4,true,wrote));deny=false;FileInfo info;assert(dynamic.stat("/denied",info));assert(live==0);denyFrom=allocations+2;assert(dynamic.write("/data-denied",0,(const uint8_t*)"data",4,true,wrote));denyFrom=0;assert(dynamic.stat("/data-denied",info));assert(live==0);
+ }
+ // All eight providers remain reachable through the bounded control envelope.
+ MemoryFiles extra[]={{"p1","/p1","ram"},{"p2","/p2","ram"},{"p3","/p3","ram"},{"p4","/p4","ram"},{"p5","/p5","ram"},{"p6","/p6","ram"}};for(auto&p:extra)assert(vfs.add(p));
+ unsigned cursor=0,seen=0;for(;;){args.clear();args["cursor"]=cursor;args["limit"]=1;assert(!service.invoke("mounts",args.as<JsonObjectConst>(),result.to<JsonObject>()));assert(result["providers"].size()==1);++seen;cursor=result["next_cursor"];if(!result["more"])break;}assert(seen==8&&cursor==8);assert(call("mounts",R"({"limit":0})"));assert(call("mounts",R"({"cursor":"0"})"));
  std::cout<<"Shared file API preserves binary text, validation-before-effects, leases, exclusive create, resize, flush, rename and 64-bit EOF offsets\n";
 }
