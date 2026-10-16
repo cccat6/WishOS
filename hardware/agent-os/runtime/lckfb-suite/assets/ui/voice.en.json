@@ -108,7 +108,8 @@
           },
           "labelProps": {
             "text": "Describe the app you want",
-            "longMode": "wrap"
+            "longMode": "wrap",
+            "missingGlyph": "replace"
           },
           "id": "message"
         },
@@ -127,7 +128,8 @@
           },
           "labelProps": {
             "text": "Tap Record, then Send when done",
-            "longMode": "wrap"
+            "longMode": "wrap",
+            "missingGlyph": "replace"
           },
           "id": "detail"
         },

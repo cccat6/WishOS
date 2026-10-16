@@ -108,7 +108,8 @@
           },
           "labelProps": {
             "text": "说出你想做的应用",
-            "longMode": "wrap"
+            "longMode": "wrap",
+            "missingGlyph": "replace"
           },
           "id": "message"
         },
@@ -127,7 +128,8 @@
           },
           "labelProps": {
             "text": "点击开始，说完再点发送",
-            "longMode": "wrap"
+            "longMode": "wrap",
+            "missingGlyph": "replace"
           },
           "id": "detail"
         },

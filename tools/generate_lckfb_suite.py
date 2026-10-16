@@ -75,7 +75,13 @@ def header(title,subtitle=None,subtitle_id=None):
  if subtitle:c.append(slot(subtitle,64,32,248,18,11,subtitle_id,color=MUTED))
  return c
 def write(name,nodes):
- page=screen(nodes);save(ASSETS/'ui'/f'{name}.json',page)
+ page=screen(nodes)
+ def external_text(n):
+  id=n.get('id','')
+  if n['type']=='label' and (id in ('answer','message','detail','filename') or (id.startswith(('app','file')) and id.endswith('_title'))):n['labelProps']['missingGlyph']='replace'
+  for c in n.get('children',[]):external_text(c)
+ for n in page['assets']:external_text(n)
+ save(ASSETS/'ui'/f'{name}.json',page)
  # A plain language resource variant; behavior remains the same application.
  en=copy.deepcopy(page)
  def tr(n):

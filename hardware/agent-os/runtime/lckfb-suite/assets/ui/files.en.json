@@ -160,7 +160,8 @@
                   "labelProps": {
                     "text": "",
                     "longMode": "ellipsis",
-                    "metrics": "ink"
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
                   },
                   "id": "file0_title"
                 }
@@ -249,7 +250,8 @@
                   "labelProps": {
                     "text": "",
                     "longMode": "ellipsis",
-                    "metrics": "ink"
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
                   },
                   "id": "file1_title"
                 }
@@ -338,7 +340,8 @@
                   "labelProps": {
                     "text": "",
                     "longMode": "ellipsis",
-                    "metrics": "ink"
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
                   },
                   "id": "file2_title"
                 }

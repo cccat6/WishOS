@@ -108,7 +108,8 @@
           },
           "labelProps": {
             "text": "",
-            "longMode": "wrap"
+            "longMode": "wrap",
+            "missingGlyph": "replace"
           },
           "id": "answer"
         },
