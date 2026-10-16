@@ -56,7 +56,7 @@ public:
   }
   if(!strcmp(m,"read_chunk")){
    if(a.containsKey("limit")&&!a["limit"].is<unsigned>())return "audio_read_limit";unsigned limit=a["limit"]|4u;if(!limit||limit>16)return "audio_read_limit";
-   describe(*s,o);auto array=o["chunks"].to<JsonArray>();for(unsigned i=0;i<limit&&i<s->count;++i){auto&chunk=s->blocks[(s->head+i)%s->capacity];char encoded[((PacketBytes+2)/3)*4+1];base64(chunk.data,chunk.bytes,encoded);auto item=array.add<JsonObject>();item["sequence"]=chunk.sequence;item["samples"]=chunk.samples;sizeText(item,"sample_start",chunk.sampleStart);item["adpcm_b64"]=encoded;if(measureJson(o)>2800){array.remove(array.size()-1);break;}s->offered=std::max(s->offered,chunk.sequence+1);}
+   describe(*s,o);auto array=o["chunks"].to<JsonArray>();for(unsigned i=0;i<limit&&i<s->count;++i){auto&chunk=s->blocks[(s->head+i)%s->capacity];char encoded[((PacketBytes+2)/3)*4+1];base64(chunk.data,chunk.bytes,encoded);auto item=array.add<JsonObject>();item["sequence"]=chunk.sequence;item["samples"]=chunk.samples;sizeText(item,"sample_start",chunk.sampleStart);item["adpcm_b64"]=encoded;if(measureJson(o)>MAX_WIRE-256){array.remove(array.size()-1);break;}s->offered=std::max(s->offered,chunk.sequence+1);}
    o["offered_sequence"]=s->offered;
   }else if(strcmp(m,"read")&&strcmp(m,"ack"))return "unsupported_method";
   describe(*s,o);return nullptr;
