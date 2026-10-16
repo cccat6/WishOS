@@ -47,7 +47,7 @@ static void pollServiceLink(bool suspend=false){
  if(linkPending){
   // A configuration call can arrive on this very RPC channel. Drain its reply
   // before stopping the native transport; never free RpcLink inside dispatch.
-  if(serviceSocket::wsSession&&!serviceSocket::wsSession->stop){serviceRpc.poll(false);if(!serviceRpc.outboundDrained()||uxQueueMessagesWaiting(serviceSocket::wsSession->outgoing))return;serviceSocket::stopWebSocket();}
+  if(serviceSocket::wsSession&&!serviceSocket::wsSession->stop){serviceRpc.poll(false);if(!serviceRpc.outboundDrained()||!serviceSocket::wsSession->outboundDrained())return;serviceSocket::stopWebSocket();}
   if(serviceSocket::wsSession||linkProbe.active())return;serviceRpc.disconnect();linkApplied.set(linkDesired);linkAppliedRevision=linkRevision;linkPending=false;linkClosing=false;linkIndex=linkNext=linkProbeCursor=0;linkRetryAt=now;linkPromote=-1;linkProbeAt=0;linkAnnounced=false;linkError[0]=0;}
  auto config=linkApplied.as<JsonObjectConst>();unsigned count=LinkEndpoints::count(config);if(!count)return;
  uint32_t retry=config["retry_ms"]|5000u,probeInterval=config["probe_interval_ms"]|60000u;
@@ -62,7 +62,7 @@ static void pollServiceLink(bool suspend=false){
  linkEverConnected=true;serviceRpc.poll();if(linkPending)return;
  if(serviceRpc.ready()&&!linkAnnounced){linkAnnounced=true;linkError[0]=0;JsonDocument d;d["endpoint_id"]=LinkEndpoints::id(config,linkIndex);d["index"]=linkIndex;d["revision"]=linkAppliedRevision;core.emit("/services/link","route_changed",d.as<JsonObjectConst>());}
  if(linkProbe.ready()){bool reachable=linkProbe.take();if(linkProbeRevision==linkAppliedRevision&&linkProbeIndex<linkIndex&&reachable)linkPromote=linkProbeIndex;}
- if(linkPromote>=0&&serviceRpc.quiescent(now,config["idle_ms"]|250u)&&!uxQueueMessagesWaiting(socket->incoming)&&!uxQueueMessagesWaiting(socket->outgoing)){unsigned next=linkPromote;linkPromote=-1;closeLink(next,now);return;}
+ if(linkPromote>=0&&serviceRpc.quiescent(now,config["idle_ms"]|250u)&&!uxQueueMessagesWaiting(socket->incoming)&&socket->outboundDrained()){unsigned next=linkPromote;linkPromote=-1;closeLink(next,now);return;}
  if(linkIndex&&probeInterval&&now>=linkProbeAt&&!linkProbe.active()&&linkPromote<0){linkProbeIndex=linkProbeCursor++%linkIndex;linkProbeRevision=linkAppliedRevision;JsonDocument candidate;LinkEndpoints::endpoint(config,linkProbeIndex,candidate.to<JsonObject>());linkProbe.start(candidate.as<JsonObjectConst>());linkProbeAt=now+probeInterval;}
 }
 static const char*linkHandler(const char*m,JsonObjectConst a,JsonObject out){

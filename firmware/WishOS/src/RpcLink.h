@@ -8,6 +8,7 @@ class RpcLink {
 public:
  struct Transport{void*context;bool(*connected)(void*);uint32_t(*generation)(void*);bool(*send)(void*,const uint8_t*,size_t);bool(*receive)(void*,uint8_t*,size_t&);};
  static constexpr size_t FrameBytes=1024,HeaderBytes=12,PayloadBytes=FrameBytes-HeaderBytes;
+ static constexpr size_t FramesPerMessage=(MAX_WIRE+PayloadBytes-1)/PayloadBytes;
 private:
  Core&core_;Transport transport_;const char*boot_;char*message_=nullptr;uint8_t*frame_=nullptr;size_t received_=0,total_=0,sending_=0,sent_=0;uint32_t inbound_=0,outbound_=1,generation_=0;bool linked_=false;uint64_t lastActivity_=0;
  static uint32_t u32(const uint8_t*p){return uint32_t(p[0])|uint32_t(p[1])<<8|uint32_t(p[2])<<16|uint32_t(p[3])<<24;}
@@ -38,7 +39,9 @@ public:
   auto frame=frame_;
   // Backpressure preserves the response. Never execute the next call until its
   // predecessor's response has entered the transport in order.
-  for(unsigned turn=0;turn<4;++turn){
+  // One bounded request/response burst must not yield between fragments just
+  // because a UI render may be scheduled before the next system-loop turn.
+  for(size_t turn=0;turn<2*FramesPerMessage+1;++turn){
    if(sending_){size_t n=std::min(PayloadBytes,sending_-sent_);memcpy(frame,"WOS1",4);put32(frame+4,outbound_);frame[8]=sent_;frame[9]=sent_>>8;frame[10]=sending_;frame[11]=sending_>>8;memcpy(frame+HeaderBytes,message_+sent_,n);
     if(!transport_.send(transport_.context,frame,n+HeaderBytes))return;lastActivity_=core_.now();sent_+=n;if(sent_==sending_){sending_=sent_=0;++outbound_;}continue;
    }
