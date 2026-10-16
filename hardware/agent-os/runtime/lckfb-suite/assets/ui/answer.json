@@ -80,6 +80,20 @@
           ]
         },
         {
+          "type": "image",
+          "placement": {
+            "x": 278,
+            "y": 10,
+            "width": 32,
+            "height": 32
+          },
+          "imageProps": {
+            "src": "../brand/done-11.png",
+            "fit": "contain"
+          },
+          "id": "activity"
+        },
+        {
           "type": "label",
           "placement": {
             "x": 12,
@@ -109,7 +123,8 @@
           "style": {
             "fontSize": 12,
             "lineHeight": 17,
-            "textColor": "#60645B"
+            "textColor": "#60645B",
+            "textAlign": "center"
           },
           "labelProps": {
             "text": "",
@@ -123,7 +138,7 @@
           "placement": {
             "x": 8,
             "y": 196,
-            "width": 148,
+            "width": 96,
             "height": 44
           },
           "layout": {
@@ -147,8 +162,8 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 16,
-                "lineHeight": 21,
+                "fontSize": 14,
+                "lineHeight": 19,
                 "textColor": "#262822"
               },
               "labelProps": {
@@ -161,11 +176,11 @@
         },
         {
           "type": "button",
-          "id": "next",
+          "id": "record",
           "placement": {
-            "x": 164,
+            "x": 112,
             "y": 196,
-            "width": 148,
+            "width": 96,
             "height": 44
           },
           "layout": {
@@ -189,8 +204,50 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 16,
-                "lineHeight": 21,
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "继续说话",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "next",
+          "placement": {
+            "x": 216,
+            "y": 196,
+            "width": 96,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
                 "textColor": "#262822"
               },
               "labelProps": {

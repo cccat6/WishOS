@@ -26,6 +26,7 @@ svg_png(BRAND/'logo.svg',ASSETS/'brand/logo.png',64);svg_png(BRAND/'lockup.svg',
 for phase in ('busy','done'):
  for frame in range(12):
   root=ET.fromstring((BRAND/'loading.svg').read_text());root.attrib['width']='64';root.attrib['height']='64'
+  if phase=='done':root.attrib['viewBox']='48 43 60 60'
   for n in list(root):
    if n.attrib.get('class') not in ('wish-progress','wish-spark'):root.remove(n);continue
    if n.attrib.get('class')=='wish-progress':
@@ -86,8 +87,8 @@ translations={'今天，想做些什么？':'What shall we make today?','对话'
 translations.update({'刷新':'Refresh','文件':'Files','本机设置':'Device options','文件共享':'File sharing','扫码进行完整设置':'Scan to configure','后台地址':'Address','同一局域网内访问':'On the same LAN','等待手机连接':'Waiting for browser','开启配网热点':'Enable setup AP','离开设置？':'Leave settings?','手机仍在连接设备设置':'A browser is connected','离开会断开手机设置会话。':'This disconnects browser settings.','再次长按用户键可强制回桌面。':'Hold user key again to force Home.','继续设置':'Stay','断开并离开':'Leave','全部类型':'All types','文件信息':'File info','点击拍照':'Tap Capture','桌面':'Home','设备状态':'Device status','设备设置':'Settings','点击开始，说完再点发送':'Tap Record, then Send when done','重新打开从15分钟开始':'Reopening resets the timer','上级':'Parent','共享':'Share','帮助':'Help','短按用户键：说话':'Press user key: talk','长按2秒：桌面':'Hold 2s: Home'})
 svg_png(BRAND/'lockup.svg',ASSETS/'brand/lockup-compact.png',176)
 svg_png(ASSETS/'icons/voice.svg',ASSETS/'brand/microphone.png',64)
-def field(text,x,y,w,size=16,id=None,align='left',h=None,wrap=False):
- n=label(text,x,y,w,size,id,h=h,wrap=wrap);n['style']['textAlign']=align;return n
+def field(text,x,y,w,size=16,id=None,align='left',h=None,wrap=False,color=INK):
+ n=label(text,x,y,w,size,id,color=color,h=h,wrap=wrap);n['style']['textAlign']=align;return n
 write('home',[image('../brand/lockup-compact.png',12,6,150,43),slot('未连接 Agent',168,8,140,20,12,'connection','right',MUTED),slot('',168,28,140,24,16,'clock','right',MUTED),label('今天，想做些什么？',12,55,296,16),button('voice','对话',8,84,148,48,'voice',fill='#F7E9DD'),button('apps','应用',164,84,148,48,'apps'),button('device','设备',8,140,148,48,'device'),button('settings','设置',164,140,148,48,'settings'),label('短按说话 · 长按2秒回桌面',12,204,238,12,color=MUTED),button('help','帮助',260,196,52,44,size=14)])
 write('welcome',[image('../brand/logo.png',128,4,64,64),field('欢迎使用 WishOS',12,73,296,23,align='center'),field('短按用户键，与 Agent 对话',12,108,296,16,align='center'),field('触摸图标，打开应用和设置',12,136,296,16,align='center'),field('长按用户键2秒，随时回桌面',12,163,296,15,align='center'),button('ready','进入桌面',64,193,192,44,size=17)])
 for suffix in ('','.en'):
@@ -126,7 +127,7 @@ write('camera',header('相机','点击拍照','status')+[image('../icons/camera.
 write('voice',header('与 Agent 对话')+[image('../brand/microphone.png',16,66,32,32,'activity'),label('说出你想做的应用',60,66,248,20,'message',h=62,wrap=True),label('点击开始，说完再点发送',12,135,296,14,'detail',MUTED,h=40,wrap=True),button('record','开始录音',8,184,304,48,'voice')])
 for suffix in ('','.en'):
  p=ASSETS/'ui'/f'voice{suffix}.json';d=json.loads(p.read_text());d['assets'][0]['children'][-1]['children'][-1]['id']='record_label';save(p,d)
-write('answer',header('与 Agent 对话')+[label('',12,56,296,17,'answer',h=118,wrap=True),label('',12,173,296,12,'page',MUTED,h=18),button('previous','上一页',8,196,148,44,size=16),button('next','下一页',164,196,148,44,size=16)])
+write('answer',header('与 Agent 对话')+[image('../brand/done-11.png',278,10,32,32,'activity'),label('',12,56,296,17,'answer',h=118,wrap=True),field('',12,173,296,12,'page','center',h=18,color=MUTED),button('previous','上一页',8,196,96,44,size=14),button('record','继续说话',112,196,96,44,size=14),button('next','下一页',216,196,96,44,size=14)])
 # Asset paths are ordinary writable files, not compiled UI tables.
 p=BASE/'package.json';package=json.loads(p.read_text());assets=package['assets']
 for file in sorted(ASSETS.rglob('*')):
