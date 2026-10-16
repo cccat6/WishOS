@@ -82,3 +82,10 @@ before submitting an update. Label text and image sources can both use node IDs 
 value keys; image-source updates are suitable for SVG-derived compressed animation
 frames. Keep loading indeterminate unless real progress is known; animate success
 only after completion.
+
+Where advertised, `/sys/ui.font_cache_glyphs` is a system configuration applied
+on the next frame preparation. It controls an optimization, not font coverage or
+allowed text. Defaults come from the selected composition; larger caches consume
+more managed memory. Native display completion may include adapter-specific
+`timings`; discover them on that adapter rather than assuming every screen has
+layout/raster/transfer phases or the S3's measured latency.

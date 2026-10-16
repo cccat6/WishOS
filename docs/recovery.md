@@ -149,7 +149,7 @@ The public host suite passed, including real Lua/LVGL factory-app scenarios,
 cross-owner transient-view replacement, memory admission, committed-frame
 completion, temporary-file retirement, compressed-tail expiry and FAT32/exFAT.
 C3, C6 and S3 builds passed separately. Current application images are 1,809,945,
-3,853,322 and 2,959,783 bytes respectively; these are selected compositions, not
+3,853,446 and 2,960,771 bytes respectively; these are selected compositions, not
 universal OS sizes. The C6 build has little executable headroom and needs explicit
 budget review before adding compiled drivers.
 
@@ -182,8 +182,12 @@ interactive round remain distinct from new desktop/Home interaction acceptance.
 
 The local Hub is paired and connected. Previous real microphone ASR and Codex/MCP
 candidate preparation are separate evidence. A new typed meeting-countdown
-request is now being validated through the real configured Harness; it is not
-the complete new-voice P0 demonstration. Current-app editing/rollback/save-as,
+request completed through the real configured Harness: separate native validation,
+installation and launch actions succeeded, followed by a completed LCD receipt
+with no missing glyphs or VM fault. The app was installed persistently on SD and
+survived the following firmware-only reboot. The user observed that its functions
+worked but reported severe touch/redraw latency. This is not the complete
+new-voice P0 demonstration. Current-app editing/rollback/save-as,
 favorites, sharing and two-physical-display adaptation keep the explicit pending
 statuses in [the acceptance scope](agent-os-plan.md).
 
@@ -198,3 +202,23 @@ same-minute suppression, forward ticks, backward correction and navigation.
 The live S3 showed 01:30 then 01:31 with completed display receipts, matching
 host/device Unix seconds within one second. This is not a deep-sleep oscillator
 or long-term drift characterization.
+
+The countdown's native full-frame baseline was 1,150–1,226 ms (three completed
+receipts). After separating layout/raster/transfer measurement, layout took
+95–97 ms and rasterization 120–124 ms; the remaining latency came mainly from
+waiting for the system loop between small DMA stripes. The S3 LCD binding now
+advances that chain on a native executor with a 6,144-byte task reservation.
+Its immutable frame and small internal DMA buffer stay leased through the final
+IRQ, and application callbacks still run on the event loop. No panel command or
+active transfer is interrupted by application navigation.
+
+Three new real-device completed receipts measured 281, 302 and 302 ms, including
+64–68 ms native transfer. HTTP request-to-observation was 366–556 ms in that probe;
+neither number is a direct physical touch-latency measurement. Twenty further real
+transfers completed without VM fault/reset; each transient native executor
+reservation was released. Physical interaction
+feedback is pending. The UI glyph cache is a declared per-composition setting:
+S3 defaults to 128 entries per face, E6 to 32; allocation remains subject to the
+existing resource policy. A separate 95-character host scenario reduced warm
+font-source reads from 189,952 bytes to zero. It does not by itself explain the
+whole device speedup, which was dominated by the DMA scheduling change.

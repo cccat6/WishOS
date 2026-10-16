@@ -22,7 +22,22 @@ static NativeOperation lcdInitialization(core,"/dev/display",{[](void(*run)(void
  return nullptr;
 },[](void*){lcdReady=lcdPanel&&!*lcdInitError;if(lcdReady)digitalWrite(pins::LCD_BL,LOW);});
 static void startLcdInit(){JsonDocument result;if(auto e=lcdInitialization.start("initialize",result.to<JsonObject>()))copy(lcdInitError,sizeof lcdInitError,e);}
-struct LcdPresentation:DisplayRequest{UiView*view=nullptr;char file[256]{};uint16_t*frame=nullptr;uint8_t*dma=nullptr;unsigned y=0;bool sending=false;};
+// Keep the SPI/DMA chain independent of event-loop polling. One immutable
+// frame and one small internal DMA buffer remain leased until the final IRQ.
+struct LcdTransfer {const uint16_t*frame=nullptr;uint8_t*dma=nullptr;char error[80]{};uint32_t elapsed=0;};
+static LcdTransfer lcdTransfer;
+static NativeOperation lcdTransmission(core,nullptr,{[](void(*run)(void*),void*p){auto entry=new(std::nothrow)LcdTask{run,p};if(!entry)return false;if(xTaskCreate(lcdTask,"wish-lcd-tx",4096,entry,1,nullptr)!=pdPASS){delete entry;return false;}return true;},6144},&lcdTransfer,[](void*p,const std::atomic<bool>&cancel)->const char*{
+ auto&t=*static_cast<LcdTransfer*>(p);t.error[0]=0;t.elapsed=0;if(cancel){copy(t.error,sizeof t.error,"cancelled");return t.error;}auto began=uptime();
+ for(unsigned y=0;y<boardpack::DISPLAY_HEIGHT;y+=8){
+  unsigned rows=std::min(8u,boardpack::DISPLAY_HEIGHT-y);
+  for(unsigned i=0;i<boardpack::DISPLAY_WIDTH*rows;++i){auto pixel=t.frame[y*boardpack::DISPLAY_WIDTH+i];t.dma[2*i]=pixel>>8;t.dma[2*i+1]=pixel;}
+  lcdDmaDone.store(false,std::memory_order_release);auto e=esp_lcd_panel_draw_bitmap(lcdPanel,0,y,boardpack::DISPLAY_WIDTH,y+rows,t.dma);
+  if(e!=ESP_OK){copy(t.error,sizeof t.error,esp_err_to_name(e));return t.error;}
+  while(!lcdDmaDone.load(std::memory_order_acquire))vTaskDelay(1);
+ }
+ t.elapsed=uptime()-began;return nullptr;
+});
+struct LcdPresentation:DisplayRequest{UiView*view=nullptr;char file[256]{};uint16_t*frame=nullptr;uint8_t*dma=nullptr;uint32_t layoutMs=0,rasterMs=0,transferMs=0;};
 static constexpr DisplayComponent lcdComponent{"st7789","lcd","spi",320,240,DisplayEvidence::TransportComplete,"spi_dma","on_demand"};
 struct LcdBinding{
  DisplayBegin readiness(){return lcdInitialization.active()?DisplayBegin::deferred():lcdReady?DisplayBegin{}:DisplayBegin::failed(*lcdInitError?lcdInitError:"display_not_initialized");}
@@ -30,19 +45,20 @@ struct LcdBinding{
   if(!vfs.lockRead(j.file,j.id))return DisplayBegin::failed("asset_lease_capacity");uiLeaseOwner=j.id;
   j.frame=static_cast<uint16_t*>(core.resources().allocate(boardpack::DISPLAY_WIDTH*boardpack::DISPLAY_HEIGHT*2));j.dma=static_cast<uint8_t*>(core.resources().allocate(boardpack::DISPLAY_WIDTH*8*2,ResourceBudget::Region::Internal));
   if(!j.frame||!j.dma)return DisplayBegin::deferred();
-  if(!prepareUi(j.file,*j.view))return Core::containsMethod("ui_memory_budget,resource_busy,bus_busy,spi_busy",uiError)?DisplayBegin::deferred():DisplayBegin::failed(uiError);
+  auto layoutAt=uptime();if(!prepareUi(j.file,*j.view))return Core::containsMethod("ui_memory_budget,resource_busy,bus_busy,spi_busy",uiError)?DisplayBegin::deferred():DisplayBegin::failed(uiError);j.layoutMs=uptime()-layoutAt;
   UiSink sink{j.frame,[](void*ctx,const lv_area_t&a,const uint16_t*pixels){auto frame=static_cast<uint16_t*>(ctx);for(int y=a.y1;y<=a.y2;++y)for(int x=a.x1;x<=a.x2;++x){int px=x,py=y;switch(uiRenderedView.rotation){case 90:px=boardpack::DISPLAY_WIDTH-1-y;py=x;break;case 180:px=boardpack::DISPLAY_WIDTH-1-x;py=boardpack::DISPLAY_HEIGHT-1-y;break;case 270:px=y;py=boardpack::DISPLAY_HEIGHT-1-x;break;}frame[py*boardpack::DISPLAY_WIDTH+px]=pixels[(y-a.y1)*(a.x2-a.x1+1)+x-a.x1];}}};
   int w=uiRenderedView.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,h=uiRenderedView.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT;
-  if(!renderUiRegion({0,0,w-1,h-1},sink))return Core::containsMethod("ui_memory_budget,resource_busy,bus_busy,spi_busy",uiError)?DisplayBegin::deferred():DisplayBegin::failed(uiError);return {};
+  auto rasterAt=uptime();if(!renderUiRegion({0,0,w-1,h-1},sink))return Core::containsMethod("ui_memory_budget,resource_busy,bus_busy,spi_busy",uiError)?DisplayBegin::deferred():DisplayBegin::failed(uiError);j.rasterMs=uptime()-rasterAt;
+  lcdTransfer.frame=j.frame;lcdTransfer.dma=j.dma;lcdTransfer.elapsed=0;JsonDocument started;
+  if(auto e=lcdTransmission.start("transmit",started.to<JsonObject>()))return Core::containsMethod("native_operation_memory_budget,native_task_allocation_failed",e)?DisplayBegin::deferred():DisplayBegin::failed(e);
+  return {};
  }
  DisplayOutcome poll(LcdPresentation&j,uint64_t){
-  if(j.sending){if(!lcdDmaDone.load(std::memory_order_acquire))return {};j.sending=false;j.y+=8;}
-  if(j.y>=boardpack::DISPLAY_HEIGHT)return DisplayOutcome::success(DisplayEvidence::TransportComplete,"spi_dma");
-  for(unsigned i=0;i<boardpack::DISPLAY_WIDTH*8;++i){auto p=j.frame[j.y*boardpack::DISPLAY_WIDTH+i];j.dma[2*i]=p>>8;j.dma[2*i+1]=p;}
-  lcdDmaDone=false;auto e=esp_lcd_panel_draw_bitmap(lcdPanel,0,j.y,boardpack::DISPLAY_WIDTH,j.y+8,j.dma);if(e!=ESP_OK)return DisplayOutcome::failed(esp_err_to_name(e));j.sending=true;return {};
+  lcdTransmission.poll();if(lcdTransmission.active())return {};j.transferMs=lcdTransfer.elapsed;
+  return *lcdTransfer.error?DisplayOutcome::failed(lcdTransfer.error):DisplayOutcome::success(DisplayEvidence::TransportComplete,"spi_dma");
  }
  void suspend(LcdPresentation&j){core.resources().freeAllocation(j.frame);core.resources().freeAllocation(j.dma);j.frame=nullptr;j.dma=nullptr;vfs.release(j.id);uiLeaseOwner=0;}
- void completed(LcdPresentation&j,const DisplayOutcome&r,uint64_t elapsed){vfs.release(j.id);uiLeaseOwner=0;if(r.ok()){copy(uiPresented,sizeof uiPresented,j.file);commitUiGeometry(j.stamp);}auto&receipt=jobs[j.id%8];if(receipt.id==j.id){receipt.complete=true;receipt.ok=r.ok();copy(receipt.state,sizeof receipt.state,r.state());copy(receipt.error,sizeof receipt.error,r.error);}JsonDocument event;r.describe(j,event.to<JsonObject>(),elapsed);core.emit("/dev/display",r.ok()?"completed":"failed",event.as<JsonObjectConst>(),j.owner);if(!presentationState.active())resetUiRenderer();else reapOrphanFonts();}
+ void completed(LcdPresentation&j,const DisplayOutcome&r,uint64_t elapsed){vfs.release(j.id);uiLeaseOwner=0;if(r.ok()){copy(uiPresented,sizeof uiPresented,j.file);commitUiGeometry(j.stamp);}auto&receipt=jobs[j.id%8];if(receipt.id==j.id){receipt.complete=true;receipt.ok=r.ok();copy(receipt.state,sizeof receipt.state,r.state());copy(receipt.error,sizeof receipt.error,r.error);}JsonDocument event;r.describe(j,event.to<JsonObject>(),elapsed);event["timings"]["layout_ms"]=j.layoutMs;event["timings"]["raster_ms"]=j.rasterMs;event["timings"]["transfer_ms"]=j.transferMs;core.emit("/dev/display",r.ok()?"completed":"failed",event.as<JsonObjectConst>(),j.owner);if(!presentationState.active())resetUiRenderer();else reapOrphanFonts();}
  void dispose(LcdPresentation&j){core.resources().freeAllocation(j.frame);core.resources().freeAllocation(j.dma);if(j.view){j.view->~UiView();core.resources().freeAllocation(j.view);}j={};}
 };
 static LcdBinding lcdBinding;

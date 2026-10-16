@@ -9,6 +9,7 @@ static SystemNavigation navigation(core,applications,1,1,0);
 static char appScope[48]="system";
 static constexpr Setting SETTINGS[]={
  Setting{"/sys/ui","font_file","string","\"\"","",0,255}.inSystem().at("next_ui_prepare"),
+ Setting{"/sys/ui","font_cache_glyphs","integer","128","",0,1024}.inSystem().at("next_ui_prepare"),
  {"/dev/display","pending","enum","\"latest\"","latest,fifo,reject"},
  {"/dev/display","prepare_timeout_ms","integer","30000","",1,4294967295.0},
  {"/dev/display","queue_limit","integer","2","",1,4},

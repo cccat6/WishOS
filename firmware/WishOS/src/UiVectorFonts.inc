@@ -1,6 +1,6 @@
 // UI-service implementation: filesystem-backed complete fonts, with faces
 // created only for requested pixel sizes. VFS leases protect live font streams.
-struct UiVectorFace {unsigned size;lv_font_t*font;UiVectorFace*next;};
+struct UiVectorFace {unsigned size,cacheGlyphs;lv_font_t*font;UiVectorFace*next;};
 struct UiVectorFamily {Vfs::Access lease;char path[256]{};UiVectorFace*faces=nullptr;UiVectorFamily*next=nullptr;explicit UiVectorFamily(Vfs&v):lease(v,false){}};
 static UiVectorFamily*uiVectorFamilies=nullptr;
 static unsigned fontBe(const uint8_t*p,unsigned n){unsigned v=0;while(n--)v=(v<<8)|*p++;return v;}
@@ -16,6 +16,7 @@ static bool uiUsesVectorFile(const char*path){for(auto f=uiVectorFamilies;f;f=f-
 static const lv_font_t*vectorFont(const char*path,unsigned size){if(size<8||size>96){uiError="font_size_range";return nullptr;}char full[256];if(!normalizePath(uiBase,path,full,sizeof full)){uiError="font_path";return nullptr;}
  auto family=uiVectorFamilies;while(family&&strcmp(family->path,full))family=family->next;
  if(!family){auto memory=core.resources().allocate(sizeof(UiVectorFamily));if(!memory){uiError="ui_memory_budget";return nullptr;}family=new(memory)UiVectorFamily(vfs);copy(family->path,sizeof family->path,full);const char*error=family->lease.add(full);if(!error)error=validateVectorFont(full);if(error){family->~UiVectorFamily();core.resources().freeAllocation(family);uiError=error;return nullptr;}family->next=uiVectorFamilies;uiVectorFamilies=family;}
- for(auto f=family->faces;f;f=f->next)if(f->size==size)return f->font;
- char qualified[260];snprintf(qualified,sizeof qualified,"V:%s",full);auto font=lv_tiny_ttf_create_file_ex(qualified,size,LV_FONT_KERNING_NONE,32);if(!font){uiError=uiReadError?uiReadError:"font_load_failed";return nullptr;}auto memory=core.resources().allocate(sizeof(UiVectorFace));if(!memory){lv_tiny_ttf_destroy(font);uiError="ui_memory_budget";return nullptr;}auto f=new(memory)UiVectorFace{size,font,family->faces};family->faces=f;return font;
+ unsigned cacheGlyphs=policies.get<unsigned>("/sys/ui","font_cache_glyphs",32);
+ for(auto f=family->faces;f;f=f->next)if(f->size==size&&f->cacheGlyphs==cacheGlyphs)return f->font;
+ char qualified[260];snprintf(qualified,sizeof qualified,"V:%s",full);auto font=lv_tiny_ttf_create_file_ex(qualified,size,LV_FONT_KERNING_NONE,cacheGlyphs);if(!font){uiError=uiReadError?uiReadError:"font_load_failed";return nullptr;}auto memory=core.resources().allocate(sizeof(UiVectorFace));if(!memory){lv_tiny_ttf_destroy(font);uiError="ui_memory_budget";return nullptr;}auto f=new(memory)UiVectorFace{size,cacheGlyphs,font,family->faces};family->faces=f;return font;
 }
