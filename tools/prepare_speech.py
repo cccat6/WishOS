@@ -52,7 +52,7 @@ def prepare(target='esp32c6'):
           'static srmodel_data_t model={'+str(len(files))+',files,data,sizes};','static srmodel_data_t*models[]={&model};',
           'static char infoValue[]='+json.dumps((model/'_MODEL_INFO_').read_text().strip())+';static char*info[]={infoValue};',
           'extern "C" srmodel_list_t*get_static_srmodels(){static srmodel_list_t list{};list.model_name=names;list.model_info=info;list.num=1;list.model_data=models;return &list;}',
-          'extern "C" char*get_model_base_path(){static char empty[]="";return empty;}']
+          'extern "C" char*get_model_base_path(){return nullptr;}']
         (src/'NotesWakeModels.cpp').write_text('\n'.join(lines)+'\n');(src/'NotesWakeModels.h').write_text('#pragma once\n#include "esp_wn_models.h"\n#define WISHOS_WAKE_MODEL "'+model_name+'"\n')
         receipt={str(p.relative_to(library)):hashlib.sha256(p.read_bytes()).hexdigest() for p in library.rglob('*') if p.is_file()}
         (library/'snapshot.json').write_text(json.dumps(receipt,sort_keys=True))

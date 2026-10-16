@@ -93,7 +93,7 @@ def compiled_assets(root,board,assets):
     for key,relative in runtime['compiled_assets'].items():
         if not isinstance(key,str) or not key.startswith('/') or '..' in key.split('/'):raise ValueError('compiled recovery path')
         raw=inside(directory,relative).read_bytes()
-        selected[key]=raw.decode() if Path(relative).suffix in ('.json','.lua','.html') else raw
+        selected[key]=assets[key] if key in ('/applications.json','/defaults.json','/services.json') and key in assets else raw.decode() if Path(relative).suffix in ('.json','.lua','.html') else raw
     selected['/components.json']=assets['/components.json']
     return {**standard,**selected}
 

@@ -1,0 +1,1 @@
+{"format":"notes-driver/1","id":"esp-camera","description":"ESP camera SDK frame lifecycle and bounded reads","platforms":["esp32"],"targets":["esp32s3"],"requires":["i2c"]}

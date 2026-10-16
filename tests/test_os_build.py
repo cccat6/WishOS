@@ -26,9 +26,21 @@ class BuildTests(unittest.TestCase):
   self.assertEqual(catalog.select(['docs/agent-os-plan.md']),[])
   self.assertEqual(catalog.select(['tools/flash_layout.py']),['e6-nova-c6','esp32-c3-runtime','esp32-s3-runtime','lckfb-szpi-esp32s3'])
   self.assertEqual(catalog.select(['hardware/agent-os/references/esp-sparkbot.json']),[])
-  self.assertEqual(catalog.select(['tools/dependencies/esp-sr.json']),['e6-nova-c6'])
+  self.assertEqual(catalog.select(['tools/dependencies/esp-sr.json']),['e6-nova-c6','lckfb-szpi-esp32s3'])
+  self.assertEqual(catalog.select(['tools/dependencies/esp-codecs.json']),['lckfb-szpi-esp32s3'])
   self.assertEqual(catalog.select([],board='esp32-c3-runtime'),['esp32-c3-runtime'])
   with self.assertRaises(ValueError):catalog.select(board='not-a-board')
+
+ def test_device_startup_overrides_and_full_fonts_remain_filesystem_resources(self):
+  root,board,_,_,assets=boardpack.load(ROOT/'hardware/agent-os/boards/lckfb-szpi-esp32s3')
+  compiled=boardpack.compiled_assets(root,board,assets)
+  for name in ('/applications.json','/defaults.json','/services.json'):
+   self.assertEqual(compiled[name],assets[name])
+  name='/fonts/NotesSansSC-Regular.ttf'
+  self.assertIn(name,assets);self.assertNotIn(name,compiled)
+  provenance=json.loads(assets['/fonts/provenance.json'])
+  self.assertEqual(hashlib.sha256(assets[name]).hexdigest(),provenance['sha256'])
+  self.assertGreater(provenance['mapped_characters'],29000)
 
  def test_adding_a_dependency_does_not_rebuild_unrelated_boards(self):
   previous=catalog.dependency_lock()

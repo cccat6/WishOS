@@ -1,0 +1,10 @@
+{
+  "family": "Notes Sans SC",
+  "upstream": "https://github.com/IBM/plex",
+  "distribution": "https://registry.npmjs.org/@ibm/plex-sans-sc/-/plex-sans-sc-1.1.0.tgz",
+  "license": "OFL-1.1",
+  "conversion": "WOFF decoded to sfnt, renamed to avoid reserved font name; complete original character map",
+  "file": "NotesSansSC-Regular.ttf",
+  "sha256": "84c5b46747d5268d52dec1cc76567b4950385434e849570d8d5267cb56ad93ea",
+  "mapped_characters": 29285
+}

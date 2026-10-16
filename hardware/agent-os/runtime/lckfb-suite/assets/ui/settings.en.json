@@ -1,0 +1,283 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 5,
+            "y": 4,
+            "width": 38,
+            "height": 35
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 3,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 4,
+                "width": -14
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 50,
+            "y": 7,
+            "width": 258
+          },
+          "style": {
+            "fontSize": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "Network & services"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 47,
+            "width": 70
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "Wi-Fi"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 88,
+            "y": 45,
+            "width": 220
+          },
+          "style": {
+            "fontSize": 17,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "ssid"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 78,
+            "width": 75
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "后台地址"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 88,
+            "y": 76,
+            "width": 220
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "address"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 108,
+            "width": 70
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "MAC"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 88,
+            "y": 106,
+            "width": 220
+          },
+          "style": {
+            "fontSize": 15,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "mac"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 138,
+            "width": 70
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "Agent"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 88,
+            "y": 136,
+            "width": 220
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "agent"
+        },
+        {
+          "type": "button",
+          "id": "ap",
+          "placement": {
+            "x": 12,
+            "y": 175,
+            "width": 144,
+            "height": 36
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 6,
+                "width": 124
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Wi-Fi setup AP"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "language",
+          "placement": {
+            "x": 164,
+            "y": 175,
+            "width": 144,
+            "height": 36
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 6,
+                "width": 124
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Language"
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 218,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 12,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "hint"
+        }
+      ]
+    }
+  ]
+}

@@ -15,7 +15,24 @@
     "LCD_BL",
     "SD_CLK",
     "SD_CMD",
-    "SD_D0"
+    "SD_D0",
+    "AUDIO_MCLK",
+    "AUDIO_BCLK",
+    "AUDIO_WS",
+    "AUDIO_DIN",
+    "AUDIO_DOUT",
+    "CAM_XCLK",
+    "CAM_D0",
+    "CAM_D1",
+    "CAM_D2",
+    "CAM_D3",
+    "CAM_D4",
+    "CAM_D5",
+    "CAM_D6",
+    "CAM_D7",
+    "CAM_VSYNC",
+    "CAM_HREF",
+    "CAM_PCLK"
   ],
   "pin_constraints": {},
   "display": {
@@ -23,13 +40,18 @@
     "height": 240
   },
   "button_count": 1,
-  "asset_file_limit_bytes": 16384,
+  "asset_file_limit_bytes": 16777216,
   "asset_budget_bytes": 131072,
   "drivers": [
     "esp-wire-i2c",
     "pca9557",
     "qmi8658",
-    "ft6336"
+    "ft6336",
+    "everest-duplex",
+    "esp-wakenet",
+    "energy-activity",
+    "esp-camera",
+    "esp-nimble-external"
   ],
   "optional_drivers": [],
   "dependencies": [

@@ -18,7 +18,7 @@ static bool resolveFile(const char*input,char*full,const char*&relative,FileProv
   if(!normalizePath("/",input,full,256))return false;
   provider=vfs.resolve(full,relative);return provider!=nullptr;
 }
-static FileService fileService(vfs);
+static FileService fileService(vfs,&core);
 static const char*fsHandler(const char*m,JsonObjectConst a,JsonObject o){return fileService.invoke(m,a,o);}
 static JsonDocument sdStatusSnapshot;static SdConfiguration sdRequestedConfiguration;
 static char sdWorkMethod[12]{};

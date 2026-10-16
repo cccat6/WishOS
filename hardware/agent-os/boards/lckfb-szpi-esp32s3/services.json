@@ -2,9 +2,15 @@
   "downloads": {
     "targets": [
       {
+        "provider": "user",
+        "root": "/WishOS/downloads",
+        "quota_bytes": "18446744073709551615",
+        "allow_internal": false
+      },
+      {
         "provider": "flash",
         "root": "/wishos/downloads",
-        "quota_bytes": "8388608",
+        "quota_bytes": "10354688",
         "allow_internal": true
       }
     ]

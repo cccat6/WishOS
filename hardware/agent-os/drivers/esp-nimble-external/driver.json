@@ -1,0 +1,20 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp-nimble-external",
+  "description": "Pinned SDK NimBLE host allocation in PSRAM; controller remains native",
+  "platforms": [
+    "esp32"
+  ],
+  "targets": [
+    "esp32s3"
+  ],
+  "build_hook": "build.py",
+  "build_inputs": [
+    "tools/prepare_nimble_memory.py",
+    "tools/dependencies/nimble-memory.json"
+  ],
+  "flags": [
+    "-DWISHOS_NIMBLE_INTERNAL_WORKSPACE=49152",
+    "-DWISHOS_NIMBLE_EXTERNAL_WORKSPACE=131072"
+  ]
+}

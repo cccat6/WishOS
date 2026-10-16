@@ -1,0 +1,175 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 5,
+            "y": 4,
+            "width": 38,
+            "height": 35
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 3,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 4,
+                "width": -14
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 50,
+            "y": 7,
+            "width": 258
+          },
+          "style": {
+            "fontSize": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "Talk to your Agent"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 54,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 18,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": ""
+          },
+          "id": "answer"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 177,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 13,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": ""
+          },
+          "id": "page"
+        },
+        {
+          "type": "button",
+          "id": "previous",
+          "placement": {
+            "x": 12,
+            "y": 203,
+            "width": 144,
+            "height": 34
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 5,
+                "width": 124
+              },
+              "style": {
+                "fontSize": 15,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Previous"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "next",
+          "placement": {
+            "x": 164,
+            "y": 203,
+            "width": 144,
+            "height": 34
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 5,
+                "width": 124
+              },
+              "style": {
+                "fontSize": 15,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Next"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

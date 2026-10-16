@@ -12,7 +12,7 @@ namespace notesos {
 // by DMA/native I/O. A faulted adapter may remain unavailable until recovery.
 struct DisplayRequest {
  uint32_t id=0,owner=0;PresentationState::Stamp stamp;
- bool latestOnly=true,system=false;
+ bool latestOnly=true,system=false;uint64_t prepareDeadline=0;
 };
 enum class DisplayEvidence:uint8_t {None,TransportComplete,DeviceReady,FrameLatched,Cached};
 inline const char*displayEvidenceName(DisplayEvidence value){
@@ -103,6 +103,7 @@ public:
  void tick(uint64_t now){
   while(count_&&!relevant(pending_[0]))discardFront(DisplayOutcome::superseded("view_changed"));
   if(!active_&&count_){
+   if(pending_[0].prepareDeadline&&now>=pending_[0].prepareDeadline){discardFront(DisplayOutcome::failed("display_prepare_timeout"));return;}
    auto ready=adapter_.readiness();
    if(ready.kind==DisplayBegin::Kind::Deferred)return;
    if(ready.kind==DisplayBegin::Kind::Failed){discardFront(DisplayOutcome::failed(ready.error));return;}

@@ -1,0 +1,199 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "image",
+          "placement": {
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 240
+          },
+          "imageProps": {
+            "src": "../brand/logo.png"
+          },
+          "id": "frame"
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 43
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "padding": 0
+          }
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 0,
+            "y": 132,
+            "width": 320,
+            "height": 108
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "padding": 0,
+            "bgOpacity": 210
+          }
+        },
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 5,
+            "y": 4,
+            "width": 38,
+            "height": 35
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 3,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 4,
+                "width": -14
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 50,
+            "y": 7,
+            "width": 258
+          },
+          "style": {
+            "fontSize": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "相机"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 140,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "正在准备相机"
+          },
+          "id": "status"
+        },
+        {
+          "type": "button",
+          "id": "capture",
+          "placement": {
+            "x": 12,
+            "y": 197,
+            "width": 144,
+            "height": 36
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 6,
+                "width": 124
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "拍照"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "save",
+          "placement": {
+            "x": 164,
+            "y": 197,
+            "width": 144,
+            "height": 36
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 6,
+                "width": 124
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "保存到 SD"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

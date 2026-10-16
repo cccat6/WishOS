@@ -27,7 +27,7 @@ static const NativeGlyph *glyph(uint32_t code,uint8_t size){
   size_t lo=0,hi=sizeof(NATIVE_GLYPHS)/sizeof(NATIVE_GLYPHS[0]);const uint32_t key=(uint32_t(size)<<21)|code;
   while(lo<hi){const size_t mid=(lo+hi)/2;const auto &g=NATIVE_GLYPHS[mid];const uint32_t k=(uint32_t(g.fontSize())<<21)|g.code;if(k<key)lo=mid+1;else hi=mid;}
   if(lo<sizeof(NATIVE_GLYPHS)/sizeof(NATIVE_GLYPHS[0])&&NATIVE_GLYPHS[lo].code==code&&NATIVE_GLYPHS[lo].fontSize()==size)return &NATIVE_GLYPHS[lo];
-  return code==0x25a1?nullptr:glyph(0x25a1,size);
+  return nullptr;
 }
 // Trusted generated tables: each glyph restarts at a byte boundary and yields
 // its exact raw/LZ4 payload without a shared cache or heap allocation.

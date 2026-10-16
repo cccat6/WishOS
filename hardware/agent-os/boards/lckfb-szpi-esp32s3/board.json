@@ -13,7 +13,24 @@
     "LCD_BL": 42,
     "SD_CLK": 47,
     "SD_CMD": 48,
-    "SD_D0": 21
+    "SD_D0": 21,
+    "AUDIO_MCLK": 38,
+    "AUDIO_BCLK": 14,
+    "AUDIO_WS": 13,
+    "AUDIO_DIN": 12,
+    "AUDIO_DOUT": 45,
+    "CAM_XCLK": 5,
+    "CAM_D0": 16,
+    "CAM_D1": 18,
+    "CAM_D2": 8,
+    "CAM_D3": 17,
+    "CAM_D4": 15,
+    "CAM_D5": 6,
+    "CAM_D6": 4,
+    "CAM_D7": 9,
+    "CAM_VSYNC": 3,
+    "CAM_HREF": 46,
+    "CAM_PCLK": 7
   },
   "hardware": {
     "i2c_hz": 100000,
@@ -28,7 +45,7 @@
     "height": 240
   },
   "resources": {
-    "heap_reserve_bytes": 32768,
+    "heap_reserve_bytes": 24576,
     "external_heap_reserve_bytes": 262144,
     "default_vm_memory_bytes": 98304,
     "application_memory": "auto",

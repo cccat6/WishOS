@@ -107,6 +107,7 @@ build/os-ui/notes_lua_test
 build/os-ui/notes_callback_test
 build/os-ui/notes_audio_test
 build/os-ui/notes_sensor_test
+build/os-ui/notes_lckfb_suite_test
 build/os-ui/notes_input_test
 build/os-ui/notes_actuator_test
 build/os-ui/notes_memory_test

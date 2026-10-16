@@ -10,7 +10,9 @@ class SystemNavigation {
 public:
  SystemNavigation(Core&c,Applications&a,uint32_t available,uint32_t home,uint32_t voice):core_(c),apps_(a),available_(available),home_(home),voice_(voice){}
  void poll(uint32_t raw,uint64_t now){raw&=available_;if(raw!=candidate_){candidate_=raw;changed_=now;}if(now-changed_>=debounceMs_)stable_=candidate_;
-  bool home=home_&&(stable_&home_)==home_,voice=voice_&&(stable_&voice_)==voice_;
+  // A release awaiting debounce must never mature an old held action after
+  // the event loop was busy rendering or loading a resource.
+  bool home=home_&&(stable_&home_)==home_&&(candidate_&home_)==home_,voice=voice_&&(stable_&voice_)==voice_&&(candidate_&voice_)==voice_;
   if(home&&!homeHeld_){homeAt_=now;homeFired_=false;}if(voice&&!voiceHeld_){voiceAt_=now;voiceFired_=false;}
   if(home&&!homeFired_&&now-homeAt_>=homeMs_){homeFired_=true;apps_.requestHome();}
   else if(voice&&!voiceFired_&&!homeFired_&&now-voiceAt_>=voiceMs_){voiceFired_=true;apps_.requestVoice();}

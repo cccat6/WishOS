@@ -1,0 +1,272 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "image",
+          "placement": {
+            "x": 4,
+            "y": 0,
+            "width": 208,
+            "height": 59
+          },
+          "imageProps": {
+            "src": "../brand/lockup.png"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 215,
+            "y": 12,
+            "width": 100
+          },
+          "style": {
+            "fontSize": 12,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "Agent not connected"
+          },
+          "id": "connection"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 253,
+            "y": 34,
+            "width": 64
+          },
+          "style": {
+            "fontSize": 15,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": ""
+          },
+          "id": "clock"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 61,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 18,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "What shall we make today?"
+          }
+        },
+        {
+          "type": "button",
+          "id": "voice",
+          "placement": {
+            "x": 12,
+            "y": 87,
+            "width": 144,
+            "height": 52
+          },
+          "style": {
+            "bgColor": "#F7E9DD",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 12,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/voice.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 13,
+                "width": 92
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Talk"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "apps",
+          "placement": {
+            "x": 164,
+            "y": 87,
+            "width": 144,
+            "height": 52
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 12,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/apps.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 13,
+                "width": 92
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Apps"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "device",
+          "placement": {
+            "x": 12,
+            "y": 147,
+            "width": 144,
+            "height": 52
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 12,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/device.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 13,
+                "width": 92
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Device"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "settings",
+          "placement": {
+            "x": 164,
+            "y": 147,
+            "width": 144,
+            "height": 52
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 12,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/settings.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 13,
+                "width": 92
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Settings"
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 214,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "Press to talk · Hold 2s for Home"
+          }
+        }
+      ]
+    }
+  ]
+}

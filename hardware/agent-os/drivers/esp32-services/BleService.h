@@ -1,4 +1,16 @@
 // Included in the BSP namespace. GATT/HID are compiled protocols; applications choose their data.
+// SDK workspace admission is a native adapter default, independently of the
+// system's configurable free-heap reserve. A selected SDK allocator can override
+// these estimates; MCU family names do not select an allocation policy.
+#ifndef WISHOS_NIMBLE_INTERNAL_WORKSPACE
+#define WISHOS_NIMBLE_INTERNAL_WORKSPACE 98304
+#endif
+#ifndef WISHOS_NIMBLE_EXTERNAL_WORKSPACE
+#define WISHOS_NIMBLE_EXTERNAL_WORKSPACE 0
+#endif
+static uint32_t bleInternalMemory=0,bleExternalMemory=0;
+static void releaseBleMemory(){core.resources().release(bleInternalMemory);core.resources().release(bleExternalMemory);bleInternalMemory=bleExternalMemory=0;}
+static const char*admitBleMemory(){if(bleInternalMemory)return nullptr;bleInternalMemory=core.resources().acquire(WISHOS_NIMBLE_INTERNAL_WORKSPACE,0,ResourceBudget::Region::Internal);if(!bleInternalMemory)return "ble_memory_budget";if(WISHOS_NIMBLE_EXTERNAL_WORKSPACE){bleExternalMemory=core.resources().acquire(WISHOS_NIMBLE_EXTERNAL_WORKSPACE,0,ResourceBudget::Region::External);if(!bleExternalMemory){releaseBleMemory();return "ble_memory_budget";}}return nullptr;}
 static uint32_t bleServiceOwner=0;static bool bleStopOnRelease=false;
 static uint32_t nextBleOperation=1,bleScanId=0,bleScanOwner=0;
 static std::atomic<bool>bleScanning{false};static unsigned bleScanCount=0,bleScanLimit=16;
@@ -49,7 +61,7 @@ static const char*bleRuntimeHandler(const char*m,JsonObjectConst a,JsonObject ou
  }
  if(!strcmp(m,"scan_results")){
    if(!bleCentral)return "ble_central_required";if(bleScanning)return "scan_in_progress";auto result=BLEDevice::getScan()->getResults();auto items=out["devices"].to<JsonArray>();
-   for(int i=0;i<result->getCount()&&i<16;++i){auto device=result->getDevice(i);auto item=items.add<JsonObject>();item["address"]=device.getAddress().toString();item["address_type"]=device.getAddressType();item["name"]=device.getName();item["rssi"]=device.getRSSI();}return nullptr;
+   for(int i=0;i<result->getCount()&&i<int(bleScanLimit);++i){auto device=result->getDevice(i);auto item=items.add<JsonObject>();item["address"]=device.getAddress().toString();item["address_type"]=device.getAddressType();item["name"]=device.getName();item["rssi"]=device.getRSSI();}return nullptr;
  }
  if(!strcmp(m,"scan_stop")){if(bleScanning){if(core.callerOwner()&&bleScanOwner!=core.callerOwner())return "ble_scan_owned_by_other";if(!BLEDevice::getScan()->stop())return "ble_scan_stop_failed";bleScanComplete(BLEScanResults{});}return nullptr;}
  if(!strcmp(m,"stop")){if(bleOperation)return "ble_operation_active";stopBleNative();return nullptr;}
@@ -72,7 +84,7 @@ static const char*bleRuntimeHandler(const char*m,JsonObjectConst a,JsonObject ou
    uint32_t timeout=a["timeout_ms"]|10000u,type=a["address_type"]|0u;if(timeout<100||timeout>30000||type>1)return "ble_connection_range";
    auto job=new(std::nothrow) BleOperation;if(!job)return "memory_low";strcpy(job->op,m);if(!strcmp(m,"connect"))strcpy(job->address,addr);else{strcpy(job->service,svc);strcpy(job->characteristic,chr);}job->timeout=timeout;job->addressType=type;
    if(!strcmp(m,"gatt_write")&&!unhex(a["hex"]|"",job->bytes,sizeof job->bytes,job->length)){delete job;return "ble_data_limit";}
-   job->reservation=core.resources().acquire(sizeof(BleOperation)+8192,core.callerOwner());if(!job->reservation){delete job;return "ble_memory_budget";}job->id=nextBleOperation++;job->owner=core.callerOwner();auto operationId=job->id,reservation=job->reservation;
+   job->reservation=core.resources().acquire(sizeof(BleOperation)+8192,0);if(!job->reservation){delete job;return "ble_memory_budget";}job->id=nextBleOperation++;job->owner=core.callerOwner();auto operationId=job->id,reservation=job->reservation;
    bleOperation=true;if(xTaskCreate(bleOperationTask,"notes-ble",6144,job,1,nullptr)!=pdPASS){bleOperation=false;delete job;return "task_allocation_failed";}core.resources().used(reservation,sizeof(BleOperation)+8192);out["state"]="accepted";out["operation_id"]=operationId;return nullptr;
  }else if(!strcmp(m,"write")){
    unsigned slot=a["index"]|0u;if(!bleRunning||slot>=bleInputCount)return "ble_characteristic_missing";
@@ -91,17 +103,20 @@ static BleConfiguration bleConfiguration;static JsonDocument bleActiveProfile;st
 static bool persistBleConfiguration(const char*data,size_t n){return preferences.putString("ble_config",data)==n;}
 static JsonDocument blePendingProfile;static char bleLifecycleMethod[12]{};static uint32_t blePendingRevision=0;
 struct BleLifecycleEntry{void(*run)(void*);void*context;};static BleLifecycleEntry bleLifecycleEntry;
+static RetainedNativeWorker bleLifecycleWorker(core.resources(),{
+ [](void(*run)(void*),void*context){bleLifecycleEntry={run,context};return xTaskCreate([](void*){auto e=bleLifecycleEntry;e.run(e.context);vTaskDelete(nullptr);},"notes-ble-life",6144,nullptr,1,nullptr)==pdPASS;},8192});
 static NativeOperation bleLifecycle(core,"/dev/ble",{
- [](void(*run)(void*),void*context){bleLifecycleEntry={run,context};return xTaskCreate([](void*){auto e=bleLifecycleEntry;e.run(e.context);vTaskDelete(nullptr);},"notes-ble-life",6144,nullptr,1,nullptr)==pdPASS;},8192},nullptr,
- [](void*,const std::atomic<bool>&cancel)->const char*{if(cancel)return "cancelled";if(!strcmp(bleLifecycleMethod,"stop")||!strcmp(bleLifecycleMethod,"restart"))stopBleNative();if(!strcmp(bleLifecycleMethod,"stop"))return nullptr;JsonDocument result;return bleRuntimeHandler("start",blePendingProfile.as<JsonObjectConst>(),result.to<JsonObject>());},
- [](void*){if(bleRunning){bleActiveProfile.set(blePendingProfile);bleActiveConfigRevision=blePendingRevision;}else bleActiveProfile.clear();blePendingProfile.clear();bleOperation=false;},&nextBleOperation);
+ [](void(*run)(void*),void*context){return bleLifecycleWorker.submit(run,context);},0},nullptr,
+ [](void*,const std::atomic<bool>&cancel)->const char*{if(cancel)return "cancelled";if(!strcmp(bleLifecycleMethod,"stop")||!strcmp(bleLifecycleMethod,"restart"))stopBleNative();if(!strcmp(bleLifecycleMethod,"stop"))return nullptr;JsonDocument result;auto error=bleRuntimeHandler("start",blePendingProfile.as<JsonObjectConst>(),result.to<JsonObject>());if(cancel){stopBleNative();return "cancelled";}return error;},
+ [](void*){if(bleRunning){bleActiveProfile.set(blePendingProfile);bleActiveConfigRevision=blePendingRevision;core.resources().used(bleInternalMemory,WISHOS_NIMBLE_INTERNAL_WORKSPACE);core.resources().used(bleExternalMemory,WISHOS_NIMBLE_EXTERNAL_WORKSPACE);}else{bleActiveProfile.clear();releaseBleMemory();}blePendingProfile.clear();bleOperation=false;},&nextBleOperation);
 static const char*beginBleLifecycle(const char*,JsonObjectConst,JsonObject);
 static bool bleLifecycleActive(){return bleLifecycle.active();}
 static void pollBleLifecycle(){bleLifecycle.poll();if(bleStopOnRelease&&!bleOperation){bleStopOnRelease=false;JsonDocument out;beginBleLifecycle("stop",JsonObjectConst(),out.to<JsonObject>());}}
 static const char*beginBleLifecycle(const char*m,JsonObjectConst profile,JsonObject out){
  if(bleOperation||bleLifecycle.active())return "ble_operation_active";if(!strcmp(m,"start")&&bleRunning)return "ble_already_running";
- blePendingProfile.set(profile);if(blePendingProfile.overflowed()){blePendingProfile.clear();return "memory_low";}copy(bleLifecycleMethod,sizeof bleLifecycleMethod,m);blePendingRevision=bleConfiguration.profileRevision();bleOperation=true;
- if(auto e=bleLifecycle.start(m,out)){bleOperation=false;blePendingProfile.clear();return e;}if(strcmp(m,"stop"))bleServiceOwner=core.callerOwner();return nullptr;
+ bool admittedNow=false;if(strcmp(m,"stop")&&!bleInternalMemory){if(auto error=admitBleMemory())return error;admittedNow=true;}
+ blePendingProfile.set(profile);if(blePendingProfile.overflowed()){blePendingProfile.clear();if(admittedNow)releaseBleMemory();return "memory_low";}copy(bleLifecycleMethod,sizeof bleLifecycleMethod,m);blePendingRevision=bleConfiguration.profileRevision();bleOperation=true;
+ if(auto e=bleLifecycle.start(m,out)){bleOperation=false;blePendingProfile.clear();if(admittedNow)releaseBleMemory();return e;}if(strcmp(m,"stop"))bleServiceOwner=core.callerOwner();return nullptr;
 }
 static void stopBle(){if(bleOperation)return;JsonDocument a,o;beginBleLifecycle("stop",a.as<JsonObjectConst>(),o.to<JsonObject>());}
 static const char*bleHandler(const char*m,JsonObjectConst a,JsonObject out){

@@ -1,5 +1,6 @@
 #pragma once
 #include "Core.h"
+#include "RetainedNativeWorker.h"
 #include <atomic>
 namespace notesos {
 // A compiled driver may place a blocking SDK operation on its native worker.
@@ -7,7 +8,7 @@ namespace notesos {
 // and cancel flag; it never runs application code or dispatches resource calls.
 class NativeOperation {
 public:
- struct Executor {bool(*launch)(void(*)(void*),void*)=nullptr;size_t memoryBytes=0;};
+ struct Executor {bool(*launch)(void(*)(void*),void*)=nullptr;size_t memoryBytes=0;bool(*launchOn)(void*,void(*)(void*),void*)=nullptr;};
  using Work=const char*(*)(void*,const std::atomic<bool>&);
  using Settled=void(*)(void*);
 private:
@@ -24,13 +25,15 @@ public:
  const std::atomic<bool>&cancellation()const{return cancel_;}
  const char*start(const char*method,JsonObject out){
   if(active())return "operation_active";if(!registered_)return "owner_hook_capacity";
-  if(!executor_.launch)return "native_executor_unavailable";
+  if(!executor_.launch&&!executor_.launchOn)return "native_executor_unavailable";
   auto&next=sequence_?*sequence_:next_;
   if(!method||strlen(method)>=sizeof method_||!next)return "operation_identity_limit";
-  auto reserved=core_.resources().acquire(executor_.memoryBytes,core_.callerOwner());if(!reserved)return "native_operation_memory_budget";
+  // Zero means the compiled executor already owns its task resources.
+  // A running native lease survives VM exit until this operation settles.
+  auto reserved=executor_.memoryBytes?core_.resources().acquire(executor_.memoryBytes,0):0;if(executor_.memoryBytes&&!reserved)return "native_operation_memory_budget";
   bool previousCancel=cancel_.load();uint32_t previous=id_,previousOwner=owner_;char priorMethod[sizeof method_],priorError[sizeof error_];memcpy(priorMethod,method_,sizeof method_);memcpy(priorError,error_,sizeof error_);
   reservation_=reserved;id_=next++;owner_=core_.callerOwner();copy(method_,sizeof method_,method);error_[0]=0;cancel_=done_=false;running_=true;
-  if(!executor_.launch(run,this)){running_=false;cancel_=previousCancel;core_.resources().release(reservation_);reservation_=0;id_=previous;owner_=previousOwner;memcpy(method_,priorMethod,sizeof method_);memcpy(error_,priorError,sizeof error_);return "native_task_allocation_failed";}
+  if(!(executor_.launchOn?executor_.launchOn(context_,run,this):executor_.launch(run,this))){running_=false;cancel_=previousCancel;core_.resources().release(reservation_);reservation_=0;id_=previous;owner_=previousOwner;memcpy(method_,priorMethod,sizeof method_);memcpy(error_,priorError,sizeof error_);return "native_task_allocation_failed";}
   core_.resources().used(reservation_,executor_.memoryBytes);out["operation_id"]=id_;out["state"]="running";return nullptr;
  }
  void poll(){if(!active()||!done_.load(std::memory_order_acquire))return;

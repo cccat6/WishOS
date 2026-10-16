@@ -47,7 +47,11 @@ public:
   if(!a["engine"].is<const char*>()||(!a["parameters"].isNull()&&!a["parameters"].is<JsonObjectConst>()))return "speech_configuration";
   SpeechBackend*engine=nullptr;for(size_t i=0;i<count_;++i)if(!strcmp(a["engine"],backends_[i]->id()))engine=backends_[i];if(!engine)return "speech_engine_not_found";
   auto args=a["parameters"].as<JsonObjectConst>();if(auto e=engine->validate(args))return e;
-  if(auto e=engine->start(args,core_.resources()))return e;if(auto e=acquire_(engine->rate(),engine->inputRoles())){engine->stop();return e;}
+  // Admit the capture transport before constructing a model. Its native worker
+  // and the model share the same resource budget; a rejected clock/layout must
+  // not transiently construct a recognition engine.
+  if(auto e=acquire_(engine->rate(),engine->inputRoles()))return e;
+  if(auto e=engine->start(args,core_.resources())){release_();return e;}
   processingUs_=processingSamples_=peakUs_=0;active_=engine;owner_=core_.callerOwner();session_=next_++;o["session_id"]=session_;o["state"]="started";core_.emit(path_,"started",o,owner_);return nullptr;
  }
 };

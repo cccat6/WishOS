@@ -27,6 +27,20 @@ uint32_t millis(){static uint32_t t=0;return ++t;}
 namespace notesos {
 static Core core;static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));static char appScope[48]="system";static Vfs vfs;static SystemFiles systemFiles;class CountedFiles:public MemoryFiles {public:bool failOnce=false;size_t largestRead=0,totalRead=0,readOps=0;CountedFiles():MemoryFiles("ram","/storage/ram","ram"){}const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{if(failOnce){failOnce=false;got=0;return "spi_busy";}++readOps;largestRead=std::max(largestRead,n);auto e=MemoryFiles::read(p,at,b,n,got);totalRead+=got;return e;}};
 static CountedFiles files;
+class CompleteFontFiles:public FileProvider {
+public:
+ size_t readBytes=0,largestRead=0;bool failOnce=false;
+ CompleteFontFiles():FileProvider("fonts","/fonts","host_fixture",true,false,false){}
+ bool available()const override{return true;}
+ void describe(JsonObject o)const override{o["filesystem"]="host_font_fixture";}
+ const char*write(const char*,uint64_t,const uint8_t*,size_t,bool,size_t&w)override{w=0;return "read_only";}
+ const char*list(const char*,uint32_t,uint32_t,JsonObject)override{return "unsupported_operation";}
+ const char*remove(const char*)override{return "read_only";}
+ const char*mkdir(const char*)override{return "read_only";}
+ const char*rename(const char*,const char*)override{return "read_only";}
+ const char*stat(const char*path,FileInfo&info)override{if(strcmp(path,"/complete.ttf"))return "not_found";std::ifstream f("hardware/agent-os/runtime/fonts/NotesSansSC-Regular.ttf",std::ios::binary|std::ios::ate);if(!f)return "not_found";info={uint64_t(f.tellg()),false};return nullptr;}
+ const char*read(const char*path,uint64_t at,uint8_t*out,size_t n,size_t&got)override{got=0;if(failOnce){failOnce=false;return "font_fixture_io";}FileInfo info;if(auto e=stat(path,info))return e;std::ifstream f("hardware/agent-os/runtime/fonts/NotesSansSC-Regular.ttf",std::ios::binary);f.seekg(at);f.read(reinterpret_cast<char*>(out),n);got=f.gcount();readBytes+=got;largestRead=std::max(largestRead,n);return nullptr;}
+};static CompleteFontFiles completeFonts;
 static bool resolveFile(const char*in,char*full,const char*&rel,FileProvider*&p){if(!normalizePath("/",in,full,256))return false;p=vfs.resolve(full,rel);return p;}
 #include "UiService.h"
 #include "../../hardware/agent-os/compositions/agentic-notes-e6/E6UiSurface.inc"
@@ -183,6 +197,37 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
    auto next=core.acquireOwner();a.clear();a["id"]="custom";a["file"]="/storage/ram/font.nmf";a["size"]=22;assert(!core.invoke("/sys/ui","font_register",a.as<JsonObjectConst>(),r.to<JsonObject>(),next));a.clear();a["path"]="/storage/ram/font-ui.json";assert(!core.invoke("/sys/ui","open",a.as<JsonObjectConst>(),r.to<JsonObject>(),next));auto nextView=r["view_id"].as<uint32_t>();assert(prepareUi("/storage/ram/font-ui.json",uiDocument(nextView)->view));for(const auto&f:fontFiles)assert(!f.font||f.owner!=old);assert(renderUiBand(0,stripe));
    core.releaseOwner(next);assert(!vfs.canMutate("/storage/ram/font.nmf"));vfs.release(uiLeaseOwner);uiLeaseOwner=0;resetUiRenderer();assert(vfs.canMutate("/storage/ram/font.nmf"));assert(core.resources().promised()==0);
  }
+ // Pointer input addresses rendered element IDs rather than app-specific
+ // coordinate tables, including rotation and a not-yet-presented replacement.
+ const char*interactive=R"({"version":"0.1.1","assets":[{"type":"viewScreen","id":"canvas","style":{"padding":0},"children":[{"type":"button","id":"launch","placement":{"x":10,"y":10,"width":100,"height":80},"style":{"padding":0},"children":[{"type":"label","id":"caption","labelProps":{"text":"Open"}}]}]}]})";
+ assert(!files.write("/hit.json",0,(const uint8_t*)interactive,strlen(interactive),true,wrote));a.clear();a["path"]="/storage/ram/hit.json";a["history"]="replace";assert(!uiHandler("open",a.as<JsonObjectConst>(),r.to<JsonObject>()));auto hitView=r["view_id"].as<uint32_t>();assert(prepareUi("/storage/ram/hit.json",uiDocument(hitView)->view));
+ a.clear();a["x"]=20;a["y"]=20;assert(!strcmp(uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()),"presentation_not_ready"));presentationState.completed(presentationState.stamp(hitView));commitUiGeometry(presentationState.stamp(hitView));assert(!uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["id"]=="caption"&&r["ids"][1]=="launch");
+  // A new model can be admitted while input still uses immutable geometry
+ // from the last completed frame, until the native adapter commits its successor.
+ auto shownRevision=uiVisibleStamp.revision;a.clear();a["view_id"]=hitView;a["values"]["caption"]="Changed";assert(!uiHandler("update",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/storage/ram/hit.json",uiDocument(hitView)->view));a.clear();a["x"]=20;a["y"]=20;assert(!uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["ids"][1]=="launch"&&r["revision"]==shownRevision);presentationState.completed(presentationState.stamp(hitView));commitUiGeometry(presentationState.stamp(hitView));
+ a.clear();a["view_id"]=hitView;a["rotation"]=90;assert(!uiHandler("update",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/storage/ram/hit.json",uiDocument(hitView)->view));presentationState.completed(presentationState.stamp(hitView));commitUiGeometry(presentationState.stamp(hitView));a.clear();a["x"]=boardpack::DISPLAY_WIDTH-21;a["y"]=20;assert(!uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["ids"][1]=="launch"&&r["x"]==20&&r["y"]==20);a["x"]=-1;assert(!strcmp(uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()),"pointer_coordinate_range"));
+ a.clear();a["view_id"]=hitView;assert(!uiHandler("close",a.as<JsonObjectConst>(),r.to<JsonObject>()));resetUiRenderer();assert(core.resources().promised()==0);
+ // A complete 8 MiB font remains a filesystem resource. Previously absent
+ // Chinese characters and non-preset sizes use its outlines, not compiled text.
+ a.clear();assert(!uiHandler("capabilities",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["external_fonts"]=="truetype-file,nmf1-indexed-1bpp"&&r["scalable_font_sizes"]["minimum"]==8&&r["scalable_font_sizes"]["maximum"]==96);
+ vfs.add(completeFonts);const char*fullFontUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"label","style":{"font":"/fonts/complete.ttf","fontSize":19},"labelProps":{"text":"实验触摸录音 阈值蝴蝶龘"}},{"type":"label","style":{"font":"/fonts/complete.ttf","fontSize":23},"labelProps":{"text":"实验触摸录音 阈值蝴蝶龘"}},{"type":"label","style":{"font":"/fonts/complete.ttf","fontSize":29},"labelProps":{"text":"实验触摸录音 阈值蝴蝶龘"}}]}]})";
+ assert(!nm::localTextSupported("阈值蝴蝶龘",24));assert(!files.write("/complete-font-ui.json",0,reinterpret_cast<const uint8_t*>(fullFontUi),strlen(fullFontUi),true,wrote));
+ assert(prepareUi("/storage/ram/complete-font-ui.json"));for(int x=0;x<480;x+=16)assert(renderUiBand(x,stripe));std::cerr<<"Full font: missing="<<uiMissingGlyphs<<" largest="<<completeFonts.largestRead<<" read="<<completeFonts.readBytes<<" live="<<uiMemoryUsed()<<"\n";assert(uiMissingGlyphs==0&&completeFonts.largestRead<=4096&&completeFonts.readBytes<1048576);assert(!vfs.canMutate("/fonts/complete.ttf"));
+ JsonDocument fontPolicy;fontPolicy["changes"][0]["resource"]="/sys/ui";fontPolicy["changes"][0]["settings"]["font_file"]="/fonts/complete.ttf";assert(!policies.apply(fontPolicy.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));assert(renderUiBand(0,stripe)&&uiMissingGlyphs==0);
+ a.clear();a["id"]="whole-family";a["file"]="/fonts/complete.ttf";assert(!uiHandler("font_register",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(!strcmp(uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()),"font_in_use"));
+ fontPolicy["changes"][0]["settings"]["font_file"]="";assert(!policies.apply(fontPolicy.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));assert(!uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(vfs.canMutate("/fonts/complete.ttf"));
+ completeFonts.failOnce=true;auto kept=uiRoot;assert(!prepareUi("/storage/ram/complete-font-ui.json"));assert(uiRoot==kept&&!strcmp(uiError,"font_fixture_io")&&vfs.canMutate("/fonts/complete.ttf"));
+ size_t fontBoundaries=0;for(size_t pass=0;pass==0||pass<=fontBoundaries;++pass){uiFailAt=SIZE_MAX;assert(prepareUi("/system/ui/home.json"));kept=uiRoot;uiAllocCalls=0;uiFailAt=pass?pass-1:SIZE_MAX;bool accepted=prepareUi("/storage/ram/complete-font-ui.json");if(!pass)fontBoundaries=uiAllocCalls;uiFailAt=SIZE_MAX;if(!accepted)assert(uiRoot==kept);assert(prepareUi("/system/ui/home.json"));assert(vfs.canMutate("/fonts/complete.ttf"));}
+ assert(prepareUi("/storage/ram/complete-font-ui.json"));JsonDocument fontMemory;fontMemory["memory_limit_bytes"]=uint32_t(core.resources().promised()+1);assert(!core.resources().configure(fontMemory.as<JsonObjectConst>()));assert(!renderUiBand(32,stripe));assert(!strcmp(uiError,"ui_memory_budget"));fontMemory["memory_limit_bytes"]=nullptr;assert(!core.resources().configure(fontMemory.as<JsonObjectConst>()));assert(renderUiBand(32,stripe));
+ resetUiRenderer();assert(core.resources().promised()==0);std::cout<<"Complete font streaming, arbitrary sizes, default selection, I/O rejection and font allocation rollback passed\n";
  std::cout<<"Full-screen image bytes="<<bin.size()<<", largest provider read="<<files.largestRead<<", image reads="<<imageReadBytes<<", image read calls="<<imageReadOps<<"\n";
- std::cout<<"LVGL runtime-loaded UI, native stripe render, VFS hot replacement, refresh/back history passed\n";
+ // An implicit system replacement must not inherit a foreground VM's view.
+ // Repeated owner/system replacements release document slots and allocations.
+ {for(unsigned i=0;i<PresentationState::Capacity;++i){auto id=presentationState.at(i).id;if(id)assert(!presentationState.close(id,0));}
+  auto owner=core.acquireOwner();uint32_t prior=0;
+  for(unsigned i=0;i<24;++i){a.clear();a["path"]="/storage/ram/updated.json";a["history"]="replace";assert(!core.invoke("/sys/ui","open",a.as<JsonObjectConst>(),r.to<JsonObject>(),i%2?0:owner));auto id=r["view_id"].as<uint32_t>();assert(id!=prior);if(prior)assert(!presentationState.get(prior)&&!uiDocument(prior));prior=id;}
+  a.clear();a["view_id"]=prior;a["values"]["title"]="Explicit system update";assert(!core.invoke("/sys/ui","update",a.as<JsonObjectConst>(),r.to<JsonObject>(),0));assert(presentationState.active()==prior);
+  core.releaseOwner(owner);assert(presentationState.get(prior));assert(!presentationState.close(prior,0));assert(!presentationState.active());for(auto d:uiDocuments)assert(!d);
+ }
+ std::cout<<"LVGL runtime-loaded UI, native stripe render, VFS hot replacement, refresh/back history and cross-owner replacement passed\n";
 }

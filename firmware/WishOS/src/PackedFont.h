@@ -1,9 +1,10 @@
 #pragma once
 #include "Vfs.h"
+#include "FileReadCache.h"
 #include <string.h>
 namespace notesos {
-// Indexed monochrome glyphs prepared on the host. Runtime files are data, not
-// executable font programs; no unbounded TrueType outline parser runs on-device.
+// Indexed monochrome glyphs prepared on the host. This pixel-font alternative
+// is separate from the complete TrueType families in UiVectorFonts.inc.
 class PackedFont {
  FileProvider*provider_=nullptr;char path_[256]{};uint32_t count_=0;uint64_t data_=0,size_=0;
  static uint32_t le(const uint8_t*p,unsigned n){uint32_t v=0;for(unsigned i=0;i<n;++i)v|=uint32_t(p[i])<<(8*i);return v;}

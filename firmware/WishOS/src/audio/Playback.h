@@ -35,6 +35,7 @@ public:
  ~Playback(){core_.removeOwnerHook(this);if(backendOpen_)backend_.close();freeBuffers();}
  bool active()const{std::lock_guard<std::mutex>lock(mutex_);return running();}
  void describe(JsonObject o)const{backend_.describe(o);o["encodings"]="pcm16le,ima-adpcm-block";o["max_packet_bytes"]=PACKET_BYTES;o["max_decoded_samples"]=PCM_SAMPLES;o["buffer_policy"]="caller_blocks_admitted_from_resource_budget";o["settings_scope"]="playback";o["application_boundary"]="start";o["volume_scope"]="driver_runtime";o["volume_apply"]="next_pcm_block";o["generation"]="application_or_upstream_service";o["events"]="started,need_data,completed,failed";asyncContract(o,"start",path_)["playback_id"]="playback_id";}
+ void failed(const char*error){std::lock_guard<std::mutex>lock(mutex_);if(running())end(State::Failed,error);}
  // The BSP schedules this on its output worker, not the application event loop.
  void pump(){std::lock_guard<std::mutex>lock(mutex_);if(!running())return;
   if(state_==State::Stopping){end(State::Failed,"cancelled");return;}

@@ -42,6 +42,11 @@ int main(){
  ButtonGestures bank({"A","B"},nullptr,receive);events.clear();c=parse(R"({"defaults":{"debounce_ms":10}})");assert(!bank.configure(c.as<JsonObjectConst>(),out.to<JsonObject>()));
  bool down[]={true,true};bank.sampleAll(down,2,1000);bank.sampleAll(down,2,1017);assert(events.size()==2&&events[0].mask==3&&events[1].mask==3);assert(events[0].edge==1000&&events[0].held==17);
  down[0]=false;bank.sampleAll(down,2,1110);down[0]=true;bank.sampleAll(down,2,1114);down[0]=false;bank.sampleAll(down,2,1117);bank.sampleAll(down,2,1130);assert(events.back().name=="release"&&events.back().mask==2&&events.back().held==117);
+ // Captured hardware edges preserve a short physical press even when the
+ // consumer resumes several seconds later after rendering a large resource.
+ ButtonGestures delayed({"one"},nullptr,receive);events.clear();delayed.sample(0,false,0);delayed.sample(0,true,10);
+ delayed.sample(0,true,110);delayed.sample(0,false,110);delayed.sample(0,false,3000);delayed.sample(0,false,3301);
+ assert(count("press")==1&&count("release")==1&&count("click")==1&&count("long_press")==0);assert(events.back().held==100);
  OrientationInput orientation;MotionConfig motion;int changes=0;
  for(unsigned t=0;t<=480;t+=80)if(orientation.sample(0,1000,0,t,motion)==0)++changes;assert(changes==1);
  for(unsigned t=560;t<1000;t+=80)assert(orientation.sample(1,1,1000,t,motion)==-1);
@@ -61,6 +66,17 @@ int main(){
  assert(views.revise(one,8));auto previous=views.stamp(one);assert(views.revise(one,7,previous.revision+1));assert(views.current(previous));
  assert(!views.close(one,7));assert(!views.active());
  PresentationState repeated;assert(!repeated.create(1,true,true,one));assert(!repeated.create(1,true,true,two));assert(!repeated.activate(one,true,1));assert(!repeated.activate(two,true,1));assert(!repeated.activate(one,true,1));assert(!repeated.back(1,disposed)&&!disposed&&repeated.active()==two);assert(!repeated.back(1,disposed)&&disposed==two&&repeated.active()==one&&repeated.get(one));
+ // Replacing an unretained transient view retires its resources, but keeps
+ // the submitted stamp available to complete an already committed frame.
+ struct Retirements {unsigned count=0;PresentationState::Stamp last;};
+ Retirements retired;PresentationState replacement;
+ replacement.onRetire(&retired,[](void*p,unsigned,const PresentationState::View&v,PresentationState::Stamp s){auto&r=*static_cast<Retirements*>(p);assert(v.id==s.view);++r.count;r.last=s;});
+ assert(!replacement.create(7,true,true,one)&&!replacement.activate(one,false,7));
+ for(unsigned i=0;i<32;++i){auto stamp=replacement.stamp(one);assert(!replacement.create(i%2?7:0,true,true,two));assert(!replacement.activate(two,false,0));assert(!replacement.get(one)&&replacement.get(two));assert(retired.last.view==stamp.view&&retired.last.activation==stamp.activation);replacement.completed(stamp);assert(replacement.presented().view==stamp.view&&replacement.active()==two);one=two;}
+ assert(retired.count==32);
+ // Explicit history retains a transient document until back/close removes it.
+ assert(!replacement.create(7,true,true,two)&&!replacement.activate(two,true,7));
+ assert(replacement.get(one)&&retired.count==32);assert(!replacement.back(7,disposed)&&disposed==two&&retired.count==33&&replacement.active()==one);
  static unsigned effects=0;core.add({"/effect","write","",[](const char*,JsonObjectConst a,JsonObject)->const char*{assert(!a.containsKey("expected_boot_id"));++effects;return nullptr;}});
  auto envelope=parse(R"({"path":"/effect","method":"write","args":{"expected_boot_id":"old"}})");invokeEnvelope(core,envelope.as<JsonObjectConst>(),out,"new",10);assert(out["ok"]==false&&out["error"]=="boot_changed"&&effects==0);
  envelope["args"]["expected_boot_id"]="new";invokeEnvelope(core,envelope.as<JsonObjectConst>(),out,"new",11);assert(out["ok"]==true&&effects==1);

@@ -52,7 +52,7 @@
 namespace notesos {
 static Core core;static const char*resourceStartupError=nullptr;static Vfs vfs;static Preferences preferences;static WebServer http(80);static DNSServer dns;
 static char apSsid[40],bootId[17];static bool mounted=false;static uint32_t cursor=0;
-static void* allocateRAM(size_t n){return core.resources().allocate(n,ResourceBudget::Region::Internal);}
+static void* allocateRAM(size_t n){return core.resources().allocate(n);}
 static void freeMemoryFile(void*p){core.resources().freeAllocation(p);}
 static MemoryFiles ramFiles("ram","/storage/ram","ram",true,allocateRAM,freeMemoryFile);static SystemFiles systemFiles(&core.resources());static LittleFsProvider flashFiles(LittleFS,mounted,"/nfs-test");
 static FlashVolumeService flashVolume(core,vfs,LittleFS,flashFiles,mounted,"/nfs-test","nfs_test");
@@ -73,7 +73,7 @@ static void rememberJob(uint32_t id){jobs[id%8]={};jobs[id%8].id=id;}
 #include "drivers/esp32-services/ApplicationService.h"
 #include "drivers/esp32-services/ManagedServices.h"
 #include "WorkerService.h"
-static FileService fileService(vfs);
+static FileService fileService(vfs,&core);
 #include WISHOS_NATIVE_DEVICES
 static const char*files(const char*m,JsonObjectConst a,JsonObject o){return fileService.invoke(m,a,o);}
 
@@ -111,8 +111,8 @@ void begin(){
  {"/services/remote","read,submit,peek,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},remoteAsyncDescription},
  {"/services/nfs","read,start,stop,memory","on-demand NFS",nfs},
  {"/dev/flash","read,mount,format,space,cancel","internal LittleFS volume",[](const char*m,JsonObjectConst a,JsonObject o){return flashVolume.invoke(m,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
- {"/sys/storage","read,mount,format,space,cancel","storage providers",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(strcmp(m,"read"))return nativeStorage(m,a,o);return describeEspStorage(vfs,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
- {"/fs",FileService::Methods,"VFS files",files},
+ {"/sys/storage","read,configure,mount,format,space,cancel","storage providers",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure")){if(auto e=argumentFields(a,"provider,quota_bytes"))return e;if(a["provider"]!="ram"||!a["quota_bytes"].is<uint32_t>())return "memory_volume_setting";if(!ramFiles.budget(a["quota_bytes"].as<uint32_t>()))return "memory_volume_in_use";ramFiles.describe(o);return nullptr;}if(strcmp(m,"read"))return nativeStorage(m,a,o);return describeEspStorage(vfs,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
+ {"/fs",FileService::Methods,"VFS files",files,[](JsonObject o){fileService.describe(o);}},
  {"/services/time","read,describe,configure,sync","asynchronous NTP",timeHandler},
  {"/sys/clock","read,write","wall and monotonic clock",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write")){ClockChange c;if(auto e=validateClockChange(a,c))return e;if(c.cpu)return "use_power_adapter";if(c.wall){timeval t{time_t(c.unixSeconds),0};if(settimeofday(&t,nullptr))return "clock_failed";timeWasSet=true;}}o["monotonic_ms"]=uptime();o["unix_s"]=int64_t(time(nullptr));o["wall_clock_valid"]=timeWasSet.load()||time(nullptr)>1700000000;return nullptr;}},
  {"/dev/usb","read","USB CDC",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["connected"]=bool(Serial);return nullptr;}}
@@ -128,7 +128,7 @@ for(auto d:devices){for(auto r:reads)if(!strcmp(d.path,r.path))d.readMethods=r.m
  http.on("/os/invoke",HTTP_POST,[]{JsonDocument request,reply;if(http.arg("plain").length()>4096||deserializeJson(request,http.arg("plain"))){http.send(400,"application/json","{\"ok\":false,\"error\":\"invalid_json\"}");return;}respond(request.as<JsonObjectConst>(),reply);String data;serializeJson(reply,data);http.send(200,"application/json",data);});
  http.onNotFound([]{JsonDocument r;if(routes.handle(http.uri().c_str(),http.method()==HTTP_GET?"GET":http.method()==HTTP_POST?"POST":http.method()==HTTP_PUT?"PUT":http.method()==HTTP_DELETE?"DELETE":"OTHER",http.arg("plain").c_str(),uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}http.sendHeader("Location","/",true);http.send(302,"text/plain","");});http.begin();event("/sys/board","boot");
 }
-void poll(){core.clock(uptime());flashVolume.poll();pollNativeDevices();boardWifi.service();wifiManager.poll(uptime());scriptHost.tick(uptime());pollApplications();pollManagedServices();workers.poll();timeService.poll(uptime(),WiFi.status()==WL_CONNECTED);pollNetwork();pollWebSocket();pollServiceLink();sockets.poll();routes.tick(uptime());remoteRequests.tick(uptime());nfsService.poll(millis());dns.processNextRequest();http.handleClient();
+void poll(){core.clock(uptime());flashVolume.poll();pollNativeDevices();fileService.poll();boardWifi.service();wifiManager.poll(uptime());scriptHost.tick(uptime());pollApplications();pollManagedServices();workers.poll();timeService.poll(uptime(),WiFi.status()==WL_CONNECTED);pollNetwork();pollWebSocket();pollServiceLink();sockets.poll();routes.tick(uptime());remoteRequests.tick(uptime());nfsService.poll(millis());dns.processNextRequest();http.handleClient();
  static char line[4097];static size_t used=0;static bool overflow=false;
  for(int n=0;n<512&&Serial.available();++n){char ch=Serial.read();if(ch=='\n'){if(used&&!overflow){line[used]=0;JsonDocument a,r;if(deserializeJson(a,line)){r["ok"]=false;r["error"]="invalid_json";}else respond(a.as<JsonObjectConst>(),r);serializeJson(r,Serial);Serial.println();}used=0;overflow=false;}else if(ch!='\r'){if(used<4096&&!overflow)line[used++]=ch;else overflow=true;}}
  core.tick();core.dispatch(cursor);delay(5);

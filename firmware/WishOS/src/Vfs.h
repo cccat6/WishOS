@@ -9,6 +9,7 @@
 #include <mutex>
 #include <new>
 namespace notesos {
+class Vfs;
 struct FileInfo { uint64_t size=0; bool directory=false; };
 inline bool parseOffset(JsonVariantConst v,uint64_t &out){
   if(v.isNull()){out=0;return true;}
@@ -57,6 +58,9 @@ public:
   virtual const char*refreshSpace(){return "unsupported_operation";}
   virtual bool busyPath(const char*)const{return false;}
   virtual const char*createFile(const char*){return "unsupported_operation";}
+  virtual const char*createTemporary(const char*,uint32_t){return "temporary_files_unsupported";}
+  virtual void retireTemporary(uint32_t){}
+  virtual void reapTemporary(Vfs&){}
   virtual const char*resize(const char*,uint64_t){return "unsupported_operation";}
   virtual const char*flush(const char*){return "unsupported_operation";}
   virtual bool available()const=0;
@@ -125,7 +129,7 @@ class MemoryFiles:public FileProvider {
 public:
   using Allocate=void*(*)(size_t);using Release=void(*)(void*);
 private:
-  struct Entry {Entry*next=nullptr;char path[192]{};uint8_t*bytes=nullptr;size_t size=0,capacity=0;bool directory=false;};
+  struct Entry {Entry*next=nullptr;char path[192]{};uint8_t*bytes=nullptr;size_t size=0,capacity=0;uint32_t temporaryOwner=0;bool directory=false,retiring=false;};
   uint64_t revision_=1;
   struct Entries {
    Entry*head=nullptr,*tail=nullptr;size_t count=0;
@@ -146,6 +150,9 @@ public:
   uint64_t maxFileSize()const override{return budget_;}
   const char*flush(const char*p)override{FileInfo i;return stat(p,i);}
   const char*createFile(const char*p)override{if(find(p))return "exists";size_t wrote=0;uint8_t b=0;return write(p,0,&b,0,false,wrote);}
+  const char*createTemporary(const char*p,uint32_t owner)override{if(!owner)return "temporary_file_owner_required";if(auto e=createFile(p))return e;find(p)->temporaryOwner=owner;return nullptr;}
+  void retireTemporary(uint32_t owner)override{for(auto&e:files_)if(e.temporaryOwner==owner)e.retiring=true;}
+  void reapTemporary(Vfs&vfs)override{for(auto&e:files_)if(e.retiring){char full[256];if(!absolutePath(e.path,full,sizeof full))continue;Vfs::Access lease(vfs,true);if(lease.add(full))continue;remove(e.path);return;}}
   const char*resize(const char*p,uint64_t size)override{
     if(!present_)return "provider_unavailable";auto e=find(p);if(!e)return "not_found";if(e->directory)return "is_directory";
     if(size>budget_-used_+e->capacity)return "quota_exceeded";
@@ -156,7 +163,7 @@ public:
   bool available()const override{return present_;}
   void setPresent(bool p){present_=p;}
   bool budget(size_t n){if(n<used_)return false;budget_=n;return true;}
-  void describe(JsonObject o)const override{sizeText(o,"quota_bytes",budget_);sizeText(o,"allocated_bytes",used_);sizeText(o,"quota_free_bytes",budget_-used_);o["filesystem"]="memory";o["metadata_bytes"]=files_.count*sizeof(Entry);o["index_capacity"]="available_memory";o["physical_capacity_bytes"]=nullptr;o["physical_partition_mutable"]=false;}
+  void describe(JsonObject o)const override{sizeText(o,"quota_bytes",budget_);sizeText(o,"allocated_bytes",used_);sizeText(o,"quota_free_bytes",budget_-used_);o["filesystem"]="memory";o["temporary_files"]="runtime_owned_with_deferred_lease_cleanup";o["metadata_bytes"]=files_.count*sizeof(Entry);o["index_capacity"]="available_memory";o["physical_capacity_bytes"]=nullptr;o["physical_partition_mutable"]=false;}
   const char*stat(const char*p,FileInfo&o)override{if(!present_)return "provider_unavailable";if(!strcmp(p,"/")){o={0,true};return nullptr;}auto e=find(p);if(!e)return "not_found";o={e->size,e->directory};return nullptr;}
   const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{got=0;if(!present_)return "provider_unavailable";auto e=find(p);if(!e)return "not_found";if(e->directory)return "is_directory";if(at>=e->size)return nullptr;got=n<e->size-at?n:e->size-at;memcpy(b,e->bytes+at,got);return nullptr;}
   const char*write(const char*p,uint64_t at,const uint8_t*b,size_t n,bool trunc,size_t&wrote)override{

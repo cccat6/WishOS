@@ -2,12 +2,15 @@
 #include "ScriptHost.h"
 #include "audio/Speech.h"
 #include "audio/Playback.h"
+#include "audio/CompressedCapture.h"
 #include <cassert>
 #include <iostream>
 #include <vector>
 using namespace notesos;using namespace notesos::audio;
 static Core core;static unsigned captures=0,physicalStarts=0;static unsigned captureRate=16000;
 static const char*acquire(unsigned rate,const char*roles="M"){if(strcmp(roles,"M"))return "capture_layout_unavailable";if(captures&&rate!=captureRate)return "capture_format_conflict";if(!captures){++physicalStarts;captureRate=rate;}++captures;return nullptr;}static void release(){assert(captures);--captures;}
+static const char*beginCapture(unsigned rate){return acquire(rate);}
+static CompressedCapture*recorder=nullptr;static std::vector<RecordingBuffer<>::Chunk>recorded;
 struct Output final:OutputBackend {
  bool opened=false,drain=false,fail=false;unsigned opens=0;std::vector<int16_t>samples;
  void describe(JsonObject o)const override{o["adapter"]="host-fixture";o["full_duplex"]=true;}
@@ -49,5 +52,19 @@ int main(){
  JsonDocument budget;budget["memory_limit_bytes"]=100;assert(!core.resources().configure(budget.as<JsonObjectConst>()));assert(core.invoke("/dev/speaker","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));assert(core.resources().promised()==0);budget["memory_limit_bytes"]=nullptr;assert(!core.resources().configure(budget.as<JsonObjectConst>()));
  a["buffer_blocks"]=1;assert(!core.invoke("/dev/speaker","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));JsonDocument packet;packet["playback_id"]=o["playback_id"];packet["sequence"]=0;packet["hex"]="01000200";assert(!core.invoke("/dev/speaker","write",packet.as<JsonObjectConst>(),o.to<JsonObject>(),owner));assert(!core.invoke("/dev/speaker","write",packet.as<JsonObjectConst>(),o.to<JsonObject>(),owner)&&o["duplicate"]==true);packet["sequence"]=1;assert(!strcmp(core.invoke("/dev/speaker","write",packet.as<JsonObjectConst>(),o.to<JsonObject>(),owner),"audio_would_block"));
  speaker.pump();packet.remove("sequence");packet.remove("hex");assert(!core.invoke("/dev/speaker","pause",packet.as<JsonObjectConst>(),o.to<JsonObject>(),owner));size_t before=output.samples.size();speaker.pump();assert(output.samples.size()==before);core.releaseOwner(owner);speaker.pump();assert(!speaker.active()&&core.resources().promised()==0);
+ // A native controller failure terminates an accepted playback with its real
+ // error and releases buffers even before the output backend opened.
+ owner=core.acquireOwner();a.clear();assert(!core.request("/dev/speaker","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));observation=o["completion_id"];speaker.failed("fixture_controller_failure");result.clear();assert(!core.completions().read(observation,owner,result.to<JsonObject>()));assert(result["event"]=="failed"&&result["data"]["error"]=="fixture_controller_failure");assert(!core.completions().release(observation,owner));assert(!speaker.active()&&core.resources().promised()==0);
+ CompressedCapture capture(core,"fixture",beginCapture,release,"/dev/mic","MMR");recorder=&capture;capture.sink([](const char*,const RecordingBuffer<>::Chunk&chunk){recorded.push_back(chunk);});
+ core.add({"/dev/mic","describe,start,stop,read,read_chunk,release,list","",[](const char*m,JsonObjectConst a,JsonObject o){return recorder->invoke(m,a,o);}});
+ a.clear();a["channel"]=1;a["buffer_blocks"]=1;assert(!core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));std::string recording=o["recording_id"].as<const char*>();int16_t stereo[480];for(unsigned i=0;i<160;++i){stereo[i*3]=0;stereo[i*3+1]=1000;stereo[i*3+2]=-1000;}
+ capture.process({stereo,160,16000,"MMR"});capture.process({stereo,160,16000,"MMR"});assert(recorded.size()==2);for(auto&block:recorded){int16_t decoded[160];size_t count=0;assert(decodeVoiceBlock(block.data,block.bytes,decoded,160,count)&&count==160&&decoded[159]>900);}
+ a.clear();assert(!core.invoke("/dev/mic","read",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));assert(o["dropped_samples"]=="160"&&o["buffered_chunks"]==1);
+ core.releaseOwner(owner);capture.process({stereo,160,16000,"MMR"});assert(!capture.active()&&captures==0);assert(!core.invoke("/dev/mic","list",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["recordings"].size()==0);
+ // Delivery retention is independent from microphone ownership. Returning
+ // Home stops capture, but a system receiver can drain the compressed tail;
+ // its configured RAM TTL releases an abandoned delivery without Flash writes.
+ owner=core.acquireOwner();a.clear();a["buffer_blocks"]=4;a["delivery_ttl_ms"]=1000;core.clock(10);assert(!core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));recording=o["recording_id"].as<const char*>();capture.process({stereo,160,16000,"MMR"});core.releaseOwner(owner);capture.process({stereo,160,16000,"MMR"});assert(!capture.active());a.clear();a["recording_id"]=recording;assert(!core.invoke("/dev/mic","read_chunk",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["chunks"].size()==1&&o["produced_samples"]=="160"&&!o["recording"].as<bool>());core.clock(1011);capture.poll();assert(!strcmp(core.invoke("/dev/mic","read",a.as<JsonObjectConst>(),o.to<JsonObject>()),"recording_not_found"));a.clear();
+ owner=core.acquireOwner();assert(!acquire(48000));a["sample_rate"]=16000;assert(!strcmp(core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner),"capture_format_conflict"));assert(!capture.active()&&captures==1);release();a.clear();assert(!core.invoke("/dev/mic","list",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["recordings"].size()==0);core.releaseOwner(owner);recorder=nullptr;
  std::cout<<"Audio shared input, detector ownership, runtime-defined wake actions, streamed playback, drain completion, failure rollback, duplicate blocks, backpressure, pause and owner cleanup passed\n";
 }

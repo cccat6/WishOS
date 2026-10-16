@@ -1,0 +1,302 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 5,
+            "y": 4,
+            "width": 38,
+            "height": 35
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 3,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 4,
+                "width": -14
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 50,
+            "y": 7,
+            "width": 258
+          },
+          "style": {
+            "fontSize": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "我的应用"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 46,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "点击打开应用"
+          }
+        },
+        {
+          "type": "button",
+          "id": "app0",
+          "placement": {
+            "x": 12,
+            "y": 70,
+            "width": 296,
+            "height": 40
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 6,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/voice.png"
+              },
+              "id": "app0_icon"
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 7,
+                "width": 244
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "对话"
+              },
+              "id": "app0_title"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "app1",
+          "placement": {
+            "x": 12,
+            "y": 118,
+            "width": 296,
+            "height": 40
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 6,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/camera.png"
+              },
+              "id": "app1_icon"
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 7,
+                "width": 244
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "相机"
+              },
+              "id": "app1_title"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "app2",
+          "placement": {
+            "x": 12,
+            "y": 166,
+            "width": 296,
+            "height": 40
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 6,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/device.png"
+              },
+              "id": "app2_icon"
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 7,
+                "width": 244
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "设备"
+              },
+              "id": "app2_title"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "previous",
+          "placement": {
+            "x": 12,
+            "y": 213,
+            "width": 140,
+            "height": 25
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 2,
+                "width": 120
+              },
+              "style": {
+                "fontSize": 13,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "上一页"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "next",
+          "placement": {
+            "x": 164,
+            "y": 213,
+            "width": 144,
+            "height": 25
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 2,
+                "width": 124
+              },
+              "style": {
+                "fontSize": 13,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "下一页"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

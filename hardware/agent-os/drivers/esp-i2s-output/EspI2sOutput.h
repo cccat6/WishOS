@@ -1,4 +1,5 @@
 #pragma once
+#include <esp_attr.h>
 #include "audio/Playback.h"
 #include <driver/i2s_std.h>
 #include <driver/gpio.h>
@@ -8,7 +9,7 @@ namespace notesos::audio {
 class EspI2sOutput final:public OutputBackend {
  i2s_port_t port_;gpio_num_t bclk_,ws_,data_,amp_;bool ampHigh_;i2s_chan_handle_t tx_=nullptr;
  std::atomic<uint32_t>sent_{0};uint32_t drainAfter_=0;unsigned channels_=1;
- static bool sent(i2s_chan_handle_t,i2s_event_data_t*,void*p){static_cast<EspI2sOutput*>(p)->sent_.fetch_add(1);return false;}
+ static bool IRAM_ATTR sent(i2s_chan_handle_t,i2s_event_data_t*,void*p){static_cast<EspI2sOutput*>(p)->sent_.fetch_add(1);return false;}
 public:
  EspI2sOutput(i2s_port_t port,gpio_num_t bclk,gpio_num_t ws,gpio_num_t data,gpio_num_t amp=GPIO_NUM_NC,bool ampHigh=true):port_(port),bclk_(bclk),ws_(ws),data_(data),amp_(amp),ampHigh_(ampHigh){}
  void describe(JsonObject o)const override{o["adapter"]="esp-idf-i2s-standard-tx";o["sample_rates_hz"]="8000,16000,24000,32000,44100,48000";o["channels"]="1,2";o["pcm_bits"]=16;o["duplex"]="exclusive_controller";o["completion_basis"]="dma_ring_drained";}

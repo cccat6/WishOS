@@ -19,7 +19,9 @@
 #define LV_USE_LODEPNG 1
 /* Decoder allocations use the shared resource budget. Image admission is a
  * runtime policy; a second fixed allocation ceiling would ignore that policy. */
-#define LV_USE_TINY_TTF 0
+#define LV_USE_TINY_TTF 1
+#define LV_TINY_TTF_FILE_SUPPORT 1
+#define LV_TINY_TTF_CACHE_GLYPH_CNT 8
 #define LV_USE_ANIMIMG 0
 #define LV_USE_ARC 0
 #define LV_USE_CALENDAR 0

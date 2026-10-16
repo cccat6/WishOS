@@ -13,6 +13,10 @@ int main(){Core core;systemCore=&core;Vfs vfs;MemoryFiles memory("apps","/apps",
  JsonDocument a,o;a["manifest"]="/apps/one.json";assert(!apps.invoke("install",a.as<JsonObjectConst>(),o.to<JsonObject>()));a.clear();a["id"]="one";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(!host.invoke("read",JsonObjectConst(),o.to<JsonObject>())&&o["loaded"]==false);for(auto method:{"load","restart","stop"})assert(!strcmp(apps.runtimeInvoke(method,JsonObjectConst(),o.to<JsonObject>()),"application_transition_pending"));assert(!apps.runtimeInvoke("read",JsonObjectConst(),o.to<JsonObject>())&&o["loaded"]==false);apps.poll();assert(!apps.invoke("read",JsonObjectConst(),o.to<JsonObject>())&&o["current"]=="one");core.listTimers(o["timers"].to<JsonArray>());assert(o["timers"].size()==1);
  // Escaping does not depend on the foreground program's event handler.
  SystemNavigation nav(core,apps,3,1,2);nav.poll(1,0);nav.poll(1,40);nav.poll(1,2000);apps.poll();assert(!apps.invoke("read",JsonObjectConst(),o.to<JsonObject>())&&o["current"]=="launcher");core.listTimers(o["timers"].to<JsonArray>());assert(o["timers"].size()==0);
+ // A short button release first observed after a slow resource operation is
+ // not a held-home action while its new level is still being debounced.
+ a.clear();a["id"]="one";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();
+ SystemNavigation delayed(core,apps,3,1,2);delayed.poll(1,3000);delayed.poll(1,3040);delayed.poll(0,6000);delayed.poll(0,6040);apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="one");apps.requestHome();apps.poll();
  // Applications cannot remove the protected recovery binding; invalid system
  // configuration also leaves the old mapping intact.
  core.add(Device::bind("/sys/navigation","read,configure","recovery",nav));uint32_t actor=core.acquireOwner();a.clear();a["home_buttons"]=0;

@@ -57,5 +57,8 @@
   "package_pins": {},
   "drivers": [
     "esp32-services"
+  ],
+  "flags": [
+    "-mtext-section-literals"
   ]
 }

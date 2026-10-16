@@ -1,0 +1,124 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "image",
+          "placement": {
+            "x": 128,
+            "y": 12,
+            "width": 64,
+            "height": 64
+          },
+          "imageProps": {
+            "src": "../brand/logo.png"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 107,
+            "y": 86,
+            "width": 210
+          },
+          "style": {
+            "fontSize": 22,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "选择语言"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 72,
+            "y": 120,
+            "width": 245
+          },
+          "style": {
+            "fontSize": 18,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "Choose your language"
+          }
+        },
+        {
+          "type": "button",
+          "id": "zh",
+          "placement": {
+            "x": 24,
+            "y": 169,
+            "width": 132,
+            "height": 46
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 10,
+                "width": 112
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "简体中文"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "en",
+          "placement": {
+            "x": 164,
+            "y": 169,
+            "width": 132,
+            "height": 46
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 10,
+                "width": 112
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "English"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

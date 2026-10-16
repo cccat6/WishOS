@@ -1,7 +1,7 @@
 {
   "version": "9.3.0",
   "source_sha256": "ec944a9be2582b375b1de2c9dab0045b17c7ac016119731e6649e96a1779eda8",
-  "patch_version": 1,
+  "patch_version": 7,
   "changes": [
     {
       "file": "src/core/lv_obj_style.c",
@@ -42,6 +42,239 @@
           "old": "lv_free(obj);",
           "new": "lv_free(obj->spec_attr); lv_free(obj);",
           "count": 5
+        }
+      ]
+    },
+    {
+      "file": "src/libs/tiny_ttf/lv_tiny_ttf.c",
+      "sha256": "de419623ee9438f887cb2a63f196e80ca4d8438e51cb57876a36eed937f2c0a1",
+      "replacements": [
+        {
+          "old": "        lv_cache_destroy(ttf->glyph_cache, NULL);\n        lv_cache_destroy(ttf->draw_data_cache, NULL);",
+          "new": "        if(ttf->glyph_cache) lv_cache_destroy(ttf->glyph_cache, NULL);\n        if(ttf->draw_data_cache) lv_cache_destroy(ttf->draw_data_cache, NULL);",
+          "count": 1
+        },
+        {
+          "old": "            tiny_ttf_glyph_cache_create_cb(&search_key, dsc);",
+          "new": "            if(!tiny_ttf_glyph_cache_create_cb(&search_key, dsc)) return false;",
+          "count": 1
+        },
+        {
+          "old": "        lv_free(dsc);\n        LV_LOG_ERROR(\"tiny_ttf: init failed\");",
+          "new": "#if LV_TINY_TTF_FILE_SUPPORT != 0\n        if(dsc->stream.file) lv_fs_close(&dsc->file);\n#endif\n        lv_free(dsc);\n        LV_LOG_ERROR(\"tiny_ttf: init failed\");",
+          "count": 2
+        },
+        {
+          "old": "    if(out_font == NULL) {\n        lv_free(dsc);",
+          "new": "    if(out_font == NULL) {\n#if LV_TINY_TTF_FILE_SUPPORT != 0\n        if(dsc->stream.file) lv_fs_close(&dsc->file);\n#endif\n        lv_free(dsc);",
+          "count": 1
+        },
+        {
+          "old": "    lv_tiny_ttf_set_size(out_font, font_size);\n    return out_font;",
+          "new": "    lv_tiny_ttf_set_size(out_font, font_size);\n    if(!dsc->glyph_cache || !dsc->draw_data_cache) { lv_tiny_ttf_destroy(out_font); return NULL; }\n    return out_font;",
+          "count": 1
+        },
+        {
+          "old": "int k = stbtt_GetGlyphKernAdvance(&dsc->info, g1, 0);",
+          "new": "int k = 0; /* Kerning is disabled: do not scan GPOS for a .notdef pair. */",
+          "count": 1
+        },
+        {
+          "old": "sizeof(tiny_ttf_glyph_cache_data_t), dsc->cache_size,",
+          "new": "sizeof(tiny_ttf_glyph_cache_data_t), dsc->cache_size ? LV_MAX(64, dsc->cache_size) : 0,",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/misc/lv_fs.c",
+      "sha256": "03b7c391a60e60fb1a49245abae432213ba48b425ece5a2d9047a2bfa6e79159",
+      "replacements": [
+        {
+          "old": "        LV_ASSERT_MALLOC(file_p->cache);",
+          "new": "        if(file_p->cache == NULL) {\n            if(drv->cache_size != LV_FS_CACHE_FROM_BUFFER && drv->close_cb) drv->close_cb(drv, file_p->file_d);\n            file_p->file_d = NULL; file_p->drv = NULL;\n            LV_PROFILER_FS_END;\n            return LV_FS_RES_OUT_OF_MEM;\n        }",
+          "count": 1
+        },
+        {
+          "old": "                LV_ASSERT_MALLOC(file_p->cache->buffer);",
+          "new": "                if(file_p->cache->buffer == NULL) { *br = 0; return LV_FS_RES_OUT_OF_MEM; }",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/misc/cache/lv_cache.c",
+      "sha256": "ee336097876c28cf3d871ec2313db9c9c7373a88aa56900116967583ee50c48e",
+      "replacements": [
+        {
+          "old": "    LV_ASSERT_MALLOC(cache);\n\n    cache->clz",
+          "new": "    if(cache == NULL) return NULL;\n\n    cache->clz",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw.c",
+      "sha256": "c59b9d7eee0deba3bcfcd770137043a789f26594c6d684f410017d5d619117a6",
+      "replacements": [
+        {
+          "old": "    LV_ASSERT_MALLOC(new_task);\n    new_task->area",
+          "new": "    if(new_task == NULL) { LV_PROFILER_DRAW_END; return NULL; }\n    new_task->area",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_3d.c",
+      "sha256": "105d47cbb30cfbf2acfbde0062b80c56c4ce73b43d003204ee4c7b567dba266d",
+      "replacements": [
+        {
+          "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_3D);",
+          "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_3D);\n    if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_arc.c",
+      "sha256": "1d82fa5144fc675285b7eae4e76142cd597d3c9fe5303593ae5e740a6a0bb09a",
+      "replacements": [
+        {
+          "old": "    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_ARC);",
+          "new": "    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_ARC);\n    if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_image.c",
+      "sha256": "6a4a98a60e9b741432f3874a21709cfbfbbd096792dd35760a968e96460362d0",
+      "replacements": [
+        {
+          "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_LAYER);",
+          "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_LAYER);\n    if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "        lv_draw_task_t * t = lv_draw_add_task(layer, image_coords, LV_DRAW_TASK_TYPE_IMAGE);",
+          "new": "        lv_draw_task_t * t = lv_draw_add_task(layer, image_coords, LV_DRAW_TASK_TYPE_IMAGE);\n        if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_label.c",
+      "sha256": "7bd9de921ec31f715ccf91257edfb80f29cc8df5f4c86a87cae6218ca91464cc",
+      "replacements": [
+        {
+          "old": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_LABEL);",
+          "new": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_LABEL);\n    if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_LETTER);",
+          "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_LETTER);\n    if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_line.c",
+      "sha256": "1985f06a7de6955d95303f3f10036934ee031d4e9e4766c4fee59744959c6016",
+      "replacements": [
+        {
+          "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_LINE);",
+          "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_LINE);\n    if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_mask.c",
+      "sha256": "311d4973746c83016adf97f445274736b6bac4a8c49541a9f6389b884656e723",
+      "replacements": [
+        {
+          "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &layer->buf_area, LV_DRAW_TASK_TYPE_MASK_RECTANGLE);",
+          "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &layer->buf_area, LV_DRAW_TASK_TYPE_MASK_RECTANGLE);\n    if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_rect.c",
+      "sha256": "ded33dcbb4aa3f986b6200b79dd5f4b374878fb5ec8f4aa21ea5607a408ca05d",
+      "replacements": [
+        {
+          "old": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_FILL);",
+          "new": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_FILL);\n    if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BORDER);",
+          "new": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BORDER);\n    if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BOX_SHADOW);",
+          "new": "    lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BOX_SHADOW);\n    if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "        t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BOX_SHADOW);",
+          "new": "        t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BOX_SHADOW);\n        if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "\n        t = lv_draw_add_task(layer, &bg_coords, LV_DRAW_TASK_TYPE_FILL);",
+          "new": "\n        t = lv_draw_add_task(layer, &bg_coords, LV_DRAW_TASK_TYPE_FILL);\n        if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "                    t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_IMAGE);",
+          "new": "                    t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_IMAGE);\n                    if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "                    t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_IMAGE);",
+          "new": "                    t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_IMAGE);\n                    if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "                t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_LABEL);",
+          "new": "                t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_LABEL);\n                if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "        t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BORDER);",
+          "new": "        t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_BORDER);\n        if(t == NULL) return;",
+          "count": 1
+        },
+        {
+          "old": "        t = lv_draw_add_task(layer, &outline_coords, LV_DRAW_TASK_TYPE_BORDER);",
+          "new": "        t = lv_draw_add_task(layer, &outline_coords, LV_DRAW_TASK_TYPE_BORDER);\n        if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_triangle.c",
+      "sha256": "98715f7c24bf532702d36d6cc342b201aa6070b84d0c5b44dd5fe53fd7531c5d",
+      "replacements": [
+        {
+          "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_TRIANGLE);",
+          "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &a, LV_DRAW_TASK_TYPE_TRIANGLE);\n    if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/draw/lv_draw_vector.c",
+      "sha256": "f0bb7550230f06f55841c61560915776d0e9625418fce544954fdbd3c137f3d7",
+      "replacements": [
+        {
+          "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &(layer->_clip_area), LV_DRAW_TASK_TYPE_VECTOR);",
+          "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &(layer->_clip_area), LV_DRAW_TASK_TYPE_VECTOR);\n    if(t == NULL) return;",
+          "count": 1
         }
       ]
     }

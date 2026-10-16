@@ -79,5 +79,8 @@ int main(){
  // A headless runtime can host other resources without constructing a display.
  // Component metadata contains actual geometry/protocol, not an E6 frame contract.
  DisplayComponent mono{"ssd1306","oled","i2c",128,64,DisplayEvidence::TransportComplete,"i2c_transfer","continuous"};JsonDocument description;mono.describe(description.to<JsonObject>());assert(description["width"]==128&&description["completion"]["kind"]=="transport_complete");
+ // A resource/initialization deferral never becomes an unbounded wait and
+ // never interrupts an already-started transfer. Preparation leases are released.
+ {PresentationState v;uint32_t id;assert(!v.create(1,true,false,id)&&!v.activate(id,false,1));Adapter a(TestAdapter::Dma,v);DisplayScheduler<Frame,Adapter>q(v,a);auto f=frame(v,id,90);f.prepareDeadline=200;a.defer=true;assert(!q.enqueue(f,decltype(q)::Policy::Latest,2).error);q.tick(100);assert(!q.active()&&q.pending()==1&&a.leases==0);q.tick(201);assert(!q.active()&&!q.pending()&&a.receipts.back()["error"]=="display_prepare_timeout");}
  std::cout<<"Unified immediate/DMA/BUSY/scanout completion, queue policy, leases, revisions, deferred start and failure disposal passed\n";
 }

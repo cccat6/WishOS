@@ -69,6 +69,11 @@ int main(){
  {Qmi8658 old(fixture.bus,Qmi8658::Profile::Rev09);JsonDocument settings,values;assert(!old.configure(settings.as<JsonObjectConst>(),0));assert(fixture.registers[0x6a][4]==0x56);assert(!old.begin(0));assert(old.poll(300).complete);old.values(values.to<JsonObject>());assert(values["gyro_x_dps"]==1&&values["nominal_odr_hz"]==117.5);}
  Ft6336 touch(fixture.bus);fixture.registers[0x38][2]=1;fixture.registers[0x38][3]=0;fixture.registers[0x38][4]=123;fixture.registers[0x38][5]=0x21;fixture.registers[0x38][6]=0xc8;assert(!touch.begin(0));assert(touch.poll(0).complete);touch.values(o.to<JsonObject>());assert(o["contacts"][0]["id"]==2&&o["contacts"][0]["x"]==123&&o["contacts"][0]["y"]==456);
  fixture.registers[0x38][2]=3;assert(!touch.begin(1));assert(touch.poll(1).error);fixture.registers[0x38][2]=0;assert(!touch.begin(2));assert(touch.poll(2).complete);touch.values(o.to<JsonObject>());assert(o["contacts"].size()==0);
+ // Device-selected transform must map both contacts into the displayed
+ // landscape orientation, preserving identity and the unmodified sensor point.
+ {Ft6336 landscape(fixture.bus,0x38,{240,320,true,false,true});fixture.registers[0x38][2]=2;fixture.registers[0x38][3]=0;fixture.registers[0x38][4]=239;fixture.registers[0x38][5]=0x10;fixture.registers[0x38][6]=0;fixture.registers[0x38][9]=0;fixture.registers[0x38][10]=0;fixture.registers[0x38][11]=0x21;fixture.registers[0x38][12]=63;
+ assert(!landscape.begin(3)&&landscape.poll(3).complete);landscape.values(o.to<JsonObject>());assert(o["contacts"][0]["x"]==0&&o["contacts"][0]["y"]==0&&o["contacts"][0]["raw_x"]==239);assert(o["contacts"][1]["id"]==2&&o["contacts"][1]["x"]==319&&o["contacts"][1]["y"]==239);
+ fixture.registers[0x38][4]=240;assert(!landscape.begin(4)&&!strcmp(landscape.poll(4).error,"touch_coordinate"));landscape.values(o.to<JsonObject>());assert(o["contacts"][0]["y"]==0);}
  Pca9557 expander(fixture.bus);fixture.registers[0x19][1]=0xf0;fixture.registers[0x19][3]=0xff;assert(!expander.configure(1,1,1));assert(fixture.registers[0x19][1]==0xf1&&fixture.registers[0x19][3]==0xfe);assert(!expander.write(2,2));assert(fixture.registers[0x19][1]==0xf3);
  // Every multi-register configuration failure closes measurement admission.
  // Invalid settings leave a working configuration intact without any bus I/O.

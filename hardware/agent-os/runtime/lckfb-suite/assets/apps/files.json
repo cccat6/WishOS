@@ -1,0 +1,16 @@
+{
+  "format": "wishos-app/1",
+  "id": "files",
+  "title": "存储与文件",
+  "entry": "files.lua",
+  "source": {
+    "repository": "https://github.com/cccat6/WishOS",
+    "path": "hardware/agent-os/runtime/lckfb-suite"
+  },
+  "help": {
+    "controls": "触摸操作；短按用户键说话；长按用户键2秒返回桌面。"
+  },
+  "memory_bytes": 196608,
+  "instruction_budget": 200000,
+  "system_call_budget": 96
+}

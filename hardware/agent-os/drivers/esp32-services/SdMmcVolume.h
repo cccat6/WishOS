@@ -64,7 +64,7 @@ public:
    if(mounted_||linked_||vfs_.hasLeasesUnder(provider_.mount)||vfs_.pinned(provider_))return "storage_in_use";fixedHz_=hz;readOnly_=ro;provider_.writable=!ro;return nullptr;
   }
   if(strcmp(m,"probe")&&strcmp(m,"mount")&&strcmp(m,"unmount")&&strcmp(m,"space"))return "unsupported_method";
-  if(a.size())return "unknown_storage_argument";if(vfs_.hasLeasesUnder(provider_.mount)||vfs_.pinned(provider_))return "storage_in_use";
+  if(a.size())return "unknown_storage_argument";if(strcmp(m,"space")&&(vfs_.hasLeasesUnder(provider_.mount)||vfs_.pinned(provider_)))return "storage_in_use";
   if(mounted_&&(!strcmp(m,"probe")||!strcmp(m,"mount")))return "volume_already_mounted";if(!mounted_&&!strcmp(m,"space"))return "volume_not_mounted";
   copy(method_,sizeof method_,m);provider_.background(true);auto e=operation_.start(m,o);if(e)provider_.background(false);return e;
  }

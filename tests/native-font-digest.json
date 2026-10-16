@@ -1,6 +1,7 @@
 {
-  "glyphs": 2058,
-  "payload_sha256": "b73aea4c5d7c370dbfefff37653dc35ff956c4aed955cbc5429e538dce9fc61f",
+  "glyphs": 1461,
+  "payload_sha256": "94f92bfb225c01de7c8e7696515704a89510ab3848ae506e70157a9a52b6c436",
+  "bitmap_sha256": "cfe3e90e3c85dfa2f40882b5ea266a67362bd51525c15cdd4322faec07c30ced",
   "algorithm": "metrics_le_then_original_raw_or_lz4_per_glyph",
-  "bitmap_sha256": "c0324a622e5ed20f08616dffd287dec33b9b23489083ffd68294109d30314af4"
+  "purpose": "recovery fallback only; normal UI uses complete font files"
 }

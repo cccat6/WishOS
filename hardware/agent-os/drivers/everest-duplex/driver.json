@@ -1,0 +1,7 @@
+{
+ "format":"notes-driver/1","id":"everest-duplex",
+ "description":"Shared-clock ES7210 and ES8311 capture/output",
+ "platforms":["esp32"],"targets":["esp32s3"],
+ "requires":["i2c"],"build_hook":"build.py",
+ "build_inputs":["tools/prepare_codecs.py","tools/dependencies/esp-codecs.json"]
+}

@@ -1,0 +1,120 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "image",
+          "placement": {
+            "x": 128,
+            "y": 8,
+            "width": 64,
+            "height": 64
+          },
+          "imageProps": {
+            "src": "../brand/logo.png"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 56,
+            "y": 79,
+            "width": 238
+          },
+          "style": {
+            "fontSize": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "欢迎使用 WishOS"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 22,
+            "y": 116,
+            "width": 280
+          },
+          "style": {
+            "fontSize": 17,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "短按用户键，与 Agent 对话"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 22,
+            "y": 145,
+            "width": 280
+          },
+          "style": {
+            "fontSize": 17,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "触摸图标，打开应用和设置"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 22,
+            "y": 174,
+            "width": 286
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "长按用户键2秒，随时回桌面"
+          }
+        },
+        {
+          "type": "button",
+          "id": "ready",
+          "placement": {
+            "x": 80,
+            "y": 204,
+            "width": 160,
+            "height": 32
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 4,
+                "width": 140
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "进入桌面"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

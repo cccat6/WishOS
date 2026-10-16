@@ -1,0 +1,184 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 5,
+            "y": 4,
+            "width": 38,
+            "height": 35
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 3,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 4,
+                "width": -14
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 50,
+            "y": 7,
+            "width": 258
+          },
+          "style": {
+            "fontSize": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "设备与传感器"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 46,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "六轴姿态 · 原生驱动"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 74,
+            "width": 130
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "加速度 / g"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 100,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 20,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "accel"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 134,
+            "width": 150
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "角速度 / °/s"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 160,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 20,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "gyro"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 201,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "temperature"
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 222,
+            "width": 296
+          },
+          "style": {
+            "fontSize": 12,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "—"
+          },
+          "id": "status"
+        }
+      ]
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 import {readFileSync} from 'node:fs';
 import {Resvg} from '@resvg/resvg-js';
-const [source,widthText,heightText]=process.argv.slice(2);
+const [source,widthText,heightText,fontFile]=process.argv.slice(2);
 if(!source)throw Error('SVG source required');
 const width=Number(widthText),height=Number(heightText);
 const svg=readFileSync(source);
-const opts={font:{loadSystemFonts:true}};
+const opts={font:fontFile?{loadSystemFonts:false,fontFiles:[fontFile],defaultFontFamily:"Notes Sans SC",sansSerifFamily:"Notes Sans SC"}:{loadSystemFonts:true,defaultFontFamily:"Arial",sansSerifFamily:"Arial"}};
 if(width>0)opts.fitTo={mode:'width',value:width};else if(height>0)opts.fitTo={mode:'height',value:height};
 const renderer=new Resvg(svg,opts);
 if(renderer.width*renderer.height>16000000)throw Error('Host SVG pixel budget exceeded');

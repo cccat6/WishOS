@@ -13,7 +13,7 @@ inline esp32_nfs::Status nfsError(const char*e){
  if(!strcmp(e,"is_directory"))return IsDir;
  if(!strcmp(e,"directory_not_empty"))return NotEmpty;
  if(!strcmp(e,"memory_low")||!strcmp(e,"file_lease_capacity"))return Jukebox;
- if(!strcmp(e,"quota_exceeded")||!strcmp(e,"entry_capacity"))return NoSpace;
+ if(!strcmp(e,"quota_exceeded")||!strcmp(e,"storage_quota_exceeded")||!strcmp(e,"no_space")||!strcmp(e,"entry_capacity"))return NoSpace;
  if(!strcmp(e,"unsupported_operation")||!strcmp(e,"directory_rename_not_supported"))return NotSupported;
  if(!strcmp(e,"file_in_use")||!strcmp(e,"bus_busy")||!strcmp(e,"spi_busy")||!strcmp(e,"resource_busy"))return Jukebox;
  if(!strcmp(e,"provider_unavailable"))return Stale;

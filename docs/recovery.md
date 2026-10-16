@@ -142,3 +142,47 @@ and does not replay uncertain mutations. That shared path has Hub fault-injectio
 regressions in addition to the physical successful run. An independent 32-read
 physical cloud probe also passed. These are protocol/device tests, not vendor
 model, account or Harness-session acceptance.
+
+## S3 desktop and peripheral validation on 2026-10-17
+
+The public host suite passed, including real Lua/LVGL factory-app scenarios,
+cross-owner transient-view replacement, memory admission, committed-frame
+completion, temporary-file retirement, compressed-tail expiry and FAT32/exFAT.
+C3, C6 and S3 builds passed separately. Current application images are 1,809,945,
+3,853,322 and 2,959,783 bytes respectively; these are selected compositions, not
+universal OS sizes. The C6 build has little executable headroom and needs explicit
+budget review before adding compiled drivers.
+
+Only USB-identified S3 `02:00:00:00:00:01` was flashed at application offset
+`0x10000`. Its writable filesystem, complete font and user SD contents were
+preserved; the separate E6 experiment device was not opened. Ordinary runtime
+files now provide the graphical launcher, approved logo/ring/star assets,
+language/onboarding, voice, settings, files, sensor and camera pages. These are
+replaceable applications, not native page branches. Host-rendered previews are
+not physical visual approval.
+
+The actual S3 presented launcher/settings/files/voice/sensor pages without
+missing glyphs or VM faults. The QMI8658 returned real acceleration, angular rate
+and die temperature. Camera capture produced 320×240 RGB565BE; the ordinary app
+copied it in chunks to a temporary RAM RGB565LE file and a completed display
+receipt was observed. Its initial UI/copy path exceeded the automated 40-second
+presentation window; capture success is not a speed/performance pass. That delay
+remains to be characterized. A subsequent Home operation presented the launcher,
+stopped the SDK and removed its temporary file, with no panic or automatic
+launcher failure. The previous camera-exit internal-memory admission failure
+did not recur after OS-owned document allocation used the configured memory
+provider rather than forcing internal RAM.
+
+The inserted 1 GB card was mounted using SDMMC 1-bit at 40 MHz. An explicitly
+created test directory passed 8,192-byte write/read, random-offset comparison,
+Chinese filename, rename and deletion; only those owned test files were removed.
+This is file-I/O evidence, not destructive media-speed negotiation. Speaker,
+physical touch/button and full Chinese font acceptance from the preceding
+interactive round remain distinct from new desktop/Home interaction acceptance.
+
+The local Hub is paired and connected. Previous real microphone ASR and Codex/MCP
+candidate preparation are separate evidence. A new typed meeting-countdown
+request is now being validated through the real configured Harness; it is not
+the complete new-voice P0 demonstration. Current-app editing/rollback/save-as,
+favorites, sharing and two-physical-display adaptation keep the explicit pending
+statuses in [the acceptance scope](agent-os-plan.md).

@@ -1,0 +1,333 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 5,
+            "y": 4,
+            "width": 38,
+            "height": 35
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "x": 9,
+                "y": 3,
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 4,
+                "width": -14
+              },
+              "style": {
+                "fontSize": 18,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 50,
+            "y": 7,
+            "width": 258
+          },
+          "style": {
+            "fontSize": 23,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "存储卡与文件"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 50,
+            "y": 44,
+            "width": 256
+          },
+          "style": {
+            "fontSize": 14,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "/"
+          },
+          "id": "directory"
+        },
+        {
+          "type": "button",
+          "id": "file0",
+          "placement": {
+            "x": 12,
+            "y": 67,
+            "width": 296,
+            "height": 29
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 276
+              },
+              "style": {
+                "fontSize": 14,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "—"
+              },
+              "id": "file0_title"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "file1",
+          "placement": {
+            "x": 12,
+            "y": 100,
+            "width": 296,
+            "height": 29
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 276
+              },
+              "style": {
+                "fontSize": 14,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "—"
+              },
+              "id": "file1_title"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "file2",
+          "placement": {
+            "x": 12,
+            "y": 133,
+            "width": 296,
+            "height": 29
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 276
+              },
+              "style": {
+                "fontSize": 14,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "—"
+              },
+              "id": "file2_title"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "file3",
+          "placement": {
+            "x": 12,
+            "y": 166,
+            "width": 296,
+            "height": 29
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 276
+              },
+              "style": {
+                "fontSize": 14,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "—"
+              },
+              "id": "file3_title"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "parent",
+          "placement": {
+            "x": 12,
+            "y": 205,
+            "width": 44,
+            "height": 28
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 24
+              },
+              "style": {
+                "fontSize": 14,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": ".."
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "next",
+          "placement": {
+            "x": 63,
+            "y": 205,
+            "width": 96,
+            "height": 28
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 76
+              },
+              "style": {
+                "fontSize": 13,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "下一页"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "nfs",
+          "placement": {
+            "x": 166,
+            "y": 205,
+            "width": 142,
+            "height": 28
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 10,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 122
+              },
+              "style": {
+                "fontSize": 13,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "网络共享"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "repository": "espressif/esp-idf",
+  "commit": "b774170ff46c393eeb5e495ea37936038d3f4f4f",
+  "sdk_version": "5.5.5",
+  "files": [
+    {
+      "path": "components/bt/host/nimble/port/src/esp_nimble_mem.c",
+      "sha256": "b40e674af60cc375c6c271583631cbfc5d22fb4d6d8de9006c6dff3bd38d3d59"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  ]
+}

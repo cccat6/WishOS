@@ -1,4 +1,5 @@
 #include "FileService.h"
+#include "FileReadCache.h"
 #include <cassert>
 #include <iostream>
 using namespace notesos;
@@ -45,5 +46,15 @@ int main(){
  // All eight providers remain reachable through the bounded control envelope.
  MemoryFiles extra[]={{"p1","/p1","ram"},{"p2","/p2","ram"},{"p3","/p3","ram"},{"p4","/p4","ram"},{"p5","/p5","ram"},{"p6","/p6","ram"}};for(auto&p:extra)assert(vfs.add(p));
  unsigned cursor=0,seen=0;for(;;){args.clear();args["cursor"]=cursor;args["limit"]=1;assert(!service.invoke("mounts",args.as<JsonObjectConst>(),result.to<JsonObject>()));assert(result["providers"].size()==1);++seen;cursor=result["next_cursor"];if(!result["more"])break;}assert(seen==8&&cursor==8);assert(call("mounts",R"({"limit":0})"));assert(call("mounts",R"({"cursor":"0"})"));
+ {struct Source:MemoryFiles{unsigned reads=0;bool online=true,fail=false;Source():MemoryFiles("cache","/cache","ram"){}bool available()const override{return online;}const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{++reads;if(fail){got=0;return "read_failed";}return MemoryFiles::read(p,at,b,n,got);}} source;
+   uint8_t original[1000];for(unsigned i=0;i<sizeof original;++i)original[i]=uint8_t(i);size_t wrote,got;assert(!source.write("/file",0,original,sizeof original,true,wrote));FileReadCache<> cache(source,"/file");uint8_t bytes[20];for(auto offset:{0,300,600,900})assert(!cache.read(offset,bytes,20,got)&&got==20&&bytes[0]==uint8_t(offset));auto reads=source.reads;assert(!cache.read(1,bytes,20,got)&&source.reads==reads&&bytes[0]==1);assert(!cache.read(1000,bytes,20,got)&&got==0);
+   const uint8_t update=99;assert(!source.write("/file",0,&update,1,false,wrote));assert(!cache.read(0,bytes,1,got)&&got==1&&bytes[0]==99);source.online=false;assert(!strcmp(cache.read(0,bytes,1,got),"provider_unavailable"));source.online=true;source.fail=true;assert(!strcmp(cache.read(4096,bytes,1,got),"read_failed")&&got==0);source.fail=false;assert(!cache.read(4096,bytes,1,got)&&got==0);
+ }
+ // Temporary files retain entry identity across rename and defer deletion
+ // until a renderer/native reader releases its lease. A reused name is safe.
+ {Core core;FileService owned(vfs,&core);auto actor=core.acquireOwner();core.add(Device::bind("/owned-fs",FileService::Methods,"",owned));JsonDocument a,o;a["file"]="/storage/ram/temp";a["temporary"]=true;assert(!core.invoke("/owned-fs","create",a.as<JsonObjectConst>(),o.to<JsonObject>(),actor));
+  assert(!memory.rename("/temp","/renamed-temp"));assert(!memory.createFile("/temp"));assert(vfs.lockRead("/storage/ram/renamed-temp",900));core.releaseOwner(actor);owned.poll();FileInfo i;assert(!memory.stat("/renamed-temp",i));vfs.release(900);owned.poll();assert(!strcmp(memory.stat("/renamed-temp",i),"not_found"));assert(!memory.stat("/temp",i));assert(!memory.remove("/temp"));
+  a["file"]="/storage/ram/no-owner";assert(!strcmp(core.invoke("/owned-fs","create",a.as<JsonObjectConst>(),o.to<JsonObject>()),"temporary_file_owner_required"));assert(!strcmp(memory.stat("/no-owner",i),"not_found"));
+ }
  std::cout<<"Shared file API preserves binary text, validation-before-effects, leases, exclusive create, resize, flush, rename and 64-bit EOF offsets\n";
 }

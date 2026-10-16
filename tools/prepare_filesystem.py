@@ -21,7 +21,7 @@ def tool():
     if platform.system()=='Darwin':
         cc=os.environ.get('CC','/Library/Developer/CommandLineTools/usr/bin/clang');cxx=os.environ.get('CXX','/Library/Developer/CommandLineTools/usr/bin/clang++')
     compiler=subprocess.check_output([cxx,'--version'],text=True).splitlines()[0]
-    key=hashlib.sha256(json.dumps(spec,sort_keys=True).encode()+compiler.encode()+platform.machine().encode()).hexdigest()
+    key=hashlib.sha256(json.dumps(spec,sort_keys=True).encode()+Path(__file__).read_bytes()+compiler.encode()+platform.machine().encode()).hexdigest()
     base=ROOT/'build/dependencies/mklittlefs'/key;base.mkdir(parents=True,exist_ok=True)
     binary=base/('mklittlefs.exe' if platform.system()=='Windows' else 'mklittlefs');receipt=base/'binary.sha256'
     if binary.exists():
@@ -45,6 +45,28 @@ def tool():
         for old,new in [('s_cfg.cache_size = 64;',f's_cfg.cache_size = {spec["cache_bytes"]};'),('s_cfg.lookahead_size = 64;',f's_cfg.lookahead_size = {spec["lookahead_bytes"]};')]:
             if text.count(old)!=1:raise RuntimeError('LittleFS builder patch context')
             text=text.replace(old,new)
+        # The upstream extractor puts the entire file on its stack. Stream
+        # large resources so a complete font does not exhaust the host stack.
+        old = '    uint8_t buffer[littlefsFile->size];'
+        if text.count(old) != 1:raise RuntimeError('LittleFS extraction buffer context')
+        text = text.replace(old, '    uint8_t buffer[4096];')
+        start = text.index('    // read content into buffer', text.index('uint8_t buffer[4096];'))
+        end = text.index('    // Adjust time, if present', start)
+        text = text[:start] + """    FILE* dst = fopen(destPath, "wb");
+    if (!dst) { lfs_file_close(&s_fs, &src); return false; }
+    uint32_t remaining = littlefsFile->size;
+    bool copied = true;
+    while (remaining) {
+        size_t request = std::min<size_t>(sizeof buffer, remaining);
+        lfs_ssize_t got = lfs_file_read(&s_fs, &src, buffer, request);
+        if (got <= 0 || fwrite(buffer, 1, got, dst) != size_t(got)) { copied = false; break; }
+        remaining -= got;
+    }
+    lfs_file_close(&s_fs, &src);
+    if (fclose(dst)) copied = false;
+    if (!copied) return false;
+
+""" + text[end:]
         main.write_text(text)
         flags=['-Os','-DLFS_NAME_MAX=255','-DLFS_ATTR_MAX=1022']
         if platform.system()=='Darwin':

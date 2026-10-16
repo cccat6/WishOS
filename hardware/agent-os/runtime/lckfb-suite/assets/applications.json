@@ -1,6 +1,6 @@
 {
   "launcher": "launcher",
-  "voice": "",
+  "voice": "voice",
   "applications": [
     {
       "id": "launcher",
@@ -11,6 +11,51 @@
         "path": "hardware/agent-os/runtime/lckfb-suite"
       },
       "fallback_manifest": "/system/recovery/launcher.json"
+    },
+    {
+      "id": "voice",
+      "title": "对话",
+      "manifest": "/system/apps/voice.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "hardware/agent-os/runtime/lckfb-suite"
+      }
+    },
+    {
+      "id": "device",
+      "title": "设备与传感器",
+      "manifest": "/system/apps/device.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "hardware/agent-os/runtime/lckfb-suite"
+      }
+    },
+    {
+      "id": "camera",
+      "title": "相机",
+      "manifest": "/system/apps/camera.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "hardware/agent-os/runtime/lckfb-suite"
+      }
+    },
+    {
+      "id": "files",
+      "title": "存储与文件",
+      "manifest": "/system/apps/files.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "hardware/agent-os/runtime/lckfb-suite"
+      }
+    },
+    {
+      "id": "settings",
+      "title": "网络与设置",
+      "manifest": "/system/apps/settings.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "hardware/agent-os/runtime/lckfb-suite"
+      }
     }
   ],
   "navigation": {

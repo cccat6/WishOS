@@ -7,6 +7,9 @@ using namespace notesos;
 int main(){char dir[]="/tmp/wishos-posix-XXXXXX";assert(mkdtemp(dir));bool mounted=true;std::recursive_mutex bus;PosixFileProvider p("test","/storage/test","sd",true,mounted,dir,"/dev/sd","fat32",512,&bus);size_t n=777;uint8_t bytes[8]{};
  std::thread owner([&]{bus.lock();assert(!strcmp(p.read("/x",0,bytes,8,n),"not_found"));bus.unlock();});owner.join();
  assert(n==0);assert(!p.mkdir("/子目录"));assert(!p.createFile("/子目录/a.txt"));assert(!p.write("/子目录/a.txt",0,(const uint8_t*)"abc",3,true,n)&&n==3);assert(!p.read("/子目录/a.txt",1,bytes,8,n)&&n==2&&!memcmp(bytes,"bc",2));
+ // Cached readers cannot outlive an in-place write, rename/removal or remount.
+ assert(!p.write("/子目录/a.txt",0,(const uint8_t*)"xyz",3,true,n));assert(!p.read("/子目录/a.txt",0,bytes,3,n)&&n==3&&!memcmp(bytes,"xyz",3));
+ p.volume("fat32",512);assert(!p.read("/子目录/a.txt",0,bytes,3,n)&&n==3&&!memcmp(bytes,"xyz",3));
  char canonical[256];FileInfo canonicalInfo;assert(!p.canonicalPath("/子目录/a.txt",canonical,sizeof canonical,canonicalInfo));assert(!strcmp(canonical,"/子目录/a.txt")&&canonicalInfo.size==3);
  assert(!strcmp(p.createFile("/子目录/a.txt"),"exists"));p.background(true);assert(!strcmp(p.read("/子目录/a.txt",0,bytes,8,n),"resource_busy")&&n==0);p.background(false);
  p.writable=false;n=99;assert(!strcmp(p.write("/子目录/a.txt",0,bytes,8,true,n),"read_only")&&n==0);assert(!strcmp(p.remove("/子目录/a.txt"),"read_only"));p.writable=true;

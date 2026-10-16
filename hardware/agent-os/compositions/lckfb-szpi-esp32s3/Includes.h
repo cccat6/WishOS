@@ -12,6 +12,22 @@
 #include <lvgl.h>
 #include <lvgl_private.h>
 #include <driver/spi_master.h>
+#include <driver/gpio.h>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_vendor.h>
 #include <esp_lcd_panel_ops.h>
+
+#include "drivers/everest-duplex/EverestDuplex.h"
+#include "audio/CompressedCapture.h"
+#include "audio/Speech.h"
+#include "drivers/esp-wakenet/EspWakeNet.h"
+#include "drivers/energy-activity/EnergyActivity.h"
+
+#include "drivers/esp-camera/EspCamera.h"
+
+#include "BleConfiguration.h"
+#include <BLEDevice.h>
+#include <BLEHIDDevice.h>
+#include <BLESecurity.h>
+
+#include <WishNimbleMemory.h>
