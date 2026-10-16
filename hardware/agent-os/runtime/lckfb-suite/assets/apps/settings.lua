@@ -3,7 +3,7 @@ local screen='settings';local pending;local guarded=false;local clients=0
 local function show(name,hint)
  screen=name or screen
  local w=C.call('/dev/wifi','read') or {};local ip=w.connected and w.ip or w.ap_ip or '192.168.4.1'
- if screen=='settings' then C.open(screen,{ssid=w.ssid or C.t('尚未联网','Not connected'),address=ip,qr='http://'..ip..'/control/setup.html',clients=clients>0 and C.t('手机已连接 · ','Browser connected · ')..clients or C.t('等待手机连接','Waiting for browser')})
+ if screen=='settings' then C.open(screen,{ssid=w.ssid or C.t('尚未联网','Not connected'),address=ip,mac='MAC '..(w.mac or ''),qr='http://'..ip..'/control/setup.html',clients=clients>0 and C.t('手机已连接 · ','Browser connected · ')..clients or C.t('等待手机连接','Waiting for browser')})
  elseif screen=='sharing' then local s=C.call('/services/nfs','read') or {};C.open(screen,{share_status=(s.running and C.t('已开启','Enabled') or C.t('未开启','Disabled'))..'\n'..ip..':/sd',share_toggle=s.running and C.t('关闭共享','Stop sharing') or C.t('开启共享','Start sharing')})
  else C.open(screen,{hint=hint or ''}) end
 end
@@ -22,6 +22,7 @@ function on_start()
  C.call('/net/http-server','route',{path='/app/settings',body='WishOS settings',content_type='text/plain'})
  show('settings');refresh();C.timer(1000,1000,refresh)
  notes.on('/net/http-server','session_changed',refresh)
+ notes.on('/dev/wifi',{'connected','disconnected'},function() if not pending then show(screen) end end)
  notes.on('/sys/apps','exit_requested',function(e) pending=e.data.operation_id;show('confirm-exit') end)
  notes.on('/sys/apps','exit_cancelled',function(e) if pending==e.data.operation_id then pending=nil;show('settings') end end)
  C.action('home',back);C.action('options',function() show('settings-options') end)

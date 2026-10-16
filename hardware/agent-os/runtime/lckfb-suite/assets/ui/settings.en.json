@@ -185,22 +185,39 @@
           "id": "address"
         },
         {
-          "type": "label",
+          "type": "container",
           "placement": {
             "x": 156,
-            "y": 181,
+            "y": 178,
             "width": 156,
-            "height": 21
+            "height": 18
           },
           "style": {
-            "fontSize": 11,
-            "lineHeight": 16,
-            "textColor": "#60645B"
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
           },
-          "labelProps": {
-            "text": "On the same LAN",
-            "longMode": "ellipsis"
-          }
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 156
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 17,
+                "textColor": "#60645B",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "mac"
+            }
+          ]
         },
         {
           "type": "button",

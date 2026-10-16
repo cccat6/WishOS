@@ -101,7 +101,7 @@ for i in range(3):
  row['children'][0]['id']='app'+str(i)+'_icon';row['children'][-1]['id']='app'+str(i)+'_title';appRows.append(row)
 write('apps',header('我的应用')+appRows+[button('previous','上一页',8,196,96,44,size=14),slot('',112,196,96,44,13,'page','center'),button('next','下一页',216,196,96,44,size=14)])
 qr={'type':'qrcode','id':'qr','placement':{'x':16,'y':64,'width':128,'height':128},'qrcodeProps':{'text':'http://192.168.4.1/control/setup.html'}}
-write('settings',header('设备设置')+[qr,label('扫码进行完整设置',156,58,156,15),label('Wi-Fi',156,91,156,11,color=MUTED),label('—',156,108,156,15,'ssid'),label('后台地址',156,139,156,11,color=MUTED),label('—',156,156,156,15,'address'),label('同一局域网内访问',156,181,156,11,color=MUTED),button('options','本机设置',8,196,116,44,size=15),slot('等待手机连接',132,196,180,44,12,'clients','right',MUTED)])
+write('settings',header('设备设置')+[qr,label('扫码进行完整设置',156,58,156,15),label('Wi-Fi',156,91,156,11,color=MUTED),label('—',156,108,156,15,'ssid'),label('后台地址',156,139,156,11,color=MUTED),label('—',156,156,156,15,'address'),slot('',156,178,156,18,12,'mac',color=MUTED),button('options','本机设置',8,196,116,44,size=15),slot('等待手机连接',132,196,180,44,12,'clients','right',MUTED)])
 write('settings-options',header('本机设置')+[button('ap','开启配网热点',8,52,304,44,size=17),button('language','语言 / Language',8,100,304,44,size=17),button('sharing','文件共享',8,148,304,44,size=17),label('',12,205,296,12,'hint',MUTED,h=30,wrap=True)])
 write('sharing',header('文件共享')+[label('NFS · 局域网存储访问',12,59,296,18),label('—',12,99,296,15,'share_status',h=72,wrap=True),button('share_toggle','开启共享',8,190,304,44,size=17)])
 for suffix in ('','.en'):
@@ -117,7 +117,10 @@ for suffix in ('','.en'):
  p=ASSETS/'ui'/f'files{suffix}.json';d=json.loads(p.read_text());nodes=d['assets'][0]['children']
  for n in nodes[1:3]:n['placement']['width']=192;n['children'][0]['placement']['width']=192
  refresh=button('refresh','刷新' if not suffix else 'Refresh',268,4,44,44,size=12)
- nodes.append(refresh);save(p,d)
+ nodes.append(refresh)
+ for n in nodes:
+  if n.get('id')=='filter':n['children'][0]['id']='filter_label'
+ save(p,d)
 write('file-info',header('文件信息')+[label('',12,56,296,17,'filename',h=78,wrap=True),label('',12,140,296,13,'fileinfo',h=42,wrap=True),button('previous','上一页',8,196,96,44,size=14),slot('',112,196,96,44,13,'page','center'),button('next','下一页',216,196,96,44,size=14)])
 write('camera',header('相机','点击拍照','status')+[image('../icons/camera.png',8,54,304,132,'frame'),button('capture','拍照',8,192,148,44,size=17),button('save','保存到 SD',164,192,148,44,size=16)])
 write('voice',header('与 Agent 对话')+[image('../brand/microphone.png',16,66,32,32,'activity'),label('说出你想做的应用',60,66,248,20,'message',h=62,wrap=True),label('点击开始，说完再点发送',12,135,296,14,'detail',MUTED,h=40,wrap=True),button('record','开始录音',8,184,304,48,'voice')])

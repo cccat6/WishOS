@@ -22,7 +22,7 @@ local function show_detail()
  local hidden={};if detailPage==1 then hidden[#hidden+1]='previous' end;if detailPage==pages then hidden[#hidden+1]='next' end;C.open('file-info',{filename=text:sub(first,last-1),fileinfo=label..' · '..size(f.size),page=tostring(detailPage)..' / '..tostring(pages)},hidden)
 end
 local function render()
- local v={directory=(dir==root and '/' or dir:sub(#root+1)),filter=categories[mode][C.en() and 2 or 1]}
+ local v={directory=(dir==root and '/' or dir:sub(#root+1)),filter_label=categories[mode][C.en() and 2 or 1]}
  for i=0,2 do local f=page.entries[i+1];local _,label=kind(f or {name=''})
   v['file'..i..'_title']=f and short_name(f.name) or ''
   v['file'..i..'_meta']=f and (label..(f.directory and '  /' or '  ·  '..size(f.size))) or ''

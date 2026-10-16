@@ -480,7 +480,8 @@
                 "text": "All types",
                 "longMode": "ellipsis",
                 "metrics": "ink"
-              }
+              },
+              "id": "filter_label"
             }
           ]
         },
