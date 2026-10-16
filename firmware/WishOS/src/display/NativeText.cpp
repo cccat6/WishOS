@@ -32,14 +32,14 @@ static const NativeGlyph *glyph(uint32_t code,uint8_t size){
 // Trusted generated tables: each glyph restarts at a byte boundary and yields
 // its exact raw/LZ4 payload without a shared cache or heap allocation.
 static void glyphPayload(const NativeGlyph&g,uint8_t*out){const uint8_t*source=NATIVE_FONT_BITS+g.offset;unsigned bit=0;for(unsigned i=0;i<(g.stored&0x7fff);++i){uint16_t node=0;while(node<256){node=NATIVE_FONT_TREE[node][(source[bit/8]>>(7-bit%8))&1];++bit;}out[i]=uint8_t(node-256);}}
-bool nativeGlyphMetrics(uint32_t cp,uint8_t size,FontMetrics&m){auto g=glyph(cp,size);if(!g)return false;m={g->w,g->h,g->advance,g->x,g->y};return true;}
+bool nativeGlyphMetrics(uint32_t cp,uint8_t size,FontMetrics&m){auto g=glyph(cp,size);if(!g)return false;m={uint8_t(g->w),uint8_t(g->h),uint8_t(g->advance),int8_t(g->x),int8_t(g->y)};return true;}
 bool nativeGlyphAlpha(uint32_t cp,uint8_t size,uint8_t*out,size_t stride){auto g=glyph(cp,size);if(!g||stride<g->w)return false;uint8_t unpacked[512];uint8_t encoded[512];glyphPayload(*g,encoded);const uint8_t*bits=encoded;size_t row=(g->w+7)/8;
  if(g->stored&0x8000){if(row*g->h>sizeof(unpacked)||!lz4Raw(bits,g->stored&0x7fff,unpacked,row*g->h))return false;bits=unpacked;}
  for(unsigned y=0;y<g->h;++y)for(unsigned x=0;x<g->w;++x)out[y*stride+x]=(bits[y*row+x/8]&(0x80>>(x&7)))?255:0;return true;
 }
 bool nativeGlyphBitmap(uint32_t cp,uint8_t size,uint8_t*out,size_t capacity,FontMetrics&m){
  auto g=glyph(cp,size);if(!g)return false;size_t bytes=((g->w+7)/8)*g->h;
- if(bytes>capacity)return false;m={g->w,g->h,g->advance,g->x,g->y};uint8_t encoded[512];glyphPayload(*g,encoded);const uint8_t*bits=encoded;
+ if(bytes>capacity)return false;m={uint8_t(g->w),uint8_t(g->h),uint8_t(g->advance),int8_t(g->x),int8_t(g->y)};uint8_t encoded[512];glyphPayload(*g,encoded);const uint8_t*bits=encoded;
  if(g->stored&0x8000)return lz4Raw(bits,g->stored&0x7fff,out,bytes);
  memcpy(out,bits,bytes);return true;
 }
