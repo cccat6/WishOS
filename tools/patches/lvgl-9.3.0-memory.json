@@ -1,7 +1,7 @@
 {
   "version": "9.3.0",
   "source_sha256": "ec944a9be2582b375b1de2c9dab0045b17c7ac016119731e6649e96a1779eda8",
-  "patch_version": 7,
+  "patch_version": 8,
   "changes": [
     {
       "file": "src/core/lv_obj_style.c",
@@ -274,6 +274,17 @@
         {
           "old": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &(layer->_clip_area), LV_DRAW_TASK_TYPE_VECTOR);",
           "new": "\n    lv_draw_task_t * t = lv_draw_add_task(layer, &(layer->_clip_area), LV_DRAW_TASK_TYPE_VECTOR);\n    if(t == NULL) return;",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/widgets/label/lv_label.c",
+      "sha256": "14ea868409d773c6db157a60fc1104297a023ed653dabc9ed867ad1d4db6a8ca",
+      "replacements": [
+        {
+          "old": "            uint32_t letter_id = lv_label_get_letter_on(obj, &p, false);",
+          "new": "            /* get_letter_on subtracts padding; convert this content point\n             * into the coordinate space expected by that helper. */\n            p.x += lv_obj_get_style_pad_left(obj, LV_PART_MAIN);\n            p.y += lv_obj_get_style_pad_top(obj, LV_PART_MAIN);\n            uint32_t letter_id = lv_label_get_letter_on(obj, &p, false);",
           "count": 1
         }
       ]
