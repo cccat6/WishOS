@@ -3,7 +3,8 @@
   "id": "lckfb-szpi-esp32s3",
   "entry": "Port.inc",
   "flags": [
-    "-DWISHOS_RESOURCE_CAPACITY=64"
+    "-DWISHOS_RESOURCE_CAPACITY=64",
+    "-DWISHOS_LCD_RASTER_ROWS=64"
   ],
   "required_pins": [
     "KEY",
@@ -51,7 +52,8 @@
     "esp-wakenet",
     "energy-activity",
     "esp-camera",
-    "esp-nimble-external"
+    "esp-nimble-external",
+    "esp-lcd-spi"
   ],
   "optional_drivers": [],
   "dependencies": [

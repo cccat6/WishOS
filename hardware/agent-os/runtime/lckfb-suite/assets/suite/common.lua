@@ -12,7 +12,14 @@ end
 function C.path(name) return notes.resolve('../ui/'..name..(C.en() and '.en' or '')..'.json') end
 function C.open(name,values,hidden)
  local r,e=C.call('/sys/ui','open',{path=C.path(name),history='replace',values=values or {},hidden=notes.array(hidden or {})})
- assert(r,e);view=r.view_id;C.view=view;C.layoutRevision=r.revision;C.model=values or {};pressed=nil;return r
+ assert(r,e);view=r.view_id;C.view=view;C.layoutRevision=r.revision;C.model=values or {};pressed=nil
+ -- Rebase the gesture state against the driver's latest physical sample when
+ -- entering a view. This accepts the first tap without waiting for the next
+ -- 20 ms sample, while an already-held contact remains ineligible for the new
+ -- view and cannot leak an action across application transitions.
+ local state=C.call('/dev/touch');local sample=state and state.input_stream and state.input_stream.sample
+ down=not sample or (sample.count or 0)~=0
+ return r
 end
 function C.update(values) if not view then return end;local next={};for k,v in pairs(C.model) do next[k]=v end;for k,v in pairs(values) do next[k]=v end;local r,e=C.call('/sys/ui','update',{view_id=view,values=next});if r then C.model=next end;return r,e end
 function C.action(id,fn) actions[id]=fn end
@@ -55,10 +62,6 @@ end
 function C.init()
  C.preferences=C.read_json(preferences) or C.preferences
  actions.home=C.home
- local cfg=C.call('/sys/config','read',{scope='system'});local ui=cfg and cfg.effective and cfg.effective['/sys/ui'] or {}
- if not ui.font_file or ui.font_file=='' then
-  C.call('/sys/config','write',{scope='system',persist=true,changes={{resource='/sys/ui',settings={font_file=notes.resolve('../fonts/NotesSansSC-Regular.ttf')}}}})
- end
  notes.on('/sys/timers','fired',function(e) local callback=timers[e.data.id];if callback then if callback.once then timers[e.data.id]=nil end;callback.fn(e) end end)
  local function touch_event(e)
   touchPending=false

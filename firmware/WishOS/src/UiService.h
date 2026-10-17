@@ -227,10 +227,15 @@ static bool prepareUiDocument(const char*path,JsonObjectConst d,const UiView&vie
  UiGeometry*geometry=nullptr;if(ok&&!validateOnly){lv_obj_update_layout(candidate);geometry=captureUiGeometry(candidate,view.rotation);if(!geometry){uiError="ui_memory_budget";ok=false;}}
  if(uiMemoryFailed()){uiError="ui_memory_budget";ok=false;}
  if(!ok||validateOnly){releaseUiGeometry(geometry);lv_obj_delete(candidate);freeUiNodeRefs(uiNodeRefs);uiNodeRefs=previousRefs;uiNodes=oldNodes;uiMissingGlyphs=oldMissing;restore();reapVectorFonts(false,0);return ok;}
- releaseUiGeometry(uiPreparedGeometry);uiPreparedGeometry=geometry;auto previous=uiRoot;uiRoot=candidate;lv_screen_load(uiRoot);lv_obj_delete(previous);freeUiNodeRefs(previousRefs);reapVectorFonts();reapOrphanFonts();lv_obj_update_layout(uiRoot);return true;
+ // Candidate layout was settled before geometry capture. Loading the screen
+ // keeps the same root dimensions, so a second full-tree layout pass here only
+ // duplicates the most expensive part of a presentation switch and delays input.
+ releaseUiGeometry(uiPreparedGeometry);uiPreparedGeometry=geometry;auto previous=uiRoot;uiRoot=candidate;lv_screen_load(uiRoot);lv_obj_delete(previous);freeUiNodeRefs(previousRefs);reapVectorFonts();reapOrphanFonts();return true;
 }
 static bool prepareUi(const char*path,const UiView&view=UiView{},bool validateOnly=false){JsonDocument doc;if(auto e=loadJsonFile(path,doc)){uiError=e;return false;}return prepareUiDocument(path,doc.as<JsonObjectConst>(),view,validateOnly);}
-static bool renderUiRegion(const lv_area_t&area,UiSink&sink){if(!uiDisplay)return false;clearUiMemoryFailure();uiReadError=nullptr;uiSink=&sink;lv_obj_invalidate_area(uiRoot,&area);lv_refr_now(uiDisplay);uiSink=nullptr;if(uiMemoryFailed())uiReadError="ui_memory_budget";if(uiReadError){uiError=uiReadError;lv_image_cache_drop(nullptr);return false;}return true;}
+// An explicit bounded raster region can be advanced over several event-loop
+// turns. The renderer owns LVGL invalidation; layout was settled by prepareUi.
+static bool renderUiRegion(const lv_area_t&area,UiSink&sink,bool exact=false){if(!uiDisplay)return false;clearUiMemoryFailure();uiReadError=nullptr;uiSink=&sink;if(exact)uiDisplay->inv_p=0;lv_obj_invalidate_area(uiRoot,&area);lv_refr_now(uiDisplay);uiSink=nullptr;if(uiMemoryFailed())uiReadError="ui_memory_budget";if(uiReadError){uiError=uiReadError;lv_image_cache_drop(nullptr);return false;}return true;}
 
 static const char*defaultUiDriver();
 static const char*validateUiDriver(const char*);
