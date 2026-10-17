@@ -12,14 +12,7 @@ end
 function C.path(name) return notes.resolve('../ui/'..name..(C.en() and '.en' or '')..'.json') end
 function C.open(name,values,hidden)
  local r,e=C.call('/sys/ui','open',{path=C.path(name),history='replace',values=values or {},hidden=notes.array(hidden or {})})
- assert(r,e);view=r.view_id;C.view=view;C.layoutRevision=r.revision;C.model=values or {};pressed=nil
- -- Rebase the gesture state against the driver's latest physical sample when
- -- entering a view. This accepts the first tap without waiting for the next
- -- 20 ms sample, while an already-held contact remains ineligible for the new
- -- view and cannot leak an action across application transitions.
- local state=C.call('/dev/touch');local sample=state and state.input_stream and state.input_stream.sample
- down=not sample or (sample.count or 0)~=0
- return r
+ assert(r,e);view=r.view_id;C.view=view;C.layoutRevision=r.revision;C.model=values or {};pressed=nil;return r
 end
 function C.update(values) if not view then return end;local next={};for k,v in pairs(C.model) do next[k]=v end;for k,v in pairs(values) do next[k]=v end;local r,e=C.call('/sys/ui','update',{view_id=view,values=next});if r then C.model=next end;return r,e end
 function C.action(id,fn) actions[id]=fn end
@@ -85,6 +78,13 @@ function C.init()
  notes.on('/dev/touch','failed',function(e) touchPending=false;pressed=nil;down=true;if e.data.input_stream and touchStreamMethod then local stopped=C.call('/dev/touch',touchStreamMethod,{enabled=false});if stopped then poll_touch() end end end)
  notes.on('/dev/touch','input_overflow',function() pressed=nil;down=true end)
  local capability=C.call('/sys/capabilities','describe',{path='/dev/touch'}) or {};local stream=capability.input_stream
- if stream then touchStreamMethod=stream.method;notes.on('/dev/touch',stream.event,touch_event);local state=C.call('/dev/touch') or {};local request={enabled=true};if not state.input_stream or not state.input_stream.enabled or state.input_stream.owner~=0 then request.interval_ms=C.config.touch_capture_interval_ms end;local active=C.call('/dev/touch',stream.method,request);if not active then poll_touch() end else poll_touch() end
+ if stream then
+  touchStreamMethod=stream.method;notes.on('/dev/touch',stream.event,touch_event)
+  local state=C.call('/dev/touch') or {};local request={enabled=true}
+  if not state.input_stream or not state.input_stream.enabled or state.input_stream.owner~=0 then request.interval_ms=C.config.touch_capture_interval_ms end
+  local active=C.call('/dev/touch',stream.method,request);if not active then poll_touch() end
+ else
+  poll_touch()
+ end
 end
 return C

@@ -4,7 +4,7 @@
   "entry": "Port.inc",
   "flags": [
     "-DWISHOS_RESOURCE_CAPACITY=64",
-    "-DWISHOS_LCD_RASTER_ROWS=64"
+    "-DWISHOS_LCD_RASTER_ROWS=40"
   ],
   "required_pins": [
     "KEY",
