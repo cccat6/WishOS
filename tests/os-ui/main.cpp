@@ -106,7 +106,7 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
   const char*page=R"({"version":"0.1.1","assets":[{"type":"viewScreen","style":{"padding":0},"children":[{"type":"image","placement":{"x":0,"y":0,"width":480,"height":720},"imageProps":{"src":"cached.png","fit":"contain"}}]}]})";assert(!files.write("/cached-ui.json",0,(const uint8_t*)page,strlen(page),true,wrote));
   JsonDocument policy,result;policy["changes"][0]["resource"]="/sys/ui";auto settings=policy["changes"][0]["settings"].to<JsonObject>();UiSink sink{nullptr,[](void*,const lv_area_t&,const uint16_t*){}};
   auto draw=[&](unsigned cache){settings["image_cache_bytes"]=cache;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(prepareUi("/storage/ram/cached-ui.json"));files.readOps=0;assert(renderUiRegion({0,0,479,719},sink));return files.readOps;};
-  auto uncached=draw(0),cached=draw(65536);std::cerr<<"PNG provider reads: uncached="<<uncached<<" cached="<<cached<<"\n";assert(cached<uncached);
+  auto uncached=draw(0),cached=draw(65536);std::cerr<<"PNG provider reads: uncached="<<uncached<<" cached="<<cached<<"\n";assert(cached<uncached);auto warm=draw(65536);std::cerr<<"PNG next-frame reads: first="<<cached<<" warm="<<warm<<"\n";assert(warm<cached);
   assert(!files.write("/cached.png",0,(const uint8_t*)"invalid",7,true,wrote));assert(!prepareUi("/storage/ram/cached-ui.json"));settings["image_cache_bytes"]=0;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));
  }
  // Indexed glyphs remain seekable and leased. Malformed user files fail at

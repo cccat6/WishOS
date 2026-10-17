@@ -4,6 +4,11 @@ static drivers::WireI2c wireI2c(Wire,i2cMutex,pins::I2C_HZ);
 static drivers::Pca9557 expander(wireI2c.bus);
 static drivers::Qmi8658 imu(wireI2c.bus,drivers::Qmi8658::Profile::RevA);
 static drivers::Ft6336 touch(wireI2c.bus,0x38,{240,320,true,false,true});
+static std::atomic<uint32_t>inputPresentation{0};
+struct InputTask{void(*run)(void*);void*context;};
+static void inputTask(void*p){auto entry=*static_cast<InputTask*>(p);delete static_cast<InputTask*>(p);entry.run(entry.context);vTaskDelete(nullptr);}
+static drivers::Ft6336 touchInputBackend(wireI2c.bus,0x38,{240,320,true,false,true});
+static drivers::Ft6336Input touchInput(core,touchInputBackend,{[](void(*run)(void*),void*context){auto entry=new(std::nothrow)InputTask{run,context};if(!entry)return false;if(xTaskCreate(inputTask,"wish-touch",4096,entry,1,nullptr)!=pdPASS){delete entry;return false;}return true;},6144},[](){return inputPresentation.load();},[](unsigned ms){vTaskDelay(pdMS_TO_TICKS(ms?ms:1));});
 static drivers::Sampling imuSampling(core,imu,"/dev/imu"),touchSampling(core,touch,"/dev/touch");
 static SystemNavigation navigation(core,applications,1,1,0);
 static char appScope[48]="system";
@@ -35,7 +40,7 @@ static ButtonGestures buttonGestures({"BOOT"},nullptr,buttonEvent);
 // GPIO edges are captured independently of rendering. Gesture interpretation,
 // configuration, navigation and callbacks remain on the system event loop.
 struct ButtonEdge {uint32_t at,pressed,presentation;};
-static QueueHandle_t buttonEdges=nullptr;static std::atomic<uint32_t>inputPresentation{0};static volatile uint32_t inputOverruns=0;static uint32_t inputRaw=0;
+static QueueHandle_t buttonEdges=nullptr;static volatile uint32_t inputOverruns=0;static uint32_t inputRaw=0;
 static void IRAM_ATTR captureButtonEdge(){ButtonEdge e{millis(),gpio_get_level(gpio_num_t(pins::KEY))==0?1u:0u,inputPresentation.load(std::memory_order_relaxed)};if(xQueueSendFromISR(buttonEdges,&e,nullptr)!=pdTRUE)++inputOverruns;}
 static void pollButtonInput(){if(!buttonEdges)return;ButtonEdge e;while(xQueueReceive(buttonEdges,&e,0)==pdTRUE){
  // Advance the previous level to its captured edge, then apply the new level.
@@ -52,7 +57,7 @@ static void registerNativeDevices(){
  core.add({"/sys/navigation","read,configure","protected system input",[](const char*m,JsonObjectConst a,JsonObject o){return navigation.invoke(m,a,o);},[](JsonObject o){navigation.describe(o);},"read"});
  core.add({"/dev/sd","read,describe,configure,probe,mount,unmount,space,cancel","SDMMC removable volume",[](const char*m,JsonObjectConst a,JsonObject o){return sdVolume.invoke(m,a,o);},[](JsonObject o){sdVolume.describe(o);},"read,describe"});
  core.add({"/dev/imu",drivers::Sampling::Methods,"six-axis inertial sensor",[](const char*m,JsonObjectConst a,JsonObject o){return imuSampling.invoke(m,a,o);},[](JsonObject o){imuSampling.describe(o);},"read,describe"});
- core.add({"/dev/touch",drivers::Sampling::Methods,"two-contact touch sensor",[](const char*m,JsonObjectConst a,JsonObject o){return touchSampling.invoke(m,a,o);},[](JsonObject o){touchSampling.describe(o);},"read,describe"});
+ core.add({"/dev/touch","describe,read,configure,measure,cancel,configure_stream","two-contact touch sensor",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure_stream"))return touchInput.configure(a,o);auto e=touchSampling.invoke(m,a,o);if(!e&&!strcmp(m,"read"))touchInput.read(o);return e;},[](JsonObject o){touchSampling.describe(o);touchInput.describe(o);},"read,describe"});
  core.add({"/sys/ui","read,capabilities,hit_test,validate,fonts,font_register,font_unregister,create,activate,close,back,open,update,refresh,app_load,validate_app","runtime presentation",uiHandler,uiAsyncDescription,"read,capabilities,hit_test,fonts,validate,validate_app"});
  core.add({"/dev/display","read,drivers","LCD presentation component",lcdHandler,[](JsonObject o){lcdHandler("read",JsonObjectConst(),o);},"read,drivers"});
  core.add({"/dev/buttons","read,describe,configure","runtime button gestures",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure"))return buttonGestures.configure(a,o,[](const char*s,size_t n){return preferences.putString("buttons",s)==n;});if(!strcmp(m,"describe"))buttonGestures.describe(o);else if(!strcmp(m,"read"))buttonGestures.read(o);else return "unsupported_method";return nullptr;},nullptr,"read,describe"});
@@ -62,4 +67,4 @@ static void registerNativeDevices(){
  JsonDocument nav;for(auto asset:boardpack::ASSETS)if(!strcmp(asset.path,"/applications.json")&&!deserializeJson(nav,asset.data,asset.size)&&nav["navigation"].is<JsonObjectConst>()){navigation.configure(nav["navigation"]);break;}
  String saved=preferences.getString("policy","{}");policies.restore(saved.c_str());
 }
-static void pollNativeDevices(){microphone.poll();pollAudio();pollBle();camera.poll();sdVolume.poll();lcdInitialization.poll();imuSampling.poll(uptime());touchSampling.poll(uptime());pollUiPresentation();lcdScheduler.tick(uptime());pollButtonInput();}
+static void pollNativeDevices(){inputPresentation.store(presentationState.active(),std::memory_order_relaxed);microphone.poll();pollAudio();pollBle();camera.poll();sdVolume.poll();lcdInitialization.poll();imuSampling.poll(uptime());touchSampling.poll(uptime());touchInput.poll();pollUiPresentation();lcdScheduler.tick(uptime());pollButtonInput();}

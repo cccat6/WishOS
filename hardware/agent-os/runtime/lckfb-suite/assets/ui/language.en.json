@@ -57,7 +57,8 @@
           "labelProps": {
             "text": "Choose your language",
             "longMode": "ellipsis"
-          }
+          },
+          "id": "language_notice"
         },
         {
           "type": "button",

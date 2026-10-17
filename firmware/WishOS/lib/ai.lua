@@ -3,18 +3,24 @@
 local M={}
 function M.listen(handler,options)
  options=options or {};local pending,listeners,timer={},{},nil
+ local function acknowledge(key)
+  local item=pending[key]
+  if not item or not item.reply then return end
+  local ack=notes.call('/services/ai','acknowledge',item.reply)
+  if ack.ok or ack.error=='ai_action_not_pending' or ack.error=='ai_request_not_found' then pending[key]=nil end
+  return ack
+ end
  local function receive(id,step,queued)
   if queued then handler(queued,function() end,{id=id,step=step});return end
   local key=tostring(id)..':'..tostring(step)
-  if pending[key] then return end
+  if pending[key] then acknowledge(key);return end
   local r=notes.call('/services/ai','read_action',{id=id,step=step})
   if not r.ok then return end
-  pending[key]=true
+  pending[key]={}
   local function done(ok,result)
-   if not pending[key] then return end
-   local ack=notes.call('/services/ai','acknowledge',{id=id,step=step,ok=ok~=false,result=result})
-   if ack.ok or ack.error=='ai_action_not_pending' or ack.error=='ai_request_not_found' then pending[key]=nil end
-   return ack
+   local item=pending[key];if not item then return end
+   if not item.reply then item.reply={id=id,step=step,ok=ok~=false,result=result} end
+   return acknowledge(key)
   end
   local ok,result=pcall(handler,r.result.action,done,{id=id,step=step})
   if not ok then done(false)

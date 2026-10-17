@@ -32,6 +32,8 @@ mkdir -p build/previews
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_rpc_link_test.cpp -o build/os-rpc-link-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_envelope_limits_test.cpp -o build/os-envelope-limits-test
 build/os-envelope-limits-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" tests/os_http_ingress_test.cpp -o build/os-http-ingress-test
+build/os-http-ingress-test
 build/os-rpc-link-test
 build/os-interaction-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_e6_color_test.cpp -o build/os-e6-color-test
@@ -106,9 +108,11 @@ for surface in 128x64 320x240 239x321; do build/os-ui/notes_portable_ui_$surface
 build/os-ui/notes_lua_test
 build/os-ui/notes_callback_test
 build/os-ui/notes_audio_test
+build/os-ui/notes_recording_storage_test
 build/os-ui/notes_sensor_test
 build/os-ui/notes_lckfb_suite_test
 build/os-ui/notes_input_test
+build/os-ui/notes_touch_stream_test
 build/os-ui/notes_actuator_test
 build/os-ui/notes_memory_test
 build/os-ui/notes_app_test

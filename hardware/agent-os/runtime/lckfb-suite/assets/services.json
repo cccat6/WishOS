@@ -29,5 +29,11 @@
     "endpoint": "https://telemetry.wishos.dev/v1/ingest",
     "interval_ms": 3600000,
     "retry_ms": 60000
-  }
+  },
+  "volatile_storage": [
+    {
+      "provider": "ram",
+      "quota_bytes": 524288
+    }
+  ]
 }

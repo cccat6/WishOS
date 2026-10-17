@@ -101,12 +101,12 @@ future delivery; already transmitted bytes cannot be recalled.
 
 The initial management UI exposes NTP/timezone, proxy, download policy, local logs
 and separate telemetry switches. It remains a runtime package. The current C6
-board has only a 44 KiB writable internal partition; permitting fallback cannot
+package has a 192 KiB writable internal partition; permitting fallback cannot
 make a large novel fit there. Larger-Flash devices select their data partition and
 quota in their own package. No SD recording silently falls back to Flash.
 
-The current ESP32 native compositions explicitly select a 12 KiB system task
-stack; this is a compiled native-integration resource, not an application VM limit
+The current ESP32 native compositions select their system task
+stack in the hardware package; this is a compiled native-integration resource, not an application VM limit
 or a universal MCU requirement. Input deferral buffers and rule records allocate
 only when needed and release with their lifecycle. Native TLS handshakes reserve
 peak headroom before allocation; stable WebSocket sessions do not retain unused
@@ -178,3 +178,44 @@ releasing its download, actual telemetry registration and aggregate acknowledgme
 Harness generation used a test adapter; this validates the system protocol and
 lifecycle rather than a particular model's generation quality. Telemetry was
 disabled after the test. No E6 research board was flashed or controlled.
+
+## Application context and conversation references
+
+`/sys/apps context` exposes the current activation identity and its captured
+launch origin. System AI submissions attach this immutable provenance snapshot;
+Hub preserves it through speech recognition. Application intent chooses a stored
+application update or a transient presentation, and native instance, inventory and
+revision guards remain authoritative before effects.
+
+The ordinary conversation package uses managed AI requests for `session_control`.
+It offers fixed-bot/selectable sessions, explicit creation/selection and bounded
+Harness-owned history excerpts. The device keeps references/mode and pending
+creation identity, not authoritative conversations or memory. Switching selection
+does not retarget in-flight work; late text for a different session cannot replace
+the current conversation display.
+
+The remote outbox allocates serialized payload/results on demand. Request payloads
+fit the declared control envelope with metadata headroom; inline results remain
+bounded and large resources still use verified separate transfers. A failed result
+allocation preserves the queued request, while deadline completion requires no new
+allocation. Repeating a system AI request with the same identity/input returns its
+accepted task even when slots are full or the task has finished.
+
+Native adapters may compose the optional compressed recording storage sink. It
+uses an independent bounded spool and native worker for retention/catalog scans,
+indexed writes and finalization. Default capture remains RAM only. Storage is
+explicit, capability-described and never implicitly falls back to internal Flash.
+
+The ESP32 HTTP adapter admits bounded, completely received Content-Length
+requests before entering the SDK parser. Waiting for a fragmented peer does not
+hold the system event loop. Adapter metadata declares header/body sizes and the
+receive deadline. Multipart and chunked request framing are not offered by this
+small resource endpoint; binary files use the existing chunk APIs. This is native
+transport behavior, not application navigation or a global network work mode.
+
+Filesystem metadata leases protect a directory node without locking the content
+of every descendant. Directory browsing can coexist with an accepted append
+recording, while reads/overwrites of its active file remain protected. Native
+volume transitions still honor those leases and provider pins. The default file
+browser waits with a deadline on transient storage contention, and SD preparation
+joins an already active operation rather than reporting a missing card.

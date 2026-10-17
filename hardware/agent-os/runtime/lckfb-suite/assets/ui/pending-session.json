@@ -1,0 +1,205 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 8,
+            "y": 4,
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png",
+                "fit": "contain"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 4,
+            "width": 248,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 248
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "创建结果待确认",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 60,
+            "width": 296,
+            "height": 65
+          },
+          "style": {
+            "fontSize": 17,
+            "lineHeight": 22,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "可继续查询，或放弃本机的待确认记录。",
+            "longMode": "wrap"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 128,
+            "width": 296,
+            "height": 55
+          },
+          "style": {
+            "fontSize": 14,
+            "lineHeight": 19,
+            "textColor": "#60645B"
+          },
+          "labelProps": {
+            "text": "放弃不会删除云端会话；请先检查列表，避免重复新建。",
+            "longMode": "wrap"
+          }
+        },
+        {
+          "type": "button",
+          "id": "check_creation",
+          "placement": {
+            "x": 8,
+            "y": 192,
+            "width": 148,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 16,
+                "lineHeight": 21,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "继续核对",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "discard_creation",
+          "placement": {
+            "x": 164,
+            "y": 192,
+            "width": 148,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 16,
+                "lineHeight": 21,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "放弃此创建",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

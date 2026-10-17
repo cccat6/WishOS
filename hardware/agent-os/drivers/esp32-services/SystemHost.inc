@@ -38,6 +38,7 @@
 #include <WiFi.h>
 #include <Network.h>
 #include <WebServer.h>
+#include "drivers/esp32-services/BoundedWebServer.h"
 #include <DNSServer.h>
 #include <Preferences.h>
 #include <esp_partition.h>
@@ -50,7 +51,7 @@
 #include <WebSocketsClient.h>
 #include <atomic>
 namespace notesos {
-static Core core;static const char*resourceStartupError=nullptr;static Vfs vfs;static Preferences preferences;static WebServer http(80);static DNSServer dns;
+static Core core;static const char*resourceStartupError=nullptr;static Vfs vfs;static Preferences preferences;static BoundedWebServer http(80,core.resources(),MAX_WIRE);static DNSServer dns;
 static char apSsid[40],bootId[17];static bool mounted=false;static uint32_t cursor=0;
 static void* allocateRAM(size_t n){return core.resources().allocate(n);}
 static void freeMemoryFile(void*p){core.resources().freeAllocation(p);}
@@ -96,7 +97,7 @@ void begin(){
  {"/services/link","read,configure","system RPC connection",linkHandler,linkDescription,"read"},
  {"/sys/connections","read,configure","application service endpoints",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{return connections.invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("connections",s)==n;});},nullptr,"read"},
  {"/sys/operations","request,read,release","retained asynchronous completion observations",[](const char*m,JsonObjectConst a,JsonObject o){return core.operation(m,a,o);}},
- {"/sys/apps",Applications::Methods,"installed runtime applications and launcher",applicationsHandler,[](JsonObject o){applications.describe(o);},"read,list,inspect,validation"},
+ {"/sys/apps",Applications::Methods,"installed runtime applications and launcher",applicationsHandler,[](JsonObject o){applications.describe(o);},"read,context,list,inspect,validation"},
  {"/sys/runtime","read,validate,load,restart,stop","dynamic Lua application",scriptHandler,[](JsonObject o){ScriptHost::describe(core,o);},"read,validate"},
  {"/sys/workers","read,submit,cancel,release","isolated FreeRTOS workers",workerHandler,workerAsyncDescription},
  {"/sys/timers","read,write,remove","scheduled events",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write"))return core.timer(a,o);if(!strcmp(m,"remove"))return core.removeTimer(a["id"]|0u)?nullptr:"not_found";core.listTimers(o["timers"].to<JsonArray>());return nullptr;}},
@@ -107,8 +108,8 @@ void begin(){
  {"/net/http","read,request,receive,cancel,release","HTTP client",networkHandler,httpAsyncDescription},
  {"/net/ws","read,connect,send,receive,close","WS/WSS transport",wsHandler,wsNativeDescription},
  {"/net/tcp","read,status,listen,connect,write,close","TCP transport",[](const char*m,JsonObjectConst a,JsonObject o){return sockets.invoke(m,a,o);}},
- {"/net/http-server","read,route,respond,remove,release,stop,session","application routes",[](const char*m,JsonObjectConst a,JsonObject o){return routes.invoke(m,a,o);},[](JsonObject o){routes.describe(o);},"read"},
- {"/services/remote","read,submit,peek,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},remoteAsyncDescription},
+ {"/net/http-server","read,route,respond,remove,release,stop,session","application routes",[](const char*m,JsonObjectConst a,JsonObject o){return routes.invoke(m,a,o);},[](JsonObject o){routes.describe(o);http.describe(o);},"read"},
+ {"/services/remote","read,submit,peek,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},RemoteRequests::describe},
  {"/services/nfs","read,start,stop,memory","on-demand NFS",nfs,NfsService::describe,"read"},
  {"/dev/flash","read,mount,format,space,cancel","internal LittleFS volume",[](const char*m,JsonObjectConst a,JsonObject o){return flashVolume.invoke(m,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
  {"/sys/storage","read,configure,mount,format,space,cancel","storage providers",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure")){if(auto e=argumentFields(a,"provider,quota_bytes"))return e;if(a["provider"]!="ram"||!a["quota_bytes"].is<uint32_t>())return "memory_volume_setting";if(!ramFiles.budget(a["quota_bytes"].as<uint32_t>()))return "memory_volume_in_use";ramFiles.describe(o);return nullptr;}if(strcmp(m,"read"))return nativeStorage(m,a,o);return describeEspStorage(vfs,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
@@ -117,7 +118,7 @@ void begin(){
  {"/sys/clock","read,write","wall and monotonic clock",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write")){ClockChange c;if(auto e=validateClockChange(a,c))return e;if(c.cpu)return "use_power_adapter";if(c.wall){timeval t{time_t(c.unixSeconds),0};if(settimeofday(&t,nullptr))return "clock_failed";timeWasSet=true;}}o["monotonic_ms"]=uptime();o["unix_s"]=int64_t(time(nullptr));o["wall_clock_valid"]=timeWasSet.load()||time(nullptr)>1700000000;return nullptr;}},
  {"/dev/usb","read","USB CDC",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["connected"]=bool(Serial);return nullptr;}}
  };
-  const struct {const char*path;const char*methods;} reads[]={{"/dev/usb","read"},{"/dev/wifi","read,describe,profiles,scan_results"},{"/fs","mounts,stat,list,read"},{"/net/default","read,describe,profiles,scan_results"},{"/net/http","read"},{"/net/http-server","read"},{"/net/tcp","status"},{"/net/ws","read"},{"/services/nfs","read"},{"/services/remote","read,peek"},{"/services/time","read,describe"},{"/sys/board","read"},{"/sys/capabilities","list,describe"},{"/sys/clock","read"},{"/sys/events","read"},{"/sys/operations","read"},{"/sys/resources","read"},{"/sys/rules","read"},{"/sys/apps","read,list,inspect,validation"},
+  const struct {const char*path;const char*methods;} reads[]={{"/dev/usb","read"},{"/dev/wifi","read,describe,profiles,scan_results"},{"/fs","mounts,stat,list,read"},{"/net/default","read,describe,profiles,scan_results"},{"/net/http","read"},{"/net/http-server","read"},{"/net/tcp","status"},{"/net/ws","read"},{"/services/nfs","read"},{"/services/remote","read,peek"},{"/services/time","read,describe"},{"/sys/board","read"},{"/sys/capabilities","list,describe"},{"/sys/clock","read"},{"/sys/events","read"},{"/sys/operations","read"},{"/sys/resources","read"},{"/sys/rules","read"},{"/sys/apps","read,context,list,inspect,validation"},
  {"/sys/runtime","read,validate"},{"/sys/stats","read"},{"/sys/storage","read,list"},{"/sys/timers","read"},{"/sys/workers","read"}};
 for(auto d:devices){for(auto r:reads)if(!strcmp(d.path,r.path))d.readMethods=r.methods;core.add(d);}
  registerNativeDevices();

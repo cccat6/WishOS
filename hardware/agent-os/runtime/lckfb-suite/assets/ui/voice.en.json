@@ -50,7 +50,7 @@
           "placement": {
             "x": 64,
             "y": 4,
-            "width": 248,
+            "width": 188,
             "height": 44
           },
           "style": {
@@ -63,7 +63,7 @@
               "type": "label",
               "placement": {
                 "align": "center",
-                "width": 248
+                "width": 188
               },
               "style": {
                 "fontSize": 22,
@@ -80,10 +80,88 @@
           ]
         },
         {
+          "type": "button",
+          "id": "sessions",
+          "placement": {
+            "x": 260,
+            "y": 4,
+            "width": 52,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "Chats",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 12,
+            "y": 51,
+            "width": 296,
+            "height": 23
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 296
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 17,
+                "textColor": "#60645B",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace"
+              },
+              "id": "session_title"
+            }
+          ]
+        },
+        {
           "type": "image",
           "placement": {
             "x": 16,
-            "y": 66,
+            "y": 82,
             "width": 32,
             "height": 32
           },
@@ -97,9 +175,9 @@
           "type": "label",
           "placement": {
             "x": 60,
-            "y": 66,
+            "y": 82,
             "width": 248,
-            "height": 62
+            "height": 50
           },
           "style": {
             "fontSize": 20,
@@ -107,7 +185,7 @@
             "textColor": "#262822"
           },
           "labelProps": {
-            "text": "Describe the app you want",
+            "text": "Talk, or ask for a tool",
             "longMode": "wrap",
             "missingGlyph": "replace"
           },

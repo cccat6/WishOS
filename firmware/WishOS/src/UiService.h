@@ -18,6 +18,17 @@ static lv_display_t* uiDisplay=nullptr;static lv_obj_t* uiRoot=nullptr;static ui
 struct UiSink {void*context;void(*write)(void*,const lv_area_t&,const uint16_t*);};
 // Named element geometry belongs to the rendered UI tree, not application
 // coordinate tables. Hit tests use the completed foreground presentation.
+// Decoder entries survive model updates while their source volume generation
+// remains valid. Providers without a change token opt out of reuse.
+struct UiImageGeneration {FileProvider*provider=nullptr;uint64_t revision=0;};
+static UiImageGeneration uiImageGenerations[8];
+static uint32_t uiAppliedImageCache=UINT32_MAX,uiAppliedHeaderCache=UINT32_MAX;
+static void observeUiImageGeneration(FileProvider&provider){
+ auto revision=provider.changeRevision();UiImageGeneration*slot=nullptr;
+ for(auto&entry:uiImageGenerations)if(entry.provider==&provider){slot=&entry;break;}else if(!entry.provider&&!slot)slot=&entry;
+ if(!slot||slot->provider!=&provider||!revision||slot->revision!=revision)lv_image_cache_drop(nullptr);
+ if(slot)*slot={&provider,revision};
+}
 struct UiNodeRef {lv_obj_t*node;char id[48];UiNodeRef*next;};
 static UiNodeRef*uiNodeRefs=nullptr;
 static void freeUiNodeRefs(UiNodeRef*nodes){while(nodes){auto next=nodes->next;core.resources().freeAllocation(nodes);nodes=next;}}
@@ -96,7 +107,7 @@ static const char*validateUiNode(JsonObjectConst node,UiValidation&validation,un
  if(node["labelProps"].containsKey("missingGlyph")&&!node["labelProps"]["missingGlyph"].is<const char*>())return "missing_glyph_policy";if(!Policies::choice("error,replace",node["labelProps"]["missingGlyph"]|"error"))return "missing_glyph_policy";
  for(auto p:node["labelProps"].as<JsonObjectConst>())if(!Policies::choice("text,missingGlyph,longMode,metrics",p.key().c_str()))return "ui_label_property";
  if(node["labelProps"].containsKey("longMode")&&!node["labelProps"]["longMode"].is<const char*>())return "ui_label_long_mode";
- if(node["labelProps"].containsKey("text")&&!node["labelProps"]["text"].is<const char*>())return "ui_label_text";if(!Policies::choice("wrap,clip,ellipsis",node["labelProps"]["longMode"]|"wrap"))return "ui_label_long_mode";if(node["labelProps"].containsKey("metrics")&&!node["labelProps"]["metrics"].is<const char*>())return "ui_label_metrics";if(!Policies::choice("line,ink",node["labelProps"]["metrics"]|"line"))return "ui_label_metrics";if(node["labelProps"]["metrics"]=="ink"&&!strcmp(node["labelProps"]["longMode"]|"wrap","wrap"))return "ink_metrics_require_single_line";if(node["labelProps"]["metrics"]=="ink"&&!strcmp(node["labelProps"]["longMode"]|"wrap","wrap"))return "ink_metrics_require_single_line";
+ if(node["labelProps"].containsKey("text")&&!node["labelProps"]["text"].is<const char*>())return "ui_label_text";if(!Policies::choice("wrap,clip,ellipsis",node["labelProps"]["longMode"]|"wrap"))return "ui_label_long_mode";if(node["labelProps"].containsKey("metrics")&&!node["labelProps"]["metrics"].is<const char*>())return "ui_label_metrics";if(!Policies::choice("line,ink",node["labelProps"]["metrics"]|"line"))return "ui_label_metrics";if(node["labelProps"]["metrics"]=="ink"&&!strcmp(node["labelProps"]["longMode"]|"wrap","wrap"))return "ink_metrics_require_single_line";
  for(auto p:node["imageProps"].as<JsonObjectConst>())if(!Policies::choice("src,fit",p.key().c_str()))return "ui_image_property";
  if(node["imageProps"].containsKey("src")&&!node["imageProps"]["src"].is<const char*>())return "ui_image_source";if(node["imageProps"].containsKey("fit")&&!node["imageProps"]["fit"].is<const char*>())return "ui_image_fit";
  if(!Policies::choice("none,contain,cover",node["imageProps"]["fit"]|"none"))return "ui_image_fit";
@@ -138,7 +149,7 @@ static bool initUi(){if(uiDisplay)return true;if(!bindUiMemory(core.resources())
  fs.tell_cb=[](lv_fs_drv_t*,void*x,uint32_t*at)->lv_fs_res_t{*at=((LvFile*)x)->at;return LV_FS_RES_OK;};lv_fs_drv_register(&fs);
  uiDisplay=lv_display_create(boardpack::DISPLAY_WIDTH,boardpack::DISPLAY_HEIGHT);if(!uiDisplay){lv_deinit();releaseUiDecoders();return false;}lv_display_set_color_format(uiDisplay,LV_COLOR_FORMAT_RGB565);lv_display_set_buffers(uiDisplay,uiDrawBuffer,nullptr,sizeof(uiDrawBuffer),LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_flush_cb(uiDisplay,uiFlush);uiRoot=lv_screen_active();lv_obj_set_style_bg_color(uiRoot,lv_color_white(),0);return !uiMemoryFailed();
 }
-static void resetUiRenderer(){uiIdleRetire=false;if(uiDisplay){lv_obj_clean(uiRoot);freeUiNodeRefs(uiNodeRefs);uiNodeRefs=nullptr;releaseUiGeometry(uiPreparedGeometry);releaseUiGeometry(uiVisibleGeometry);uiPreparedGeometry=uiVisibleGeometry=nullptr;uiVisibleStamp={};reapVectorFonts(true);lv_deinit();uiDisplay=nullptr;uiRoot=nullptr;releaseUiDecoders();}reapOrphanFonts();}
+static void resetUiRenderer(){uiIdleRetire=false;uiAppliedImageCache=uiAppliedHeaderCache=UINT32_MAX;for(auto&entry:uiImageGenerations)entry={};if(uiDisplay){lv_obj_clean(uiRoot);freeUiNodeRefs(uiNodeRefs);uiNodeRefs=nullptr;releaseUiGeometry(uiPreparedGeometry);releaseUiGeometry(uiVisibleGeometry);uiPreparedGeometry=uiVisibleGeometry=nullptr;uiVisibleStamp={};reapVectorFonts(true);lv_deinit();uiDisplay=nullptr;uiRoot=nullptr;releaseUiDecoders();}reapOrphanFonts();}
 static char* uiFallbackText(const char*text,const lv_font_t*font,bool replace){
  size_t n=strlen(text);char*out=static_cast<char*>(core.resources().allocate(n+1));if(!out)return nullptr;size_t at=0,wrote=0;
  while(at<n){uint8_t lead=text[at];size_t length=lead<128?1:(lead&0xe0)==0xc0?2:(lead&0xf0)==0xe0?3:(lead&0xf8)==0xf0?4:1;bool valid=at+length<=n;uint32_t cp=length==1?lead:lead&((1<<(7-length))-1);
@@ -150,7 +161,7 @@ static char* uiFallbackText(const char*text,const lv_font_t*font,bool replace){
 // Keep image decoder scratch buffers out of every recursive node frame.
 [[gnu::noinline]] static bool configureUiImage(JsonObjectConst node,lv_obj_t*o,JsonObjectConst style){
  const char*src=uiValues[node["id"]|""]|(node["imageProps"]["src"]|"");char full[256];if(!normalizePath(uiBase,src,full,sizeof(full))){uiError="invalid_image_path";return false;}if(uiLeaseOwner&&!vfs.lockRead(full,uiLeaseOwner)){uiError="asset_lease_capacity";return false;}const char*relative;auto provider=vfs.resolve(full,relative);FileInfo info;if(!provider){uiError="image_not_found";return false;}if(auto e=provider->stat(relative,info)){uiError=e;return false;}if(info.directory){uiError="is_directory";return false;}
- char qualified[260];snprintf(qualified,sizeof(qualified),"V:%s",full);lv_image_header_t hdr{};uiReadError=nullptr;if(lv_image_decoder_get_info(qualified,&hdr)!=LV_RESULT_OK){uiError=uiReadError?uiReadError:"image_decode_not_available";return false;}if(!hdr.w||!hdr.h||hdr.w>2048||hdr.h>2048){uiError="image_dimensions_limit";return false;}uint8_t signature[8]{};size_t signatureBytes=0;if(auto error=provider->read(relative,0,signature,sizeof signature,signatureBytes)){uiError=error;return false;}const uint8_t pngSignature[]={137,80,78,71,13,10,26,10};bool png=signatureBytes==8&&!memcmp(signature,pngSignature,8);if(png&&(uint64_t(hdr.w)*hdr.h*4>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384)||info.size>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384))){uiError="large_png_requires_streamable_asset";return false;}lv_image_set_src(o,qualified);if(!style["imageOpacity"].isNull()){int opacity=dimension(style["imageOpacity"],255);lv_obj_set_style_image_opa(o,opacity,0);}
+ observeUiImageGeneration(*provider);char qualified[260];snprintf(qualified,sizeof(qualified),"V:%s",full);lv_image_header_t hdr{};uiReadError=nullptr;if(lv_image_decoder_get_info(qualified,&hdr)!=LV_RESULT_OK){uiError=uiReadError?uiReadError:"image_decode_not_available";return false;}if(!hdr.w||!hdr.h||hdr.w>2048||hdr.h>2048){uiError="image_dimensions_limit";return false;}uint8_t signature[8]{};size_t signatureBytes=0;if(auto error=provider->read(relative,0,signature,sizeof signature,signatureBytes)){uiError=error;return false;}const uint8_t pngSignature[]={137,80,78,71,13,10,26,10};bool png=signatureBytes==8&&!memcmp(signature,pngSignature,8);if(png&&(uint64_t(hdr.w)*hdr.h*4>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384)||info.size>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384))){uiError="large_png_requires_streamable_asset";return false;}lv_image_set_src(o,qualified);if(!style["imageOpacity"].isNull()){int opacity=dimension(style["imageOpacity"],255);lv_obj_set_style_image_opa(o,opacity,0);}
  const char*fit=node["imageProps"]["fit"]|"none";if(strcmp(fit,"none"))lv_image_set_inner_align(o,!strcmp(fit,"contain")?LV_IMAGE_ALIGN_CONTAIN:LV_IMAGE_ALIGN_COVER);return true;
 }
 // Fonts can carry substantial asymmetric leading. Opt-in single-line controls
@@ -193,7 +204,8 @@ static bool buildNode(JsonObjectConst node,lv_obj_t*parent,unsigned depth=0,UiTe
 }
 static bool prepareUiDocument(const char*path,JsonObjectConst d,const UiView&view,bool validateOnly){
  if(auto e=validateUiDocument(path,d)){uiError=e;return false;}if(!initUi()){uiError="ui_memory_budget";return false;}clearUiMemoryFailure();
- auto imageCache=policies.get<uint32_t>("/sys/ui","image_cache_bytes",0);lv_image_cache_resize(imageCache,true);lv_image_header_cache_resize(imageCache?32:0,true);
+ auto imageCache=policies.get<uint32_t>("/sys/ui","image_cache_bytes",0);if(uiAppliedImageCache!=imageCache){lv_image_cache_resize(imageCache,true);uiAppliedImageCache=imageCache;}
+ auto headerCount=imageCache?32u:0u;if(uiAppliedHeaderCache!=headerCount){lv_image_header_cache_resize(headerCount,true);uiAppliedHeaderCache=headerCount;}
  char rootBase[256];copy(rootBase,sizeof(rootBase),path);char*slash=strrchr(rootBase,'/');if(slash)*slash=0;
  UiScratch<UiView> savedView;if(!savedView.value){uiError="ui_memory_budget";return false;}auto&previousView=*savedView.value;previousView=uiRenderedView;char previousBase[sizeof uiBase];copy(previousBase,sizeof previousBase,uiBase);JsonDocument previousValues;swap(uiValues,previousValues);
  auto restore=[&](){swap(uiValues,previousValues);copy(uiBase,sizeof uiBase,previousBase);uiRenderedView=previousView;lv_display_set_resolution(uiDisplay,previousView.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,previousView.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT);};uiRenderedView=view;
@@ -202,7 +214,6 @@ static bool prepareUiDocument(const char*path,JsonObjectConst d,const UiView&vie
  auto candidate=lv_obj_create(nullptr);if(!candidate){restore();uiError="ui_memory_budget";return false;}
  auto previousRefs=uiNodeRefs;uiNodeRefs=nullptr;
  unsigned oldNodes=uiNodes,oldMissing=uiMissingGlyphs;uiNodes=0;uiMissingGlyphs=0;uiError="none";bool ok=true;
- lv_image_cache_drop(nullptr);
  for(auto a:d["assets"].as<JsonArrayConst>()){
    JsonDocument external;JsonObjectConst obj;copy(uiBase,sizeof(uiBase),rootBase);
    if(a.is<const char*>()){

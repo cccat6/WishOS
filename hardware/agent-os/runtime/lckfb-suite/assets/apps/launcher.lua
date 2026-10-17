@@ -14,8 +14,8 @@ function C.show_apps()
  local hidden={};if page==0 then hidden[#hidden+1]='previous' end;if not more then hidden[#hidden+1]='next' end;for i=#rows,2 do hidden[#hidden+1]='app'..i end;C.open('apps',v,hidden);for i=0,2 do C.action('app'..i,function() local a=rows[i+1];if a then C.launch(a.id) end end) end
  C.action('next',function() if more then page=page+1;C.show_apps() end end);C.action('previous',function() if page>0 then page=page-1;C.show_apps() end end)
 end
-local function welcome() C.open('welcome');C.action('ready',function() C.preferences.onboarded=true;C.save_preferences();desktop() end) end
-local function choose(lang) C.preferences.language=lang;C.save_preferences();welcome() end
+local function welcome() C.open('welcome');C.action('ready',function() local saved,e=C.change_preferences({onboarded=true});if saved then desktop() else C.update({welcome_title=e or 'save_failed'}) end end) end
+local function choose(lang) local saved,e=C.change_preferences({language=lang});if saved then welcome() else C.update({language_notice=e or 'save_failed'}) end end
 function on_start()
  C.init();C.button(function() C.launch('voice',{record=true}) end)
  C.timer(C.config.clock_poll_interval_ms,C.config.clock_poll_interval_ms,update_clock)

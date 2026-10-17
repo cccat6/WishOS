@@ -102,7 +102,15 @@
     "/ui/sharing.en.json": "assets/ui/sharing.en.json",
     "/ui/sharing.json": "assets/ui/sharing.json",
     "/control/settings.js": "@runtime/control/settings.js",
-    "/control/session.json": "assets/control/session.json"
+    "/control/session.json": "assets/control/session.json",
+    "/suite/conversation.lua": "assets/suite/conversation.lua",
+    "/suite/sessions.lua": "assets/suite/sessions.lua",
+    "/ui/conversation-history.en.json": "assets/ui/conversation-history.en.json",
+    "/ui/conversation-history.json": "assets/ui/conversation-history.json",
+    "/ui/sessions.en.json": "assets/ui/sessions.en.json",
+    "/ui/sessions.json": "assets/ui/sessions.json",
+    "/ui/pending-session.en.json": "assets/ui/pending-session.en.json",
+    "/ui/pending-session.json": "assets/ui/pending-session.json"
   },
   "gzip_assets": [
     "/control/control.js",

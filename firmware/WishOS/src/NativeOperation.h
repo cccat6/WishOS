@@ -23,7 +23,9 @@ public:
  ~NativeOperation(){core_.removeOwnerHook(this);} // Native composition outlives its worker.
  bool active()const{return running_.load(std::memory_order_acquire);}
  const std::atomic<bool>&cancellation()const{return cancel_;}
- const char*start(const char*method,JsonObject out){
+ const char*start(const char*method,JsonObject out){return start(method,out,core_.callerOwner());}
+ // Native service composition may retain work beyond an originating VM.
+ const char*start(const char*method,JsonObject out,uint32_t owner){
   if(active())return "operation_active";if(!registered_)return "owner_hook_capacity";
   if(!executor_.launch&&!executor_.launchOn)return "native_executor_unavailable";
   auto&next=sequence_?*sequence_:next_;
@@ -32,7 +34,7 @@ public:
   // A running native lease survives VM exit until this operation settles.
   auto reserved=executor_.memoryBytes?core_.resources().acquire(executor_.memoryBytes,0):0;if(executor_.memoryBytes&&!reserved)return "native_operation_memory_budget";
   bool previousCancel=cancel_.load();uint32_t previous=id_,previousOwner=owner_;char priorMethod[sizeof method_],priorError[sizeof error_];memcpy(priorMethod,method_,sizeof method_);memcpy(priorError,error_,sizeof error_);
-  reservation_=reserved;id_=next++;owner_=core_.callerOwner();copy(method_,sizeof method_,method);error_[0]=0;cancel_=done_=false;running_=true;
+  reservation_=reserved;id_=next++;owner_=owner;copy(method_,sizeof method_,method);error_[0]=0;cancel_=done_=false;running_=true;
   if(!(executor_.launchOn?executor_.launchOn(context_,run,this):executor_.launch(run,this))){running_=false;cancel_=previousCancel;core_.resources().release(reservation_);reservation_=0;id_=previous;owner_=previousOwner;memcpy(method_,priorMethod,sizeof method_);memcpy(error_,priorError,sizeof error_);return "native_task_allocation_failed";}
   core_.resources().used(reservation_,executor_.memoryBytes);out["operation_id"]=id_;out["state"]="running";return nullptr;
  }

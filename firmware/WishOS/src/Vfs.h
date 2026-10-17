@@ -75,10 +75,10 @@ public:
 };
 class Vfs {
   FileProvider* providers_[8]{};size_t count_=0;
-  struct Lease{char path[256]{};uint32_t owner=0;const void*scope=nullptr;bool write=false,folded=false;};Lease leases_[16];
+  struct Lease{char path[256]{};uint32_t owner=0;const void*scope=nullptr;bool write=false,folded=false,subtree=true;};Lease leases_[16];
   mutable std::recursive_mutex leaseMutex_;
-  bool overlap(const char*a,const char*b,bool folded)const{
-    if(!folded)return pathWithin(a,b)||pathWithin(b,a);
+  bool overlap(const char*a,const char*b,bool folded,bool subtreeA=true,bool subtreeB=true)const{
+    if(!folded)return !strcmp(a,b)||(subtreeA&&pathWithin(a,b))||(subtreeB&&pathWithin(b,a));
     const char*relative=nullptr;auto provider=resolve(a,relative);
     auto within=[&](const char*root,const char*child){if(!strcmp(root,"/"))return true;
       while(*root&&*child){while(*root=='/')++root;while(*child=='/')++child;char x[256],y[256];size_t n=0,m=0;
@@ -86,29 +86,29 @@ class Vfs {
         while(child[m]&&child[m]!='/'){if(m>=255)return false;y[m]=child[m];++m;}y[m]=0;
         if(provider?!provider->sameName(x,y):strcasecmp(x,y))return false;root+=n;child+=m;
       }return !*root;
-    };return within(a,b)||within(b,a);
+    };return (within(a,b)&&within(b,a))||(subtreeA&&within(a,b))||(subtreeB&&within(b,a));
   }
-  const char*scoped(const char*path,const void*scope,bool write,bool folded){
+  const char*scoped(const char*path,const void*scope,bool write,bool folded,bool subtree){
     std::lock_guard<std::recursive_mutex>lock(leaseMutex_);if(strlen(path)>=256)return "invalid_path";
-    for(auto&l:leases_)if((l.owner||l.scope)&&l.scope!=scope&&(write||l.write)&&overlap(path,l.path,folded||l.folded))return "file_in_use";
+    for(auto&l:leases_)if((l.owner||l.scope)&&l.scope!=scope&&(write||l.write)&&overlap(path,l.path,folded||l.folded,subtree,l.subtree))return "file_in_use";
     for(auto&l:leases_)if(l.scope==scope&&!strcmp(l.path,path))return nullptr;
-    for(auto&l:leases_)if(!l.owner&&!l.scope){strcpy(l.path,path);l.scope=scope;l.write=write;l.folded=folded;return nullptr;}return "file_lease_capacity";
+    for(auto&l:leases_)if(!l.owner&&!l.scope){strcpy(l.path,path);l.scope=scope;l.write=write;l.folded=folded;l.subtree=subtree;return nullptr;}return "file_lease_capacity";
   }
   void releaseScope(const void*scope){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if(l.scope==scope)l={};}
 public:
   // Short file operations use unique scope identities; application/driver lease
   // owner numbers cannot collide with or release them. Never hold this mutex
   // across physical I/O: only the lease record survives the operation.
-  class Access {Vfs&vfs_;bool write_;public:Access(Vfs&v,bool write):vfs_(v),write_(write){}Access(const Access&)=delete;Access&operator=(const Access&)=delete;~Access(){vfs_.releaseScope(this);}const char*add(const char*path,bool folded=false){return vfs_.scoped(path,this,write_,folded);}};
+  class Access {Vfs&vfs_;bool write_,subtree_;public:Access(Vfs&v,bool write,bool subtree=true):vfs_(v),write_(write),subtree_(subtree){}Access(const Access&)=delete;Access&operator=(const Access&)=delete;~Access(){vfs_.releaseScope(this);}const char*add(const char*path,bool folded=false){return vfs_.scoped(path,this,write_,folded,subtree_);}};
   bool lockRead(const char*path,uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);if(!owner||strlen(path)>=256)return false;
     const char*relative;auto provider=resolve(path,relative);bool folded=provider&&provider->caseInsensitive();
-    for(auto&l:leases_)if(l.write&&overlap(path,l.path,folded||l.folded))return false;
+    for(auto&l:leases_)if(l.write&&overlap(path,l.path,folded||l.folded,true,l.subtree))return false;
     for(auto&l:leases_)if(!l.scope&&l.owner==owner&&!strcmp(l.path,path))return true;
     for(auto&l:leases_)if(!l.owner&&!l.scope){strcpy(l.path,path);l.owner=owner;l.folded=folded;return true;}return false;
   }
   void release(uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if(!l.scope&&l.owner==owner)l={};}
-  bool hasLeasesUnder(const char*path)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if((l.owner||l.scope)&&overlap(path,l.path,l.folded))return true;return false;}
-  bool canMutate(const char*path,bool folded=false)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if((l.owner||l.scope)&&overlap(path,l.path,folded||l.folded))return false;return true;}
+  bool hasLeasesUnder(const char*path)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if((l.owner||l.scope)&&overlap(path,l.path,l.folded,true,l.subtree))return true;return false;}
+  bool canMutate(const char*path,bool folded=false)const{std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&l:leases_)if((l.owner||l.scope)&&overlap(path,l.path,folded||l.folded,true,l.subtree))return false;return true;}
   struct Pin{FileProvider*provider=nullptr;uint32_t owner=0;};Pin pins[8];
   bool pin(FileProvider&p,uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);if(!owner)return false;for(auto&x:pins)if(!x.owner){x={&p,owner};return true;}return false;}
   void unpin(uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);for(auto&x:pins)if(x.owner==owner)x={};}

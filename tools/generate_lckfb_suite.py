@@ -78,7 +78,7 @@ def write(name,nodes):
  page=screen(nodes)
  def external_text(n):
   id=n.get('id','')
-  if n['type']=='label' and (id in ('answer','message','detail','filename','fileinfo','ssid','directory') or (id.startswith(('app','file')) and id.endswith(('_title','_meta')))):n['labelProps']['missingGlyph']='replace'
+  if n['type']=='label' and (id in ('answer','message','detail','filename','fileinfo','ssid','directory','session_title','empty') or (id.startswith('session') and id.endswith(('_title','_meta'))) or (id.startswith(('app','file')) and id.endswith(('_title','_meta')))):n['labelProps']['missingGlyph']='replace'
   for c in n.get('children',[]):external_text(c)
  for n in page['assets']:external_text(n)
  save(ASSETS/'ui'/f'{name}.json',page)
@@ -90,7 +90,7 @@ def write(name,nodes):
  for node in en['assets']:tr(node)
  save(ASSETS/'ui'/f'{name}.en.json',en)
 translations={'今天，想做些什么？':'What shall we make today?','对话':'Talk','应用':'Apps','设备':'Device','设置':'Settings','短按说话 · 长按2秒回桌面':'Press to talk · Hold 2s for Home','我的应用':'Your apps','点击打开应用':'Tap an app to open it','上一页':'Previous','下一页':'Next','设备与传感器':'Device & sensors','六轴姿态 · 原生驱动':'6-axis motion · Native drivers','存储卡与文件':'Files & storage','网络共享':'NFS sharing','打开网页管理文件':'Manage files in your browser','相机':'Camera','拍照':'Capture','保存到 SD':'Save to SD','正在准备相机':'Preparing camera','网络与服务':'Network & services','配网热点':'Wi-Fi setup AP','语言':'Language','与 Agent 对话':'Talk to your Agent','短按用户键开始或结束录音':'Press user key to start/stop','说出你想做的应用':'Describe the app you want','短按开始录音':'Press to record','开始录音':'Record','结束并发送':'Send recording','欢迎使用 WishOS':'Welcome to WishOS','短按用户键，与 Agent 对话':'Press the user key to talk','触摸图标，打开应用和设置':'Tap icons for apps and settings','长按用户键2秒，随时回桌面':'Hold the user key 2s for Home','进入桌面':'Open desktop','暂无应用':'No applications','选择语言':'Choose language','未连接 Agent':'Agent not connected'}
-translations.update({'刷新':'Refresh','文件':'Files','本机设置':'Device options','文件共享':'File sharing','扫码进行完整设置':'Scan to configure','后台地址':'Address','同一局域网内访问':'On the same LAN','等待手机连接':'Waiting for browser','开启配网热点':'Enable setup AP','离开设置？':'Leave settings?','手机仍在连接设备设置':'A browser is connected','离开会断开手机设置会话。':'This disconnects browser settings.','再次长按用户键可强制回桌面。':'Hold user key again to force Home.','继续设置':'Stay','断开并离开':'Leave','全部类型':'All types','文件信息':'File info','点击拍照':'Tap Capture','桌面':'Home','设备状态':'Device status','设备设置':'Settings','点击开始，说完再点发送':'Tap Record, then Send when done','重新打开从15分钟开始':'Reopening resets the timer','上级':'Parent','共享':'Share','帮助':'Help','短按用户键：说话':'Press user key: talk','长按2秒：桌面':'Hold 2s: Home'})
+translations.update({'创建结果待确认':'Creation not confirmed','可继续查询，或放弃本机的待确认记录。':'Check again, or dismiss this pending reference.','放弃不会删除云端会话；请先检查列表，避免重复新建。':'Dismiss does not delete cloud sessions. Check the list before creating another.','继续核对':'Check again','放弃此创建':'Dismiss','会话':'Chats','固定机器人':'Single bot','多会话':'Sessions','记录':'History','新建会话':'New chat','会话记录':'Conversation','说点什么，或让我制作应用':'Talk, or ask for a tool','继续说话':'Say more','刷新':'Refresh','文件':'Files','本机设置':'Device options','文件共享':'File sharing','扫码进行完整设置':'Scan to configure','后台地址':'Address','同一局域网内访问':'On the same LAN','等待手机连接':'Waiting for browser','开启配网热点':'Enable setup AP','离开设置？':'Leave settings?','手机仍在连接设备设置':'A browser is connected','离开会断开手机设置会话。':'This disconnects browser settings.','再次长按用户键可强制回桌面。':'Hold user key again to force Home.','继续设置':'Stay','断开并离开':'Leave','全部类型':'All types','文件信息':'File info','点击拍照':'Tap Capture','桌面':'Home','设备状态':'Device status','设备设置':'Settings','点击开始，说完再点发送':'Tap Record, then Send when done','重新打开从15分钟开始':'Reopening resets the timer','上级':'Parent','共享':'Share','帮助':'Help','短按用户键：说话':'Press user key: talk','长按2秒：桌面':'Hold 2s: Home'})
 svg_png(BRAND/'lockup.svg',ASSETS/'brand/lockup-compact.png',176)
 svg_png(ASSETS/'icons/voice.svg',ASSETS/'brand/microphone.png',64)
 def field(text,x,y,w,size=16,id=None,align='left',h=None,wrap=False,color=INK):
@@ -99,7 +99,7 @@ write('home',[image('../brand/lockup-compact.png',12,6,150,43),slot('未连接 A
 write('welcome',[image('../brand/logo.png',128,4,64,64),field('欢迎使用 WishOS',12,73,296,23,align='center'),field('短按用户键，与 Agent 对话',12,108,296,16,align='center'),field('触摸图标，打开应用和设置',12,136,296,16,align='center'),field('长按用户键2秒，随时回桌面',12,163,296,15,align='center'),button('ready','进入桌面',64,193,192,44,size=17)])
 for suffix in ('','.en'):
  p=ASSETS/'ui'/f'welcome{suffix}.json';d=json.loads(p.read_text());d['assets'][0]['children'][1]['id']='welcome_title';d['assets'][0]['children'][-1]['children'][-1]['id']='ready_label';save(p,d)
-write('language',[image('../brand/logo.png',128,8,64,64),field('选择语言',12,82,296,22,align='center'),field('Choose your language',12,117,296,16,align='center'),button('zh','简体中文',8,174,148,52),button('en','English',164,174,148,52)])
+write('language',[image('../brand/logo.png',128,8,64,64),field('选择语言',12,82,296,22,align='center'),field('Choose your language',12,117,296,16,id='language_notice',align='center'),button('zh','简体中文',8,174,148,52),button('en','English',164,174,148,52)])
 appRows=[]
 for i in range(3):
  row=button('app'+str(i),'—',8,52+i*48,304,44,'apps',size=17)
@@ -130,10 +130,20 @@ for suffix in ('','.en'):
  save(p,d)
 write('file-info',header('文件信息')+[label('',12,56,296,17,'filename',h=78,wrap=True),label('',12,140,296,13,'fileinfo',h=42,wrap=True),button('previous','上一页',8,196,96,44,size=14),slot('',112,196,96,44,13,'page','center'),button('next','下一页',216,196,96,44,size=14)])
 write('camera',header('相机','点击拍照','status')+[image('../icons/camera.png',8,54,304,132,'frame'),button('capture','拍照',8,192,148,44,size=17),button('save','保存到 SD',164,192,148,44,size=16)])
-write('voice',header('与 Agent 对话')+[image('../brand/microphone.png',16,66,32,32,'activity'),label('说出你想做的应用',60,66,248,20,'message',h=62,wrap=True),label('点击开始，说完再点发送',12,135,296,14,'detail',MUTED,h=40,wrap=True),button('record','开始录音',8,184,304,48,'voice')])
+voice_header=header('与 Agent 对话');voice_header[1]['placement']['width']=188;voice_header[1]['children'][0]['placement']['width']=188
+voice_header.append(button('sessions','会话',260,4,52,44,size=14))
+write('voice',voice_header+ [slot('',12,51,296,23,12,'session_title',color=MUTED)]+[image('../brand/microphone.png',16,82,32,32,'activity'),label('说点什么，或让我制作应用',60,82,248,20,'message',h=50,wrap=True),label('点击开始，说完再点发送',12,135,296,14,'detail',MUTED,h=40,wrap=True),button('record','开始录音',8,184,304,48,'voice')])
 for suffix in ('','.en'):
  p=ASSETS/'ui'/f'voice{suffix}.json';d=json.loads(p.read_text());d['assets'][0]['children'][-1]['children'][-1]['id']='record_label';save(p,d)
 write('answer',header('与 Agent 对话')+[image('../brand/done-11.png',278,10,32,32,'activity'),label('',12,56,296,17,'answer',h=118,wrap=True),field('',12,173,296,12,'page','center',h=18,color=MUTED),button('previous','上一页',8,196,96,44,size=14),button('record','继续说话',112,196,96,44,size=14),button('next','下一页',216,196,96,44,size=14)])
+session_rows=[]
+for i in range(3):
+ row=button('session'+str(i),'',8,54+i*47,304,44);row.pop('layout');row['children']=[slot('',10,3,282,22,15,'session'+str(i)+'_title'),slot('',10,25,282,15,10,'session'+str(i)+'_meta',color=MUTED)];session_rows.append(row)
+write('sessions',[button('home','',8,4,44,44,'back',fill=PAPER),slot('会话',64,4,80,44,22),button('mode','固定机器人',152,4,104,44,size=14),button('history','记录',268,4,44,44,size=12)]+session_rows+[label('',12,65,296,16,'empty',h=120,wrap=True),button('session_previous','上一页',8,195,80,44,size=14),button('new','新建会话',96,195,128,44,size=14),button('session_next','下一页',232,195,80,44,size=14)])
+for suffix in ('','.en'):
+ p=ASSETS/'ui'/f'sessions{suffix}.json';d=json.loads(p.read_text());d['assets'][0]['children'][2]['children'][0]['id']='mode_label';d['assets'][0]['children'][-2]['children'][0]['id']='new_label';save(p,d)
+write('conversation-history',header('会话记录')+[label('',12,56,296,17,'answer',h=128,wrap=True),slot('',112,196,96,44,12,'page','center'),button('session_previous','上一页',8,196,96,44,size=14),button('session_next','下一页',216,196,96,44,size=14)])
+write('pending-session',header('创建结果待确认')+[label('可继续查询，或放弃本机的待确认记录。',12,60,296,17,h=65,wrap=True),label('放弃不会删除云端会话；请先检查列表，避免重复新建。',12,128,296,14,color=MUTED,h=55,wrap=True),button('check_creation','继续核对',8,192,148,44,size=16),button('discard_creation','放弃此创建',164,192,148,44,size=16)])
 # Asset paths are ordinary writable files, not compiled UI tables.
 p=BASE/'package.json';package=json.loads(p.read_text());assets=package['assets']
 for file in sorted(ASSETS.rglob('*')):

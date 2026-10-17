@@ -28,7 +28,8 @@ public:
   if(a.containsKey("file")&&a.containsKey("path")&&a["file"]!=a["path"])return "conflicting_file_paths";
   char full[256];const char*rel;FileProvider*p;if(auto e=resolve(a["file"]|(a["path"]|""),full,rel,p))return e;if(!p->available())return "provider_unavailable";
   uint64_t at=0;if(!parseOffset(a["offset"],at))return "invalid_offset";
-  bool mutation=strcmp(m,"stat")&&strcmp(m,"list")&&strcmp(m,"read");Vfs::Access lease(vfs_,mutation);if(auto e=lease.add(full,p->caseInsensitive()))return e;
+  bool mutation=strcmp(m,"stat")&&strcmp(m,"list")&&strcmp(m,"read");// Metadata protects the queried node, not every descendant file content.
+  Vfs::Access lease(vfs_,mutation,strcmp(m,"stat")&&strcmp(m,"list"));if(auto e=lease.add(full,p->caseInsensitive()))return e;
   if(!strcmp(m,"stat")){FileInfo info;if(auto e=p->stat(rel,info))return e;out["file"]=full;sizeText(out,"size",info.size);out["directory"]=info.directory;return nullptr;}
   if(!strcmp(m,"list")){auto limit=a["limit"]|12u;if(!limit||limit>24)return "list_limit";auto cursor=a["cursor"]|0u;if(auto e=p->list(rel,cursor,limit,out))return e;auto entries=out["entries"].as<JsonArray>();while(entries.size()&&measureJson(out)>MAX_WIRE-256){entries.remove(entries.size()-1);out["more"]=true;out["next_cursor"]=cursor+entries.size();}return nullptr;}
   if(!strcmp(m,"read")){auto length=a["length"]|1024u;if(!length||length>1024)return "chunk_limit";uint8_t bytes[1024];size_t got=0;if(auto e=p->read(rel,at,bytes,length,got))return e;char encoded[2049];hex(bytes,got,encoded);out["hex"]=encoded;sizeText(out,"next_offset",at+got);return nullptr;}

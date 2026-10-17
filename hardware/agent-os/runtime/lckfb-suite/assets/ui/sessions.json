@@ -1,0 +1,590 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F7F5EF",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "button",
+          "id": "home",
+          "placement": {
+            "x": 8,
+            "y": 4,
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#F7F5EF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/back.png",
+                "fit": "contain"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 64,
+            "y": 4,
+            "width": 80,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "bgOpacity": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "align": "center",
+                "width": 80
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 27,
+                "textColor": "#262822",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "会话",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "mode",
+          "placement": {
+            "x": 152,
+            "y": 4,
+            "width": 104,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "固定机器人",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "mode_label"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "history",
+          "placement": {
+            "x": 268,
+            "y": 4,
+            "width": 44,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 17,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "记录",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "session0",
+          "placement": {
+            "x": 8,
+            "y": 54,
+            "width": 304,
+            "height": 44
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 282,
+                "height": 22
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 15,
+                    "lineHeight": 20,
+                    "textColor": "#262822",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
+                  },
+                  "id": "session0_title"
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 25,
+                "width": 282,
+                "height": 15
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 10,
+                    "lineHeight": 15,
+                    "textColor": "#60645B",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
+                  },
+                  "id": "session0_meta"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "session1",
+          "placement": {
+            "x": 8,
+            "y": 101,
+            "width": 304,
+            "height": 44
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 282,
+                "height": 22
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 15,
+                    "lineHeight": 20,
+                    "textColor": "#262822",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
+                  },
+                  "id": "session1_title"
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 25,
+                "width": 282,
+                "height": 15
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 10,
+                    "lineHeight": 15,
+                    "textColor": "#60645B",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
+                  },
+                  "id": "session1_meta"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "session2",
+          "placement": {
+            "x": 8,
+            "y": 148,
+            "width": 304,
+            "height": 44
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 3,
+                "width": 282,
+                "height": 22
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 15,
+                    "lineHeight": 20,
+                    "textColor": "#262822",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
+                  },
+                  "id": "session2_title"
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 10,
+                "y": 25,
+                "width": 282,
+                "height": 15
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 282
+                  },
+                  "style": {
+                    "fontSize": 10,
+                    "lineHeight": 15,
+                    "textColor": "#60645B",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "",
+                    "longMode": "ellipsis",
+                    "metrics": "ink",
+                    "missingGlyph": "replace"
+                  },
+                  "id": "session2_meta"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 65,
+            "width": 296,
+            "height": 120
+          },
+          "style": {
+            "fontSize": 16,
+            "lineHeight": 21,
+            "textColor": "#262822"
+          },
+          "labelProps": {
+            "text": "",
+            "longMode": "wrap",
+            "missingGlyph": "replace"
+          },
+          "id": "empty"
+        },
+        {
+          "type": "button",
+          "id": "session_previous",
+          "placement": {
+            "x": 8,
+            "y": 195,
+            "width": 80,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "上一页",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "new",
+          "placement": {
+            "x": 96,
+            "y": 195,
+            "width": 128,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "新建会话",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              },
+              "id": "new_label"
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "session_next",
+          "placement": {
+            "x": 232,
+            "y": 195,
+            "width": 80,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 10
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "borderWidth": 1,
+            "borderColor": "#D9DACF",
+            "radius": 7,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "width": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#262822"
+              },
+              "labelProps": {
+                "text": "下一页",
+                "longMode": "ellipsis",
+                "metrics": "ink"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

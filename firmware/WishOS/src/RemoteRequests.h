@@ -4,18 +4,22 @@
 namespace notesos {
 // Transport-independent outbox. A relay peeks, dispatches with the same ID and completes it.
 class RemoteRequests {
- struct Request{uint32_t id=0,owner=0;uint64_t expires=0;bool done=false,ok=false;char key[65]{},route[65]{},payload[1537]{},result[1537]{};};
+public:
+ static constexpr size_t PayloadLimit=MAX_WIRE-512,ResultLimit=1536;
+private:
+ struct Request{uint32_t id=0,owner=0;uint64_t expires=0;bool done=false,ok=false;char key[65]{},route[65]{};char*payload=nullptr,*result=nullptr;};
  Request*slots_[4]{};uint32_t next_=1;Core&core_;bool registered_=false;
- void release(Request*&r){if(r){r->~Request();core_.resources().freeAllocation(r);r=nullptr;}}
+ void release(Request*&r){if(r){core_.resources().freeAllocation(r->payload);core_.resources().freeAllocation(r->result);r->~Request();core_.resources().freeAllocation(r);r=nullptr;}}
  void changed(Request&r,const char*name){JsonDocument d;d["id"]=r.id;d["owner"]=r.owner;d["request_id"]=r.key;d["route"]=r.route;d["ok"]=r.ok;core_.emit("/services/remote",name,d.as<JsonObjectConst>(),r.owner);}
  static bool equivalent(const char*saved,JsonVariantConst value){JsonDocument d;return !deserializeJson(d,saved)&&d.as<JsonVariantConst>()==value;}
  static void describe(const Request&r,JsonObject o){o["id"]=r.id;o["request_id"]=r.key;o["route"]=r.route;o["state"]=r.done?(r.ok?"completed":"failed"):"queued";o["ok"]=r.ok;
-   JsonDocument d;if(!deserializeJson(d,r.done?r.result:r.payload))o[r.done?"result":"payload"]=d.as<JsonVariantConst>();}
+   JsonDocument d;if(!deserializeJson(d,r.done?(r.result?r.result:"{\"error\":\"deadline_exceeded\"}"):r.payload))o[r.done?"result":"payload"]=d.as<JsonVariantConst>();}
 public:
+ static void describe(JsonObject o){remoteAsyncDescription(o);o["payload_limit_bytes"]=PayloadLimit;o["completion_limit_bytes"]=ResultLimit;o["allocation"]="actual_serialized_request_and_result";}
  explicit RemoteRequests(Core&c):core_(c){registered_=core_.onOwnerRelease(this,[](void*x,uint32_t owner){auto&s=*static_cast<RemoteRequests*>(x);for(auto&r:s.slots_)if(r&&r->owner==owner)s.release(r);});}
  ~RemoteRequests(){core_.removeOwnerHook(this);for(auto&r:slots_)release(r);}
  bool pending()const{for(auto r:slots_)if(r&&!r->done)return true;return false;}
- void tick(uint64_t now){for(auto r:slots_)if(r&&!r->done&&r->expires<=now){r->done=true;strcpy(r->result,"{\"error\":\"deadline_exceeded\"}");changed(*r,"failed");}}
+ void tick(uint64_t now){for(auto r:slots_)if(r&&!r->done&&r->expires<=now){r->done=true;changed(*r,"failed");}}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject out,uint64_t now,const char*boot){
    const char*fields=!strcmp(m,"submit")?"route,request_id,payload,timeout_ms":!strcmp(m,"peek")?"after_id":!strcmp(m,"complete")?"id,ok,result":!strcmp(m,"read")||!strcmp(m,"release")?"id":"";
    for(auto f:a)if(!Core::containsMethod(fields,f.key().c_str()))return "unknown_remote_argument";
@@ -27,12 +31,12 @@ public:
      if(a.containsKey("timeout_ms")&&!a["timeout_ms"].is<uint32_t>())return "remote_request_type";
      const char*key=a["request_id"]|"",*route=a["route"]|"";uint32_t ttl=a["timeout_ms"]|300000u;
      if(!*route||strlen(route)>64||strlen(key)>64||ttl<100||ttl>86400000)return "remote_request_range";
-     if(!a["payload"].is<JsonObjectConst>()||measureJson(a["payload"])>1536)return "remote_payload_limit";
+     if(!a["payload"].is<JsonObjectConst>()||measureJson(a["payload"])>PayloadLimit)return "remote_payload_limit";
      if(*key)for(auto r:slots_)if(r&&!strcmp(r->key,key)){
        if(core_.callerOwner()&&r->owner!=core_.callerOwner())return "request_owned_by_other";
        if(strcmp(r->route,route)||!equivalent(r->payload,a["payload"]))return "request_id_conflict";describe(*r,out);return nullptr;}
      Request**slot=nullptr;for(auto&s:slots_)if(!s){slot=&s;break;}if(!slot)return "remote_queue_full";
-     if(!next_)return "request_id_exhausted";auto memory=core_.resources().allocate(sizeof(Request));if(!memory)return "remote_memory_budget";auto r=new(memory)Request();*slot=r;r->id=next_++;r->owner=core_.callerOwner();r->expires=now+ttl;strcpy(r->route,route);serializeJson(a["payload"],r->payload,sizeof r->payload);
+     if(!next_)return "request_id_exhausted";auto memory=core_.resources().allocate(sizeof(Request));if(!memory)return "remote_memory_budget";auto r=new(memory)Request();r->payload=static_cast<char*>(core_.resources().allocate(measureJson(a["payload"])+1));if(!r->payload){release(r);return "remote_memory_budget";}*slot=r;r->id=next_++;r->owner=core_.callerOwner();r->expires=now+ttl;strcpy(r->route,route);serializeJson(a["payload"],r->payload,measureJson(a["payload"])+1);
      if(*key)strcpy(r->key,key);else{size_t n=strlen(boot);if(n>48)n=48;memcpy(r->key,boot,n);r->key[n++]=':';char digits[10];unsigned count=0;uint32_t value=r->id;do{digits[count++]=char('0'+value%10);value/=10;}while(value);while(count)r->key[n++]=digits[--count];r->key[n]=0;}
      describe(*r,out);changed(*r,"queued");return nullptr;
    }
@@ -42,9 +46,9 @@ public:
    Request*r=nullptr;for(auto s:slots_)if(s&&s->id==id&&id)r=s;if(!r)return "request_not_found";
    if(core_.callerOwner()&&r->owner!=core_.callerOwner())return "request_owned_by_other";
    if(!strcmp(m,"complete")){
-     if(!a["ok"].is<bool>()||!a.containsKey("result")||measureJson(a["result"])>1536)return "remote_result_limit";
-     if(r->done){if(r->ok!=a["ok"].as<bool>()||!equivalent(r->result,a["result"]))return "completion_conflict";}
-     else{r->done=true;r->ok=a["ok"];serializeJson(a["result"],r->result,sizeof r->result);changed(*r,r->ok?"completed":"failed");}
+     if(!a["ok"].is<bool>()||!a.containsKey("result")||measureJson(a["result"])>ResultLimit)return "remote_result_limit";
+     if(r->done){if(r->ok!=a["ok"].as<bool>()||!equivalent(r->result?r->result:"{\"error\":\"deadline_exceeded\"}",a["result"]))return "completion_conflict";}
+     else{auto bytes=measureJson(a["result"])+1;auto result=static_cast<char*>(core_.resources().allocate(bytes));if(!result)return "remote_memory_budget";serializeJson(a["result"],result,bytes);r->result=result;r->done=true;r->ok=a["ok"];changed(*r,r->ok?"completed":"failed");}
    }else if(!strcmp(m,"release")){if(!r->done)return "request_pending";for(auto&s:slots_)if(s==r){release(s);break;}return nullptr;}
    else if(strcmp(m,"read"))return "unsupported_method";
    describe(*r,out);return nullptr;

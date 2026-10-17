@@ -16,7 +16,7 @@ protected:
 private:
 std::recursive_mutex localBus_;struct Reader{int fd=-1;char path[320]{};uint64_t used=0;};Reader readers_[2];uint64_t readOrder_=0;
  void closeReader(){for(auto&r:readers_){if(r.fd>=0)::close(r.fd);r={};}}
- uint64_t revision_=1;mutable std::mutex spaceMutex_;uint64_t capacity_=0,free_=0;bool known_=false,dirty_=true;std::atomic<bool>background_{false};void*spaceContext_=nullptr;const char*(*requestSpace_)(void*)=nullptr;
+ std::atomic<uint64_t>revision_{1};mutable std::mutex spaceMutex_;uint64_t capacity_=0,free_=0;bool known_=false,dirty_=true;std::atomic<bool>background_{false};void*spaceContext_=nullptr;const char*(*requestSpace_)(void*)=nullptr;
  void changedSpace(uint64_t reserve=0){std::lock_guard<std::mutex>lock(spaceMutex_);if(known_)free_=reserve>free_?0:free_-reserve;dirty_=true;}
  struct Fd{int value;~Fd(){if(value>=0)::close(value);}};
  static const char*error(){switch(errno){case ENOENT:return "not_found";case EEXIST:return "exists";case ENOSPC:return "no_space";case EROFS:return "read_only";case ENOTDIR:return "not_directory";case EISDIR:return "is_directory";case ENOTEMPTY:return "directory_not_empty";default:return "filesystem_io_failed";}}
@@ -34,7 +34,7 @@ public:
  void spaceRequester(void*ctx,const char*(*request)(void*)){spaceContext_=ctx;requestSpace_=request;}
  bool busyPath(const char*)const override{return background_;}
  bool available()const override{return mounted_;}bool durableWrites()const override{return true;}const char*operations()const override{return "stat,read,list,write,create,resize,flush,remove,mkdir,rename";}
-  uint64_t changeRevision()const override{return revision_;}
+  uint64_t changeRevision()const override{return revision_.load();}
  void describe(JsonObject o)const override{o["prepare"]["path"]=resource_;o["prepare"]["method"]="mount";o["prepare"]["args"].to<JsonObject>();o["mounted"]=mounted_;o["filesystem"]=filesystem_;o["allocation_unit_bytes"]=unit_;o["growth_overhead_bytes"]=2*unit_;std::lock_guard<std::mutex>lock(spaceMutex_);o["free_is_cached"]=true;o["space_refresh_async"]=requestSpace_!=nullptr;o["free_needs_refresh"]=dirty_;o["capacity_refresh"]["path"]=resource_;o["capacity_refresh"]["method"]="space";o["capacity_refresh"]["args"].to<JsonObject>();if(mounted_&&known_){sizeText(o,"volume_capacity_bytes",capacity_);sizeText(o,"free_bytes",free_);}else{o["volume_capacity_bytes"]=nullptr;o["free_bytes"]=nullptr;}}
  const char*refreshSpace()override{if(!mounted_)return "provider_unavailable";if(background_)return "resource_busy";return requestSpace_?requestSpace_(spaceContext_):"space_executor_unavailable";}
  // Resolve real component spelling for case-folding filesystems, so aliases

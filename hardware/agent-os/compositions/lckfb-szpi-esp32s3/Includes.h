@@ -3,6 +3,7 @@
 #include "drivers/pca9557/Pca9557.h"
 #include "drivers/qmi8658/Qmi8658.h"
 #include "drivers/ft6336/Ft6336.h"
+#include "drivers/ft6336/Ft6336Input.h"
 #include "DisplayScheduler.h"
 #include "Policy.h"
 #include "PackedFont.h"

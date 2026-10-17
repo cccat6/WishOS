@@ -210,7 +210,7 @@
                 "textColor": "#262822"
               },
               "labelProps": {
-                "text": "继续说话",
+                "text": "Say more",
                 "longMode": "ellipsis",
                 "metrics": "ink"
               }

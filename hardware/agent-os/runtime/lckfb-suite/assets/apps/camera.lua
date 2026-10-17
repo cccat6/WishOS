@@ -1,4 +1,4 @@
-local C=notes.require('../suite/common.lua');local frame,file,saveTimer;local candidateOwned=false;local busy=false;local lastFrame;local garbage={};local partial
+local C=notes.require('../suite/common.lua');local frame,file,saveTimer;local candidateOwned=false;local busy=false;local lastFrame;local garbage={};local partial;local savePreparing=false
 local function status(text) C.update({status=text}) end
 local function clear(id) if id then C.call('/dev/camera','release',{frame_id=id}) end end
 local function release_camera()
@@ -14,7 +14,7 @@ local function failed_capture(error)
  candidateOwned=false;file=nil;release_camera();status(error)
 end
 local function capture_ready()
- if busy or saveTimer then return end;busy=true;file=nil;candidateOwned=false;status(C.t('正在拍照','Capturing'))
+ if busy or saveTimer or savePreparing then return end;busy=true;file=nil;candidateOwned=false;status(C.t('正在拍照','Capturing'))
  local r=notes.request('/dev/camera','capture',{},function(e)
   if e.event~='operation_completed' then failed_capture(e.data.error or 'camera_capture_failed');return end
   local s=C.call('/dev/camera','read');if not s or not s.frame_id or s.frame_id==0 then failed_capture('camera_frame_missing');return end
@@ -30,7 +30,7 @@ local function capture_ready()
  if not r.ok then failed_capture(r.error) end
 end
 local function capture()
- if busy or saveTimer then return end
+ if busy or saveTimer or savePreparing then return end
  local s,e=C.call('/dev/camera','read');if not s then status(e);return end
  if s.operation_pending then status(C.t('相机正在准备，请稍后再试','Camera is preparing; try again shortly'));return end
  if s.ready then capture_ready();return end
@@ -40,18 +40,22 @@ local function capture()
  if not r.ok then busy=false;status(r.error) end
 end
 local function save()
- if not lastFrame or saveTimer then return end
+ if not lastFrame or saveTimer or savePreparing then return end
+ savePreparing=true;status(C.t('正在准备保存','Preparing to save'))
  C.prepare_sd(function(s,e)
+  savePreparing=false
   if not s or not s.mounted then status(e or C.t('请插入 SD 卡','Insert an SD card'));return end
   local folder='/storage/user/WishOS';local stat=C.call('/fs','stat',{file=folder});if not stat then local made,err=C.call('/fs','mkdir',{file=folder});if not made then status(err);return end end
   folder=folder..'/photos';if not C.call('/fs','stat',{file=folder}) then local made,err=C.call('/fs','mkdir',{file=folder});if not made then status(err);return end end
   local clock=C.call('/sys/clock','read') or {};local name=folder..'/capture-'..tostring(clock.unix_s or 0)..'-'..tostring(clock.monotonic_ms or 0)..'.bin';local src=lastFrame;local at=0
   partial=name..'.partial';local made,err=C.call('/fs','create',{file=partial});if not made then partial=nil;status(err);return end
   status(C.t('正在保存到 SD','Saving to SD'))
+  local clock=C.call('/sys/clock') or {};local deadline=(clock.monotonic_ms or 0)+C.config.photo_save_timeout_ms
   saveTimer=C.timer(1,20,function()
+   local now=C.call('/sys/clock') or {};if (now.monotonic_ms or 0)>=deadline then C.cancel(saveTimer);saveTimer=nil;status(C.t('保存超时，可重试','Save timed out; try again'));return end
    local b,err=C.call('/fs','read',{file=src,offset=tostring(at),length=1024});if not b then C.cancel(saveTimer);saveTimer=nil;status(err);return end
    if b.hex=='' then local flushed,err=C.call('/fs','flush',{file=partial});if flushed then flushed,err=C.call('/fs','rename',{file=partial,to=name}) end;C.cancel(saveTimer);saveTimer=nil;if flushed then partial=nil;status(C.t('已保存：WishOS/photos','Saved: WishOS/photos')) else status(err) end;return end
-   local w,err=C.call('/fs','write',{file=partial,offset=tostring(at),hex=b.hex});if not w then C.cancel(saveTimer);saveTimer=nil;status(err);return end
+   local w,err=C.call('/fs','write',{file=partial,offset=tostring(at),hex=b.hex});if not w then if err=='bus_busy' or err=='spi_busy' or err=='resource_busy' then return end;C.cancel(saveTimer);saveTimer=nil;status(err);return end
    at=tonumber(b.next_offset)
   end)
  end)

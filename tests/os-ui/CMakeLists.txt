@@ -150,3 +150,13 @@ target_compile_definitions(notes_lckfb_suite_test PRIVATE ARDUINO=10819 ARDUINOJ
 target_compile_options(notes_lckfb_suite_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
 target_link_options(notes_lckfb_suite_test PRIVATE -fsanitize=address,undefined)
 target_link_libraries(notes_lckfb_suite_test PRIVATE notes_lua lvgl::lvgl)
+
+add_executable(notes_recording_storage_test recording_storage_test.cpp)
+target_include_directories(notes_recording_storage_test PRIVATE "${NOTES_ROOT}/firmware/WishOS/src" "${NOTES_ARDUINO_LIBS}/ArduinoJson/src")
+target_compile_options(notes_recording_storage_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
+target_link_options(notes_recording_storage_test PRIVATE -fsanitize=address,undefined)
+
+add_executable(notes_touch_stream_test touch_stream_test.cpp)
+target_include_directories(notes_touch_stream_test PRIVATE "${NOTES_ROOT}/firmware/WishOS/src" "${NOTES_ARDUINO_LIBS}/ArduinoJson/src")
+target_compile_options(notes_touch_stream_test PRIVATE -UNDEBUG -g -fsanitize=address,undefined)
+target_link_options(notes_touch_stream_test PRIVATE -fsanitize=address,undefined)

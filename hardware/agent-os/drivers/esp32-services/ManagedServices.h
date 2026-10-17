@@ -37,6 +37,9 @@ static void registerManagedServices(){
  core.diagnostics(&diagnostics,[](void*p,const char*s,const char*e,JsonObjectConst d,uint32_t owner){static_cast<Diagnostics*>(p)->event(s,e,d,owner);},[](void*p,const char*s,const char*m,const char*e,uint32_t owner){static_cast<Diagnostics*>(p)->call(s,m,e,owner);});
  JsonDocument config,logs;
  for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/services.json")){deserializeJson(config,a.data,a.size);break;}
+ // Package startup policy is applied once through the same validated storage
+ // interface; replacing an ordinary app must not reset system volume quotas.
+ for(auto settings:config["volatile_storage"].as<JsonArrayConst>()){JsonDocument result;if(auto e=core.invoke("/sys/storage","configure",settings,result.to<JsonObject>())){JsonDocument data;data["error"]=e;core.emit("/sys/storage","configuration_failed",data.as<JsonObjectConst>());}}
  if(config["logs"].is<JsonObjectConst>())logs["settings"]=config["logs"];if(logs["settings"].isNull())logs["settings"].to<JsonObject>();JsonDocument out;diagnostics.invoke("configure",logs.as<JsonObjectConst>(),out.to<JsonObject>());
  auto saved=preferences.getString("logs","");if(saved.length()){JsonDocument a,b;if(!deserializeJson(b,saved)){a["settings"]=b;diagnostics.invoke("configure",a.as<JsonObjectConst>(),out.to<JsonObject>());}}
  saved=preferences.getString("downloads","");if(!saved.length()&&config["downloads"].is<JsonObjectConst>())serializeJson(config["downloads"],saved);if(saved.length())transfers.restore(saved.c_str());
