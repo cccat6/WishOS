@@ -1,4 +1,4 @@
-import importlib.util, json, unittest, tempfile
+import importlib.util, json, unittest, tempfile, io
 from unittest.mock import patch
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('os_client',Path(__file__).parents[1]/'tools/os_client.py')
@@ -54,6 +54,41 @@ class Packages(m.Client):
             if self.bad_read:data=bytes(len(data))
             return {'hex':data.hex()}
         raise AssertionError((path,method,a))
+class CapacityClient(m.Client):
+    def __init__(self,mount='/custom',failure=None):
+        self.calls=[];self.timeout=1;self.mount=mount;self.failure=failure;self.writes=0;self.requests=0;self.releases=0;self.clock=None
+    def call(self,path,method='read',args=None,request_id=None,*,timeout=None):
+        if timeout is not None:assert 0<timeout<=self.timeout
+        a=args or {};self.calls.append((path,method,a))
+        if path=='/fs' and method=='write':
+            self.writes+=1
+            if self.writes==(2 if self.failure=='later_chunk' else 1):
+                if self.failure=='write_timeout':raise TimeoutError('write reply lost')
+                raise m.RpcError('quota_exceeded' if self.failure=='quota' else 'storage_space_refresh_required')
+            if self.failure=='again':raise m.RpcError('storage_space_refresh_required')
+            return {'written':len(a['hex'])//2}
+        if path=='/fs' and method=='mounts':
+            if a['cursor']==0:return {'providers':[{'mount':'/','capacity_refresh':{'path':'/wrong','method':'space','args':{}}}],'more':True,'next_cursor':1}
+            selected={'mount':self.mount,'capacity_refresh':{'path':'/custom/storage','method':'measure_space','args':{'volume':'chosen'}}}
+            if self.failure=='unsupported':selected.pop('capacity_refresh')
+            return {'providers':[selected],'more':False}
+        if path=='/sys/capabilities':return {'async':{'measure_space':{'success_events':['volume_measured']}}}
+        if path=='/sys/operations':
+            if method=='request':
+                self.requests+=1
+                if self.failure=='request_timeout':raise TimeoutError('request reply lost')
+                if self.failure=='late_ack':self.clock[0]=2
+                return {'completion_id':71}
+            if method=='release':
+                self.releases+=1
+                if self.failure in ('cleanup','failed_cleanup'):raise m.RpcError('cleanup_failed')
+                return {}
+            if self.failure=='reboot':raise RuntimeError('Device rebooted; create a new client before reusing handles')
+            if self.failure=='timeout':self.clock[0]=2;return {'ready':False}
+            if self.failure in ('failed','failed_cleanup'):return {'ready':True,'event':'volume_failed','data':{'error':'storage_io_failed'}}
+            return {'ready':True,'event':'volume_measured','data':{'ok':True}}
+        raise AssertionError((path,method,a))
+
 class Tests(unittest.TestCase):
     def test_package_verified_activation_and_lost_reply(self):
         for lost in (False,True):
@@ -69,6 +104,22 @@ class Tests(unittest.TestCase):
             p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start(')
             with self.assertRaises(ValueError):c.publish_app(p,'/storage/flash')
         self.assertFalse(any(method in ('mkdir','write','install','launch') for _,method,_ in c.calls))
+
+    def test_activation_between_observations_is_not_reported_as_failure(self):
+        class Transition(Packages):
+            switching=False
+            def call(self,path,method='read',args=None,request_id=None):
+                if path=='/sys/apps' and method=='read' and self.switching:
+                    self.loaded=self.target;self.switching=False
+                r=super().call(path,method,args,request_id)
+                if path=='/sys/apps' and method=='launch':
+                    self.target=self.loaded;self.loaded='old';self.switching=True
+                return r
+        c=Transition()
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start() end')
+            result=c.publish_app(p,'/storage/flash')
+        self.assertEqual(result['entry'],c.loaded);self.assertEqual(c.activation_count,1)
 
     def test_installation_does_not_execute_or_replace_the_launcher(self):
         c=Packages()
@@ -89,6 +140,70 @@ class Tests(unittest.TestCase):
             p=Path(folder);descriptor(p);(p/'main.lua').write_text('function on_start() end')
             with self.assertRaises(ValueError):c.publish_app(p,'/storage/ram',persist=True)
         self.assertTrue(all(method in ('read','describe','mounts') for _,method,_ in c.calls))
+    def test_upload_explicit_refresh_uses_matching_paginated_provider_contract(self):
+        for mount in ('/custom','/storage/removable','/storage/flash'):
+            with self.subTest(mount=mount),tempfile.TemporaryDirectory() as folder:
+                source=Path(folder)/'data';source.write_bytes(b'abc');client=CapacityClient(mount)
+                self.assertEqual(client.upload(source,mount+'/nested/data')['bytes'],3)
+                self.assertEqual((client.writes,client.requests,client.releases),(2,1,1))
+                request=next(a for p,method,a in client.calls if p=='/sys/operations' and method=='request')
+                self.assertEqual(request,{'path':'/custom/storage','method':'measure_space','args':{'volume':'chosen'}})
+                writes=[a for p,method,a in client.calls if method=='write'];self.assertEqual(writes[0],writes[1])
+
+    def test_upload_refresh_retries_only_rejected_chunk_after_prior_data(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'data';source.write_bytes(bytes(range(256))*9);client=CapacityClient(failure='later_chunk')
+            self.assertEqual(client.upload(source,'/custom/data')['bytes'],2304)
+            writes=[a for p,method,a in client.calls if p=='/fs' and method=='write']
+            self.assertEqual([a['offset'] for a in writes],['0','1024','1024','2048'])
+            self.assertEqual(client.requests,1);self.assertEqual(client.releases,1)
+
+    def test_upload_boot_change_keeps_cleanup_boot_guard_and_preserves_unknown_outcome(self):
+        client=m.Client(url='http://device',timeout=1);calls=[]
+        def respond(request,timeout):
+            command=json.loads(request.data);calls.append(command);method=command['method'];path=command['path'];boot='A';error=None
+            if path=='/fs' and method=='write':error='storage_space_refresh_required';result={}
+            elif method=='mounts':result={'providers':[{'mount':'/custom','capacity_refresh':{'path':'/volume','method':'space'}}],'more':False}
+            elif path=='/sys/capabilities':result={'async':{'space':{'success_events':['ready']}}}
+            elif method=='request':result={'completion_id':71}
+            else:boot='B';result={};error='boot_changed'
+            return io.BytesIO(json.dumps({'ok':error is None,'error':error,'result':result,'boot_id':boot}).encode())
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'data';source.write_bytes(b'abc')
+            with patch.object(m.urllib.request,'urlopen',side_effect=respond):
+                with self.assertRaisesRegex(RuntimeError,'Device rebooted'):client.upload(source,'/custom/data')
+        self.assertEqual(sum(c['method']=='write' for c in calls),1)
+        self.assertEqual(calls[-1]['method'],'release');self.assertEqual(calls[-1]['args'],{'id':71})
+        self.assertTrue(all(c['expected_boot_id']=='A' for c in calls[1:]))
+
+    def test_upload_capacity_failures_release_known_receipts_and_never_replay(self):
+        for failure,error in [('failed',m.RpcError),('timeout',TimeoutError),('reboot',RuntimeError),('again',m.RpcError),('request_timeout',TimeoutError),('late_ack',TimeoutError),('cleanup',m.RpcError)]:
+            with self.subTest(failure=failure),tempfile.TemporaryDirectory() as folder:
+                source=Path(folder)/'data';source.write_bytes(b'abc');client=CapacityClient(failure=failure);clock=[0.];client.clock=clock
+                with patch.object(m.time,'monotonic',side_effect=lambda:clock[0]),patch.object(m.time,'sleep'):
+                    with self.assertRaises(error):client.upload(source,'/custom/data')
+                self.assertEqual(client.requests,1)
+                self.assertEqual(client.releases,0 if failure=='request_timeout' else 1)
+                self.assertEqual(client.writes,2 if failure=='again' else 1)
+
+    def test_upload_preserves_refresh_failure_when_receipt_cleanup_also_fails(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'data';source.write_bytes(b'abc');client=CapacityClient(failure='failed_cleanup')
+            with self.assertRaisesRegex(m.RpcError,'storage_io_failed') as caught:client.upload(source,'/custom/data')
+            self.assertEqual(client.releases,1);self.assertEqual(client.writes,1)
+            if hasattr(caught.exception,'add_note'):self.assertIn('cleanup_failed',' '.join(caught.exception.__notes__))
+
+    def test_upload_real_quota_or_uncertain_write_does_not_refresh(self):
+        for failure,error in [('quota',m.RpcError),('write_timeout',TimeoutError)]:
+            with self.subTest(failure=failure),tempfile.TemporaryDirectory() as folder:
+                source=Path(folder)/'data';source.write_bytes(b'abc');client=CapacityClient(failure=failure)
+                with self.assertRaises(error):client.upload(source,'/custom/data')
+                self.assertEqual(client.writes,1);self.assertEqual(len(client.calls),1)
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'data';source.write_bytes(b'abc');client=CapacityClient(failure='unsupported')
+            with self.assertRaisesRegex(m.RpcError,'storage_space_refresh_required'):client.upload(source,'/custom/data')
+            self.assertEqual((client.writes,client.requests,client.releases),(1,0,0))
+
     def test_stream_exact(self):
         c=Fake();r=c.present_native(bytes([0x11])*172800,'e6.ink6.image-v1',True);self.assertEqual(r['job_id'],7)
         chunks=[x[2] for x in c.calls if x[1]=='chunk'];self.assertEqual(sum(len(x['hex'])//2 for x in chunks),172800);self.assertEqual([x['offset'] for x in chunks],list(range(0,172800,1024)));self.assertEqual(c.calls[-1][1],'commit')

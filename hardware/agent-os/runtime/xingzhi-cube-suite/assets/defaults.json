@@ -1,0 +1,9 @@
+{
+  "system": {
+    "/sys/ui": {
+      "font_file": "/storage/flash/factory/fonts/NotesSansSC-Regular.ttf",
+      "font_cache_glyphs": 128,
+      "image_cache_bytes": 65536
+    }
+  }
+}

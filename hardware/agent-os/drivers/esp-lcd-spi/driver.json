@@ -1,0 +1,8 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp-lcd-spi",
+  "platforms": [
+    "esp32"
+  ],
+  "description": "ESP-IDF SPI LCD presentation"
+}

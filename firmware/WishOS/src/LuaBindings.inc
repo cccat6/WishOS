@@ -27,7 +27,7 @@
     char*source=nullptr;size_t size=0;const char*error=s.reader_(s.readerContext_,full,source,size);
     if(error){free(source);--s.moduleCount_;return luaL_error(L,"%s",error);}s.scratch_=source;
     if(size>8192){s.cleanup();--s.moduleCount_;return luaL_error(L,"module_size");}
-    int status=luaL_loadbufferx(L,source,size,full,"t");s.cleanup();if(status!=LUA_OK){--s.moduleCount_;return lua_error(L);}
+    int status=s.compileChunk(L,source,size,full);s.cleanup();if(status!=LUA_OK){--s.moduleCount_;return lua_error(L);}
     char previous[256];strcpy(previous,s.base_);strcpy(s.base_,full);auto slash=strrchr(s.base_,'/');if(slash==s.base_)slash[1]=0;else *slash=0;
     status=lua_pcall(L,0,1,0);strcpy(s.base_,previous);if(status!=LUA_OK){return lua_error(L);}
     if(lua_isnil(L,-1)){lua_pop(L,1);lua_pushboolean(L,true);}lua_pushvalue(L,-1);s.modules_[slot].ref=luaL_ref(L,LUA_REGISTRYINDEX);s.modules_[slot].ready=true;return 1;

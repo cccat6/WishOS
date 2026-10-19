@@ -1,0 +1,313 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "id": "menu",
+      "style": {
+        "bgColor": "#ffffff",
+        "padding": 16
+      },
+      "layout": {
+        "type": "flex",
+        "flexFlow": "column",
+        "gap": 4
+      },
+      "children": [
+        {
+          "type": "label",
+          "id": "brand",
+          "labelProps": {
+            "text": "WishOS",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        },
+        {
+          "type": "container",
+          "id": "header",
+          "children": [
+            {
+              "type": "label",
+              "id": "title",
+              "labelProps": {
+                "text": "设备菜单",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 32,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 48
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "gap": 4
+          },
+          "placement": {
+            "height": 64
+          }
+        },
+        {
+          "type": "container",
+          "id": "content",
+          "children": [
+            {
+              "type": "container",
+              "id": "row1",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "item1",
+                  "labelProps": {
+                    "text": "网络",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 24,
+                    "textColor": "#172e56"
+                  }
+                }
+              ],
+              "style": {
+                "padding": 0,
+                "radius": 8,
+                "borderWidth": 0,
+                "bgColor": "#f6f7ef",
+                "paddingLeft": 12
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "column",
+                "gap": 4
+              },
+              "placement": {
+                "height": 40
+              }
+            },
+            {
+              "type": "container",
+              "id": "row2",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "item2",
+                  "labelProps": {
+                    "text": "服务",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 24,
+                    "textColor": "#172e56"
+                  }
+                }
+              ],
+              "style": {
+                "padding": 0,
+                "radius": 8,
+                "borderWidth": 0,
+                "bgColor": "#f6f7ef",
+                "paddingLeft": 12
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "column",
+                "gap": 4
+              },
+              "placement": {
+                "height": 40
+              }
+            },
+            {
+              "type": "container",
+              "id": "row3",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "item3",
+                  "labelProps": {
+                    "text": "应用",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 24,
+                    "textColor": "#172e56"
+                  }
+                }
+              ],
+              "style": {
+                "padding": 0,
+                "radius": 8,
+                "borderWidth": 0,
+                "bgColor": "#f6f7ef",
+                "paddingLeft": 12
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "column",
+                "gap": 4
+              },
+              "placement": {
+                "height": 40
+              }
+            },
+            {
+              "type": "container",
+              "id": "row4",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "item4",
+                  "labelProps": {
+                    "text": "设备状态",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 24,
+                    "textColor": "#172e56"
+                  }
+                }
+              ],
+              "style": {
+                "padding": 0,
+                "radius": 8,
+                "borderWidth": 0,
+                "bgColor": "#f6f7ef",
+                "paddingLeft": 12
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "column",
+                "gap": 4
+              },
+              "placement": {
+                "height": 40
+              }
+            },
+            {
+              "type": "container",
+              "id": "row5",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "item5",
+                  "labelProps": {
+                    "text": "存储",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 24,
+                    "textColor": "#172e56"
+                  }
+                }
+              ],
+              "style": {
+                "padding": 0,
+                "radius": 8,
+                "borderWidth": 0,
+                "bgColor": "#f6f7ef",
+                "paddingLeft": 12
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "column",
+                "gap": 4
+              },
+              "placement": {
+                "height": 40
+              }
+            },
+            {
+              "type": "container",
+              "id": "row6",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "item6",
+                  "labelProps": {
+                    "text": "休眠",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 24,
+                    "textColor": "#172e56"
+                  }
+                }
+              ],
+              "style": {
+                "padding": 0,
+                "radius": 8,
+                "borderWidth": 0,
+                "bgColor": "#f6f7ef",
+                "paddingLeft": 12
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "column",
+                "gap": 4
+              },
+              "placement": {
+                "height": 40
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "column",
+            "gap": 4
+          }
+        },
+        {
+          "type": "label",
+          "id": "message",
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#aa322d"
+          },
+          "placement": {
+            "height": 44
+          }
+        },
+        {
+          "type": "label",
+          "id": "keys",
+          "labelProps": {
+            "text": "A 上一项   B 选择   C 下一项",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        }
+      ]
+    }
+  ]
+}

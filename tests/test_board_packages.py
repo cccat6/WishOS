@@ -8,6 +8,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 spec=importlib.util.spec_from_file_location('board_pack',ROOT/'tools/prepare_board_package.py')
 pack=importlib.util.module_from_spec(spec);spec.loader.exec_module(pack)
+pack.DEFAULT=ROOT/'tests/fixtures/device-template'
 class PackageTests(unittest.TestCase):
  def fixture(self,root):
   b=json.loads((pack.DEFAULT/'board.json').read_text());b['composition']=str((pack.DEFAULT/b['composition']).resolve());b['partition_file']='partitions.csv';(root/'partitions.csv').write_bytes((pack.DEFAULT/'partitions.csv').read_bytes())
@@ -17,6 +18,23 @@ class PackageTests(unittest.TestCase):
   (root/'app.json').write_text('{"format":"notes-app/1","entry":"ui/home.json"}')
   return b
  def write(self,root,b): (root/'board.json').write_text(json.dumps(b))
+ def test_headless_initial_files_are_separate_from_recovery(self):
+  root,b,_,_,assets=pack.load(ROOT/'hardware/agent-os/boards/esp32-c3-runtime')
+  compiled=pack.compiled_assets(root,b,assets)
+  self.assertIn('/control/control.js.gz',assets)
+  self.assertNotIn('/control/control.js.gz',compiled)
+  self.assertNotIn('/apps/launcher.lua',compiled)
+  self.assertIn('/recovery/launcher.lua',compiled)
+  self.assertIn('/lib/navigation.lua',compiled)
+  app=json.loads(assets['/applications.json'])['applications'][0]
+  self.assertEqual(app['fallback_manifest'],'/system/recovery/launcher.json')
+ def test_factory_ui_documents_are_in_the_effective_package(self):
+  for board_id in ('lckfb-szpi-esp32s3','xingzhi-cube-154tft-wifi'):
+   root,board,_,_,assets=pack.load(pack.HARDWARE/'boards'/board_id)
+   directory,_=pack.runtime_package(root,board)
+   for path in (directory/'assets/ui').glob('*.json'):
+    self.assertIn('/ui/'+path.name,assets,(board_id,path.name))
+
  def test_default_and_wiring_change(self):
   pack.load(pack.DEFAULT)
   with tempfile.TemporaryDirectory() as folder:
@@ -34,6 +52,15 @@ class PackageTests(unittest.TestCase):
    with self.assertRaises((ValueError,FileNotFoundError)):pack.load(root)
    b=self.fixture(root);b['display']['width']=240;self.write(root,b)
    with self.assertRaisesRegex(ValueError,'geometry'):pack.load(root)
+ def test_all_lua_assets_obey_the_runtime_source_contract(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);board=self.fixture(root);board['assets']['/suite/helper.lua']='helper.lua';self.write(root,board)
+   (root/'helper.lua').write_text('--'+('x'*8190));pack.load(root)
+   (root/'helper.lua').write_text('--'+('x'*8191))
+   with self.assertRaisesRegex(ValueError,'runtime Lua asset'):pack.load(root)
+   (root/'helper.lua').write_text('')
+   with self.assertRaisesRegex(ValueError,'runtime Lua asset'):pack.load(root)
+
  def test_factory_is_only_a_runtime_reference(self):
   _,board,_,_,assets=pack.load(pack.DEFAULT)
   catalog=json.loads(assets['/applications.json']);self.assertEqual(catalog['launcher'],'launcher')
@@ -76,11 +103,45 @@ class PackageTests(unittest.TestCase):
    (port/'Port.inc').write_text('// validation fixture');(port/'composition.json').write_text(json.dumps(spec));board['composition']='composition';self.write(root,board)
    with self.assertRaisesRegex(ValueError,'compiled asset budget'):pack.load(root)
 
+ def test_internal_filesystem_binding_follows_device_configuration(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);b=self.fixture(root)
+   b['runtime_filesystem'].update(partition='custom_data',mount='/storage/custom',native_mount='/customfs')
+   (root/'partitions.csv').write_text((root/'partitions.csv').read_text().replace('spiffs,data,spiffs','custom_data,data,spiffs'))
+   self.write(root,b);pack.generate(root,root/'generated')
+   text=(root/'generated/BoardPackage.h').read_text()
+   self.assertIn('FLASH_PARTITION[]=\"custom_data\"',text)
+   self.assertIn('FLASH_MOUNT[]=\"/storage/custom\"',text)
+   self.assertIn('FLASH_NATIVE_MOUNT[]=\"/customfs\"',text)
+   self.assertIn('RUNTIME_PATH[]=\"/storage/custom/factory\"',text)
+
  def test_binary_assets_preserve_nul_and_size(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root);b['assets']['/icons/test.bin']='test.bin';raw=b'\x00\xff\x00data';(root/'test.bin').write_bytes(raw);self.write(root,b)
    *_,assets=pack.load(root);self.assertEqual(assets['/icons/test.bin'],raw)
    pack.generate(root,root/'generated');text=(root/'generated/BoardPackage.h').read_text();self.assertIn('\\x00\\xff\\x00\\x64\\x61\\x74\\x61',text)
+ def test_xingzhi_effective_quota_covers_factory_files_and_user_room(self):
+  _,board,_,_,assets=pack.load(pack.HARDWARE/'boards/xingzhi-cube-154tft-wifi')
+  services=json.loads(assets['/services.json'])
+  flash=next(t for t in services['downloads']['targets'] if t['provider']=='flash')
+  # The public transfer contract measures total volume use, including factory fonts.
+  stored=sum(len(v.encode()) if isinstance(v,str) else len(v) for k,v in assets.items() if k not in ('/components.json','/defaults.json','/applications.json','/services.json'))
+  self.assertGreater(int(flash['quota_bytes']),stored+524288)
+  self.assertEqual(board['application_providers'],['flash'])
+ def test_xingzhi_adc_pin_must_have_adc_capability(self):
+  with tempfile.TemporaryDirectory() as folder:
+   source=pack.HARDWARE/'boards/xingzhi-cube-154tft-wifi';root=Path(folder)
+   # Resolve the actual composition; the invalid pin is rejected before assets.
+   board=json.loads((source/'board.json').read_text());board['composition']=str((source/board['composition']).resolve());board.pop('runtime');board['partition_file']='partitions.csv';(root/'partitions.csv').write_bytes((source/'partitions.csv').read_bytes());board['assets']={};board['pins']['BATTERY_ADC']=42
+   (root/'board.json').write_text(json.dumps(board))
+   with self.assertRaisesRegex(ValueError,'incompatible with required hardware capability'):pack.load(root)
+ def test_lckfb_effective_services_admit_camera_temporary_frames(self):
+  _,board,_,_,assets=pack.load(pack.HARDWARE/'boards/lckfb-szpi-esp32s3')
+  services=json.loads(assets['/services.json'])
+  ram=next(v for v in services['volatile_storage'] if v['provider']=='ram')
+  # The currently displayed image remains leased while its successor is copied.
+  width,height=board['display']['width'],board['display']['height']
+  self.assertGreaterEqual(ram['quota_bytes'],2*(width*height*2+12))
  def test_same_c6_can_have_an_unrelated_display_touch_and_one_button(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);b=self.fixture(root);port=root/'port';port.mkdir();(port/'Port.inc').write_text('// test port, not firmware\n')

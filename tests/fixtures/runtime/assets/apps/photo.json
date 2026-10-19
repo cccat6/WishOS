@@ -1,0 +1,26 @@
+{
+  "format": "wishos-app/1",
+  "id": "photo",
+  "title": "手机传图",
+  "entry": "photo.lua",
+  "memory_bytes": 98304,
+  "source": {
+    "repository": "https://github.com/cccat6/WishOS",
+    "path": "tests/fixtures/runtime",
+    "ref": "main"
+  },
+  "help": {
+    "home": "长按 A 返回桌面",
+    "voice": "按住 B 说话，松开结束",
+    "feedback": "处理中与错误会显示在当前界面；实际刷新完成以驱动回执为准"
+  },
+  "requires": [
+    {
+      "path": "/sys/ui",
+      "methods": [
+        "open",
+        "update"
+      ]
+    }
+  ]
+}

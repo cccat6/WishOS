@@ -17,6 +17,6 @@ class WireI2c {
  }
 public:
  I2cBus bus;
- WireI2c(TwoWire&wire,SemaphoreHandle_t mutex,uint32_t hz,uint16_t timeoutMs=10):wire_(wire),mutex_(mutex),hz_(hz),timeout_(timeoutMs),bus{this,acquire,release,transfer,clock}{}
+ WireI2c(TwoWire&wire,SemaphoreHandle_t mutex,uint32_t hz,uint16_t timeoutMs=50):wire_(wire),mutex_(mutex),hz_(hz),timeout_(timeoutMs),bus{this,acquire,release,transfer,clock}{}
 };
 }

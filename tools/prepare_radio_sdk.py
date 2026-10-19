@@ -16,9 +16,16 @@ def prepare(sdk:Path,toolbin:Path,out:Path):
         mapping=out/(archive+'.symbols');mapping.write_text(''.join(f'esp_ieee802154_{n} {prefix}_{n}\n' for n in names))
         digest=hashlib.sha256(src.read_bytes()+mapping.read_bytes()).hexdigest()
         cache=out/(archive+'.sha256')
-        if not dest.exists() or not cache.exists() or cache.read_text()!=digest:
+        receipt={}
+        if cache.exists():
+            try:receipt=json.loads(cache.read_text())
+            except json.JSONDecodeError:pass
+        if receipt.get('input_sha256')==digest and dest.exists():
+            if receipt.get('output_sha256')!=hashlib.sha256(dest.read_bytes()).hexdigest():
+                raise RuntimeError('Prepared radio archive modified: '+archive)
+        else:
             subprocess.run([str(toolbin/'riscv32-esp-elf-objcopy'),'--redefine-syms',str(mapping),str(src),str(dest)],check=True)
-            cache.write_text(digest)
+            cache.write_text(json.dumps({'input_sha256':digest,'output_sha256':hashlib.sha256(dest.read_bytes()).hexdigest()}))
         records[archive]={'input_sha256':hashlib.sha256(src.read_bytes()).hexdigest(),'prepared_sha256':hashlib.sha256(dest.read_bytes()).hexdigest()}
     # Replace every occurrence, retaining the SDK's original archive ordering and repeats.
     tokens=shlex.split((sdk/'flags/ld_libs').read_text())

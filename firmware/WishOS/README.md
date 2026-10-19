@@ -1,13 +1,11 @@
-# WishOS
+# WishOS 固件
 
-Runtime-loadable UI and Lua applications above portable resource, policy and file interfaces. Current Arduino BSP targets the shared ESP32-C6FH4 E6/Nova board; the implemented display backend is E6. Separate headless ESP32-C3 and ESP32-S3 SDK validation targets use the same runtime. Nova and other display-controller bindings are not yet implemented.
+这里提供 WishOS 的便携运行时和系统服务。当前两个产品设备包为立创实战派 ESP32-S3 与 Xingzhi Cube 1.54 TFT，具体接线和驱动组合位于 `hardware/agent-os/`。
 
-See [runtime/API status](../../docs/agent-os-runtime.md), [agent skill](../../skills/agentic-notes-hardware/SKILL.md) and [example package](../../examples/agent-os/dashboard).
+从仓库根目录运行 `WISHOS_BOARD=<设备包> tools/build_wishos.sh`。构建器生成所选设备的头文件、组件和锁定依赖，再编译固件。初始 Launcher、字体和网页随独立 LittleFS 镜像交付，后续通过文件/应用接口更新。
 
-Hardware packages live in [hardware/agent-os](../../hardware/agent-os/README.md). Select MCU platform, device composition/wiring, reusable drivers and initial runtime references with `WISHOS_BOARD`; runtime apps cannot change native wiring. Minimum Flash is 4 MiB. Factory applications and web controls are normal writable LittleFS files; first deployment includes `runtime.littlefs.bin`, later firmware updates preserve the filesystem. Build: `tools/build_wishos.sh`. Test: `tools/test_wishos.sh` from the repository root. Neither command flashes hardware. The source directory alone is not a configured sketch: use the generated per-board sketch, with its `BoardPackage.h`, selected native sources and build options. Do not flash this board profile to the older NotesMonitor PCB.
+支持的 Flash 下限为 4 MiB；当前两台 S3 使用 16 MiB Flash 和 PSRAM。共享资源管理器按平台能力选择内存，DMA和SDK任务使用其实际要求的区域。
 
-The firmware owns its source tree. It does not compile the legacy NotesMonitor application or any internal waveform/experimental tooling. Third-party licenses are in `licenses/` and the vendored Lua headers; Arduino libraries retain their upstream licenses.
+录音采用独立可解码的 IMA ADPCM 块。音频、显示、输入和存储通过统一资源接口供应用调用。NFS 使用锁定的 ESP32NFS 依赖，具体版本见 `tools/dependencies/`。
 
-On-demand network storage: `/services/nfs` exports an existing OS provider through ESP32NFS **1.3.0** (MIT), with SdFat **2.3.0**. The build/test scripts snapshot the verified v1.3.0 commit from the sibling repository, ignoring its uncommitted development state; Arduino IDE users install ESP32NFS 1.3.0. NFS starts explicitly and pins its storage until stopped. See the runtime guide for lifecycle, client mount commands and current semantics.
-
-Connectivity build: WebSockets 2.7.2 and Arduino ESP32 3.3.11 are required. The script prepares build-local namespaced 802.15.4 SDK archives and links a boot-selected radio dispatcher; both Thread and Zigbee are in one image. Choose `/sys/radio` protocol, then reboot. The custom partition table is part of the initial full firmware deployment. The installed SDK is never edited. See [connectivity contract](../../skills/agentic-notes-hardware/references/connectivity.md).
+请从[开始使用](../../docs/getting-started.md)、[运行时 API](../../docs/agent-os-runtime.md)和[设备支持](../../docs/supported-devices.md)继续阅读。第三方许可保存在 `licenses/` 和依赖快照中。

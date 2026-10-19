@@ -1,0 +1,6 @@
+{
+  "format": "notes-driver/1",
+  "id": "esp-i2s-input",
+  "description": "ESP-IDF standard I2S mono microphone input",
+  "platforms": ["esp32"]
+}

@@ -20,5 +20,21 @@ int main(){Core core;Vfs vfs;fs::LittleFSFS fs;bool mounted=false;LittleFsProvid
  hold=true;assert(!service.invoke("space",JsonObjectConst(),o.to<JsonObject>()));assert(mounted);FileInfo info;assert(!strcmp(provider.stat("/anything",info),"resource_busy"));hold=false;join();service.poll();vfs.unpin(77);
  flashFormatStatus=-1;assert(!service.invoke("format",JsonObjectConst(),o.to<JsonObject>()));join();service.poll();assert(!mounted&&fs.ends==1);service.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["operation"]["error"]=="format_failed");flashFormatStatus=0;
  assert(!service.invoke("mount",JsonObjectConst(),o.to<JsonObject>()));join();service.poll();assert(mounted);assert(core.resources().promised()==0);
+ // The system volume facade consumes only its selector. Native operations
+ // keep /dev/flash correlation, system format ownership and cancellation ids.
+ struct Selected {FlashVolumeService&native;const char*invoke(const char*m,JsonObjectConst a,JsonObject o){return native.invokeSelected(m,a,o);}void describe(JsonObject o){native.describe(o);}} selected{service};
+ assert(core.add(Device::bind("/sys/storage","mount,format,space,cancel","",selected)));
+ auto begins=fs.begins,ends=fs.ends;auto sequence=core.sequence();
+ for(auto method:{"mount","format","space","cancel"}){a.clear();a["provider"]="elsewhere";assert(!strcmp(core.invoke("/sys/storage",method,a.as<JsonObjectConst>(),o.to<JsonObject>()),"storage_provider_not_found"));}
+ a.clear();a["provider"]="flash";a["operation_id"]=99;assert(!strcmp(core.invoke("/sys/storage","mount",a.as<JsonObjectConst>(),o.to<JsonObject>()),"unknown_argument"));
+ a.remove("operation_id");auto actor=core.acquireOwner();assert(!strcmp(core.invoke("/sys/storage","format",a.as<JsonObjectConst>(),o.to<JsonObject>(),actor),"system_scope_required"));
+ assert(fs.begins==begins&&fs.ends==ends&&core.sequence()==sequence&&!service.active());
+ hold=true;assert(!core.request("/sys/storage","space",a.as<JsonObjectConst>(),o.to<JsonObject>(),actor));completion=o["completion_id"];
+ auto operation=o["operation_id"].as<uint32_t>();a["operation_id"]=operation+1;assert(!strcmp(core.invoke("/sys/storage","cancel",a.as<JsonObjectConst>(),o.to<JsonObject>(),actor),"operation_not_found"));
+ a["operation_id"]=operation;assert(!strcmp(core.invoke("/sys/storage","cancel",a.as<JsonObjectConst>(),o.to<JsonObject>(),core.acquireOwner()),"operation_owned_by_other"));
+ assert(!core.invoke("/sys/storage","cancel",a.as<JsonObjectConst>(),o.to<JsonObject>(),actor));service.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["operation"]["operation_id"]==operation&&o["operation"]["cancel_requested"]==true);
+ hold=false;join();service.poll();assert(!core.completions().read(completion,actor,o.to<JsonObject>()));assert(o["ready"]==true&&o["source"]=="/dev/flash"&&o["data"]["operation_id"]==operation);assert(!core.completions().release(completion,actor));
+ a.clear();a["provider"]="flash";assert(!core.request("/sys/storage","format",a.as<JsonObjectConst>(),o.to<JsonObject>()));completion=o["completion_id"];join();service.poll();assert(fs.ends==ends+1&&mounted);
+ assert(!core.completions().read(completion,0,o.to<JsonObject>()));assert(o["event"]=="operation_completed"&&o["source"]=="/dev/flash");assert(!core.completions().release(completion,0));assert(core.resources().promised()==0);
  std::cout<<"Flash async preparation, nonblocking cached reads, leases, failure cleanup and recovery passed\n";
 }

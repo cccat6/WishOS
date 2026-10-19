@@ -1,4 +1,8 @@
 #include "UiMemory.h"
+#include "drivers/esp32-services/PosixFileProvider.h"
+#define LODEPNG_NO_COMPILE_CPP
+#include <src/libs/lodepng/lodepng.h>
+#include <filesystem>
 #include "PackedFont.h"
 #include <lvgl_private.h>
 #ifdef NDEBUG
@@ -9,24 +13,25 @@
 #include "Core.h"
 #include "PresentationState.h"
 #include "DisplayScheduler.h"
-#include "drivers/e6/E6Profiles.h"
 #include "ScriptHost.h"
 #include "Sha256.h"
 #include "display/NativeFont.h"
 #include "Vfs.h"
-#include "compositions/agentic-notes-e6/Defaults.h"
+#include "../fixtures/composition/Defaults.h"
 #include "SystemFiles.h"
-#include "drivers/e6/scene/Content.h"
+#include "../fixtures/scene/Content.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
 #include <vector>
-static size_t uiAllocCalls=0,uiFailAt=SIZE_MAX;
+static size_t uiAllocCalls=0,uiFailAt=SIZE_MAX,uiRejectedAllocationSize=0,uiObservedAllocationSize=0;
+static void*uiMetadataFaultResize(void*p,size_t n){if(!n){free(p);return nullptr;}uiObservedAllocationSize=n;if(n==uiRejectedAllocationSize)return nullptr;return realloc(p,n);}
 static void*uiFaultResize(void*p,size_t n){if(!n){free(p);return nullptr;}if(uiAllocCalls++==uiFailAt)return nullptr;return realloc(p,n);}
 uint32_t millis(){static uint32_t t=0;return ++t;}
 namespace notesos {
-static Core core;static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));static char appScope[48]="system";static Vfs vfs;static SystemFiles systemFiles;class CountedFiles:public MemoryFiles {public:bool failOnce=false;size_t largestRead=0,totalRead=0,readOps=0;CountedFiles():MemoryFiles("ram","/storage/ram","ram"){}const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{if(failOnce){failOnce=false;got=0;return "spi_busy";}++readOps;largestRead=std::max(largestRead,n);auto e=MemoryFiles::read(p,at,b,n,got);totalRead+=got;return e;}};
-static CountedFiles files;
+static Core core;static Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));static char appScope[48]="system";static Vfs vfs;static SystemFiles systemFiles;class CountedFiles:public MemoryFiles {public:bool failOnce=false,online=true,revisionless=false,reliableContent=false;size_t largestRead=0,totalRead=0,readOps=0,statOps=0;CountedFiles(const char*id="ram",const char*mount="/storage/ram"):MemoryFiles(id,mount,"ram"){}bool available()const override{return online&&MemoryFiles::available();}uint64_t changeRevision()const override{return revisionless?0:MemoryFiles::changeRevision();}uint64_t contentRevision()const override{return reliableContent?changeRevision():MemoryFiles::contentRevision();}const char*stat(const char*p,FileInfo&i)override{++statOps;return available()?MemoryFiles::stat(p,i):"provider_unavailable";}const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{if(!available()){got=0;return "provider_unavailable";}if(failOnce){failOnce=false;got=0;return "spi_busy";}++readOps;largestRead=std::max(largestRead,n);auto e=MemoryFiles::read(p,at,b,n,got);totalRead+=got;return e;}};
+static CountedFiles files;static CountedFiles replacementImages("replacement-images","/replacement-images");
+static bool removableImagesMounted=true;static char removableImagesRoot[]="/tmp/wishos-ui-media-XXXXXX";static PosixFileProvider removableImages("removable-images","/removable-images","sd",true,removableImagesMounted,removableImagesRoot,"","fat",512);
 class CompleteFontFiles:public FileProvider {
 public:
  size_t readBytes=0,largestRead=0;bool failOnce=false;
@@ -43,7 +48,8 @@ public:
 };static CompleteFontFiles completeFonts;
 static bool resolveFile(const char*in,char*full,const char*&rel,FileProvider*&p){if(!normalizePath("/",in,full,256))return false;p=vfs.resolve(full,rel);return p;}
 #include "UiService.h"
-#include "../../hardware/agent-os/compositions/agentic-notes-e6/E6UiSurface.inc"
+#include "font_family_scenarios.inc"
+#include "../fixtures/RasterSink.inc"
 static unsigned uiQueueCalls=0;static bool deferUi=false;static ScriptHost*callbackRuntime=nullptr;static PresentationState::Stamp lastUiStamp;
 static unsigned micStarts=0;
 static const char*defaultUiDriver(){return "test.rgb565";}
@@ -91,6 +97,15 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  const char*large=R"({"version":"0.1.1","assets":[{"type":"viewScreen","style":{"padding":0},"children":[{"type":"image","imageProps":{"src":"assets/picture.bin"}}]}]})";
  assert(!files.write("/large.json",0,(const uint8_t*)large,strlen(large),true,wrote));files.largestRead=files.totalRead=files.readOps=0;assert(prepareUi("/storage/ram/large.json"));for(int x=0;x<480;x+=16){assert(renderUiBand(x,stripe));assert(stripe.bytes[100]==0x33);}assert(files.largestRead<=4096);size_t imageReadOps=files.readOps,imageReadBytes=files.totalRead;
  files.failOnce=true;assert(!renderUiBand(160,stripe));assert(!strcmp(uiError,"spi_busy"));assert(renderUiBand(160,stripe));assert(stripe.bytes[100]==0x33);
+ // Real streamable RGB565 pixels exercise large row reads, partial raster
+ // regions and odd image geometry independently of the source window size.
+ {constexpr unsigned width=319,height=37,left=7,top=5;std::vector<uint8_t> pixels(12+width*height*2);pixels[0]=0x19;pixels[1]=0x12;pixels[4]=width&255;pixels[5]=width>>8;pixels[6]=height;pixels[8]=(width*2)&255;pixels[9]=(width*2)>>8;
+  auto color=[](unsigned x,unsigned y){return uint16_t(((x*3+y)&31)<<11|((x+y*7)&63)<<5|((x*11+y*3)&31));};for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){auto c=color(x,y);size_t at=12+(y*width+x)*2;pixels[at]=c;pixels[at+1]=c>>8;}
+  assert(!files.write("/assets/rows.bin",0,pixels.data(),pixels.size(),true,wrote));const char*page=R"({"version":"0.1.1","assets":[{"type":"viewScreen","style":{"padding":0,"bgColor":"#ffffff"},"children":[{"type":"image","placement":{"x":7,"y":5,"width":319,"height":37},"imageProps":{"src":"assets/rows.bin"}}]}]})";assert(!files.write("/rows.json",0,reinterpret_cast<const uint8_t*>(page),strlen(page),true,wrote));assert(prepareUi("/storage/ram/rows.json"));
+  std::vector<uint16_t> full(boardpack::DISPLAY_WIDTH*64),partitioned(full.size());auto sinkFor=[](std::vector<uint16_t>&target){return UiSink{&target,[](void*context,const lv_area_t&area,const uint16_t*data){auto&out=*static_cast<std::vector<uint16_t>*>(context);for(int y=area.y1;y<=area.y2;++y)memcpy(out.data()+y*boardpack::DISPLAY_WIDTH+area.x1,data+(y-area.y1)*(area.x2-area.x1+1),(area.x2-area.x1+1)*sizeof(uint16_t));}};};
+  auto sink=sinkFor(full);files.readOps=0;assert(renderUiRegion({0,0,boardpack::DISPLAY_WIDTH-1,63},sink,true));auto readOps=files.readOps;for(unsigned y=0;y<64;++y)for(unsigned x=0;x<boardpack::DISPLAY_WIDTH;++x)assert(full[y*boardpack::DISPLAY_WIDTH+x]==(x>=left&&x<left+width&&y>=top&&y<top+height?color(x-left,y-top):uint16_t(0xffff)));
+  sink=sinkFor(partitioned);for(int y=0;y<64;y+=9)assert(renderUiRegion({0,y,boardpack::DISPLAY_WIDTH-1,std::min(y+8,63)},sink,true));assert(full==partitioned);std::cout<<"Streaming RGB565 odd-row fixture: source_reads="<<readOps<<", payload_bytes="<<pixels.size()<<"; full/partial pixels exact\n";assert(!files.remove("/assets/rows.bin")&&!files.remove("/rows.json"));
+ }
  // Exercise the separate alpha plane through the real LVGL binary decoder.
  std::vector<uint8_t> alpha(12+64*64*3,0);alpha[0]=0x19;alpha[1]=0x14;alpha[4]=64;alpha[6]=64;alpha[8]=128;
  for(size_t i=12;i<12+64*64*2;i+=2)alpha[i+1]=0xf8;
@@ -107,7 +122,55 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
   JsonDocument policy,result;policy["changes"][0]["resource"]="/sys/ui";auto settings=policy["changes"][0]["settings"].to<JsonObject>();UiSink sink{nullptr,[](void*,const lv_area_t&,const uint16_t*){}};
   auto draw=[&](unsigned cache){settings["image_cache_bytes"]=cache;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(prepareUi("/storage/ram/cached-ui.json"));files.readOps=0;assert(renderUiRegion({0,0,479,719},sink));return files.readOps;};
   auto uncached=draw(0),cached=draw(65536);std::cerr<<"PNG provider reads: uncached="<<uncached<<" cached="<<cached<<"\n";assert(cached<uncached);auto warm=draw(65536);std::cerr<<"PNG next-frame reads: first="<<cached<<" warm="<<warm<<"\n";assert(warm<cached);
+  // A modest shared-budget adjustment preserves decoded residents that fit.
+  configureUiImageCache(65000);files.readOps=0;assert(renderUiRegion({0,0,479,719},sink));assert(files.readOps==0);configureUiImageCache(65536);
+  // A positive metadata hit avoids source I/O, while every call still acquires
+  // its current read lease and applies the current decoded-PNG budget.
+  JsonDocument node;node["imageProps"]["src"]="/storage/ram/cached.png";auto image=lv_image_create(uiRoot);assert(image);
+  auto configure=[&](){return configureUiImage(node.as<JsonObjectConst>(),image,JsonObjectConst());};
+  clearUiImageMetadata();lv_image_cache_drop(nullptr);files.statOps=files.readOps=0;assert(configure());assert(files.statOps&&files.readOps);
+  files.statOps=files.readOps=0;assert(configure());assert(files.statOps==0&&files.readOps==0);assert(uiImageMetadataBytes&&uiImageMetadataBytes+uiAppliedDecodedImageCache==65536);
+  {Vfs::Access writer(vfs,true);assert(!writer.add("/storage/ram/cached.png"));files.statOps=files.readOps=0;auto previousSource=lv_image_get_src(image);assert(!configure()&&!strcmp(uiError,"asset_lease_capacity"));assert(!files.statOps&&!files.readOps&&lv_image_get_src(image)==previousSource);}assert(configure());
+  auto previousPng=policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384);settings["png_decode_budget_bytes"]=1024;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));files.statOps=files.readOps=0;assert(!configure()&&!strcmp(uiError,"large_png_requires_streamable_asset"));assert(!files.statOps&&!files.readOps);settings["png_decode_budget_bytes"]=previousPng;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(configure());
+  // Unavailable media and providers with no revision token never reuse facts.
+  files.online=false;assert(!configure()&&!strcmp(uiError,"provider_unavailable"));files.online=true;files.statOps=files.readOps=0;assert(configure());assert(files.statOps&&files.readOps);
+  files.revisionless=true;assert(configure());files.statOps=files.readOps=0;assert(configure());assert(files.statOps&&files.readOps);files.revisionless=false;assert(configure());
+  // A removable adapter may positively promise a reliable content epoch.
+  // Without it new admissions reread; with it the ordinary warm cache works.
+  files.removable=true;assert(configure());files.statOps=files.readOps=0;assert(configure()&&files.statOps&&files.readOps);
+  files.reliableContent=true;assert(configure());files.statOps=files.readOps=0;assert(configure()&&!files.statOps&&!files.readOps);files.removable=false;files.reliableContent=false;
+  // Metadata and decoded pixels share one budget; lowering it immediately
+  // retires metadata, without turning a cache refusal into an image refusal.
+  configureUiImageCache(1);assert(!uiImageMetadataBytes&&uiAppliedDecodedImageCache==1);assert(configure());assert(!uiImageMetadataBytes);configureUiImageCache(65536);assert(configure());
+  // A metadata allocation failure alone leaves valid rendering available.
+  clearUiImageMetadata();lv_image_cache_drop(nullptr);core.resources().heap(ResourceBudget::Region::Internal,{nullptr,nullptr,nullptr,uiMetadataFaultResize});auto probe=core.resources().allocate(sizeof(UiImageMetadata));assert(probe);auto requestSize=uiObservedAllocationSize;core.resources().freeAllocation(probe);uiRejectedAllocationSize=requestSize;clearUiMemoryFailure();assert(configure());assert(!uiMemoryFailed()&&!uiImageMetadataBytes);uiRejectedAllocationSize=0;core.resources().heap(ResourceBudget::Region::Internal,{});assert(configure());assert(uiImageMetadataBytes);
+  // A new provider can resolve the same absolute name. Neither the OS facts
+  // cache nor LVGL's path-only header cache may conceal that replacement.
+  assert(vfs.add(replacementImages));assert(!replacementImages.write("/cached.png",0,data.data(),data.size(),true,wrote));files.mount="/retired-images";replacementImages.mount="/storage/ram";replacementImages.statOps=replacementImages.readOps=0;assert(configure());assert(replacementImages.statOps&&replacementImages.readOps);files.mount="/storage/ram";replacementImages.mount="/replacement-images";files.statOps=files.readOps=0;assert(configure());assert(files.statOps&&files.readOps);
+  // A removable provider's internal write counter does not observe external
+  // replacement. A new UI admission must read header/size despite warm caches.
+  {assert(mkdtemp(removableImagesRoot));assert(vfs.add(removableImages));auto native=std::string(removableImagesRoot)+"/image.png";
+   auto replace=[&](const uint8_t*bytes,size_t size){std::ofstream out(native,std::ios::binary|std::ios::trunc);out.write(reinterpret_cast<const char*>(bytes),size);assert(out.good());};
+   replace(data.data(),data.size());node["imageProps"]["src"]="/removable-images/image.png";assert(configure());assert(configure());
+   lv_image_decoder_dsc_t decoded{};assert(lv_image_decoder_open(&decoded,"V:/removable-images/image.png",nullptr)==LV_RESULT_OK);lv_image_decoder_close(&decoded);assert(lv_cache_get_size(LV_GLOBAL_DEFAULT()->img_cache,nullptr)>0);
+   std::vector<uint8_t>pixels(128*128*4,255);uint8_t*large=nullptr;size_t largeBytes=0;assert(lodepng_encode32(&large,&largeBytes,pixels.data(),128,128)==0);auto revision=removableImages.changeRevision();replace(large,largeBytes);lv_free(large);assert(removableImages.changeRevision()==revision&&removableImages.available());
+   bool accepted=configure();std::cerr<<"Removable external PNG replacement admitted="<<accepted<<" error="<<uiError<<"\n";assert(!accepted&&!strcmp(uiError,"large_png_requires_streamable_asset"));
+   replace(data.data(),data.size());assert(configure());auto oversized=data;oversized.resize(previousPng+1);replace(oversized.data(),oversized.size());assert(!configure()&&!strcmp(uiError,"large_png_requires_streamable_asset"));
+   assert(std::filesystem::remove(native));assert(!configure()&&!strcmp(uiError,"not_found"));removableImagesMounted=false;std::filesystem::remove_all(removableImagesRoot);node["imageProps"]["src"]="/storage/ram/cached.png";assert(configure());
+  }
+  // Encoded-file admission is independently rechecked on a metadata hit.
+  lv_image_header_t known{};assert(lv_image_decoder_get_info("V:/storage/ram/cached.png",&known)==LV_RESULT_OK);auto encodedLimit=std::max<uint32_t>(uint32_t(data.size()),uint32_t(known.w)*known.h*4)+64;auto padded=data;padded.resize(encodedLimit+1);assert(!files.write("/cached.png",0,padded.data(),padded.size(),true,wrote));settings["png_decode_budget_bytes"]=encodedLimit+1;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(configure());settings["png_decode_budget_bytes"]=encodedLimit;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));files.statOps=files.readOps=0;assert(!configure()&&!strcmp(uiError,"large_png_requires_streamable_asset")&&!files.statOps&&!files.readOps);assert(!files.write("/cached.png",0,data.data(),data.size(),true,wrote));settings["png_decode_budget_bytes"]=previousPng;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(configure());
+  // A two-entry budget evicts the least recently used source, not a warm one.
+  assert(!files.write("/second.png",0,data.data(),data.size(),true,wrote));assert(!files.write("/third.png",0,data.data(),data.size(),true,wrote));clearUiImageMetadata();assert(configure());auto entryBytes=uiImageMetadataBytes;configureUiImageCache(uint32_t(entryBytes*2));node["imageProps"]["src"]="/storage/ram/second.png";assert(configure());node["imageProps"]["src"]="/storage/ram/cached.png";assert(configure());node["imageProps"]["src"]="/storage/ram/third.png";assert(configure());node["imageProps"]["src"]="/storage/ram/cached.png";files.statOps=files.readOps=0;assert(configure()&&!files.statOps&&!files.readOps);node["imageProps"]["src"]="/storage/ram/second.png";assert(configure()&&files.statOps&&files.readOps);configureUiImageCache(65536);node["imageProps"]["src"]="/storage/ram/cached.png";assert(configure());
+  // A changing frame on one provider keeps an unrelated provider's decoded
+  // PNG resident. Each source still passes its own current lease/epoch checks.
+  {std::vector<uint8_t> dynamic(12+16*16*2);dynamic[0]=0x19;dynamic[1]=0x12;dynamic[4]=dynamic[6]=16;dynamic[8]=32;
+   const char*mixed=R"({"version":"0.1.1","assets":[{"type":"viewScreen","style":{"padding":0},"children":[{"type":"image","imageProps":{"src":"/storage/ram/dynamic.bin"}},{"type":"image","placement":{"x":32,"y":0,"width":64,"height":64},"imageProps":{"src":"/replacement-images/cached.png","fit":"contain"}}]}]})";assert(!files.write("/mixed-ui.json",0,reinterpret_cast<const uint8_t*>(mixed),strlen(mixed),true,wrote));
+   UiSink mixedSink{nullptr,[](void*,const lv_area_t&,const uint16_t*){}};auto frame=[&](uint8_t value){dynamic[12]=value;assert(!files.write("/dynamic.bin",0,dynamic.data(),dynamic.size(),true,wrote));assert(prepareUi("/storage/ram/mixed-ui.json"));assert(renderUiRegion({0,0,boardpack::DISPLAY_WIDTH-1,63},mixedSink,true));};frame(1);replacementImages.readOps=0;frame(2);std::cerr<<"Cross-provider static PNG rereads="<<replacementImages.readOps<<"\n";assert(replacementImages.readOps==0);assert(!files.remove("/dynamic.bin")&&!files.remove("/mixed-ui.json"));
+  }
+  // Source modification is checked even when the previous positive entry fits.
   assert(!files.write("/cached.png",0,(const uint8_t*)"invalid",7,true,wrote));assert(!prepareUi("/storage/ram/cached-ui.json"));settings["image_cache_bytes"]=0;assert(!policies.apply(policy.as<JsonObjectConst>(),result.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));
+  assert(!files.remove("/second.png")&&!files.remove("/third.png"));assert(!files.resize("/cached.png",7));
  }
  // Indexed glyphs remain seekable and leased. Malformed user files fail at
  // the format boundary rather than entering an unchecked outline parser.
@@ -158,7 +221,7 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  for(;;){JsonDocument state;presentationState.describe(state.to<JsonObject>());if(!state["views"].size())break;uint32_t id=state["views"][0]["id"];unsigned slot=presentationState.slot(id);assert(!presentationState.close(id,0));freeUiDocument(slot);}resetUiRenderer();assert(core.resources().promised()==0);
  // The real factory entrypoint uses the exact runtime/GUI loader used by a user
  // replacement. No special native boot path or system-owned button bindings.
- core.add({"/sys/ui","read,app_load,open,update,refresh,back,close,font_register,font_unregister,fonts", "",uiHandler,uiAsyncDescription});
+ core.add({"/sys/ui","font_check,read,app_load,open,update,refresh,back,close,font_register,font_unregister,fonts", "",uiHandler,uiServiceDescription});
  core.add({"/dev/buttons","read","",[](const char*,JsonObjectConst,JsonObject)->const char*{return nullptr;}});
  core.add({"/dev/mic","start,stop","",[](const char*m,JsonObjectConst,JsonObject)->const char*{if(!strcmp(m,"start"))++micStarts;return nullptr;}});
  core.add({"/sys/rules","write","",[](const char*,JsonObjectConst a,JsonObject o){return core.setRule(a,o);}});
@@ -215,6 +278,8 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  // from the last completed frame, until the native adapter commits its successor.
  auto shownRevision=uiVisibleStamp.revision;a.clear();a["view_id"]=hitView;a["values"]["caption"]="Changed";assert(!uiHandler("update",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/storage/ram/hit.json",uiDocument(hitView)->view));a.clear();a["x"]=20;a["y"]=20;assert(!uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["ids"][1]=="launch"&&r["revision"]==shownRevision);presentationState.completed(presentationState.stamp(hitView));commitUiGeometry(presentationState.stamp(hitView));
  a.clear();a["view_id"]=hitView;a["rotation"]=90;assert(!uiHandler("update",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/storage/ram/hit.json",uiDocument(hitView)->view));presentationState.completed(presentationState.stamp(hitView));commitUiGeometry(presentationState.stamp(hitView));a.clear();a["x"]=boardpack::DISPLAY_WIDTH-21;a["y"]=20;assert(!uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["ids"][1]=="launch"&&r["x"]==20&&r["y"]==20);a["x"]=-1;assert(!strcmp(uiHandler("hit_test",a.as<JsonObjectConst>(),r.to<JsonObject>()),"pointer_coordinate_range"));
+ // Focus/navigation discovery uses the same completed geometry and pagination.
+ a.clear();a["view_id"]=hitView;a["limit"]=1;assert(!uiHandler("elements",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["elements"].size()==1&&r["more"]==true&&r["elements"][0]["id"]=="canvas"&&r["rotation"]==90);a["cursor"]=r["cursor"];assert(!uiHandler("elements",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["elements"][0]["id"]=="launch"&&r["elements"][0]["x"]==10&&r["elements"][0]["height"]==80);a["cursor"]=r["cursor"];assert(!uiHandler("elements",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["elements"][0]["id"]=="caption"&&!r["more"].as<bool>());a["limit"]=9;assert(!strcmp(uiHandler("elements",a.as<JsonObjectConst>(),r.to<JsonObject>()),"ui_elements_page"));
  a.clear();a["view_id"]=hitView;assert(!uiHandler("close",a.as<JsonObjectConst>(),r.to<JsonObject>()));resetUiRenderer();assert(core.resources().promised()==0);
  // A complete 8 MiB font remains a filesystem resource. Previously absent
  // Chinese characters and non-preset sizes use its outlines, not compiled text.
@@ -222,6 +287,36 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
  vfs.add(completeFonts);const char*fullFontUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"label","style":{"font":"/fonts/complete.ttf","fontSize":19},"labelProps":{"text":"实验触摸录音 阈值蝴蝶龘"}},{"type":"label","style":{"font":"/fonts/complete.ttf","fontSize":23},"labelProps":{"text":"实验触摸录音 阈值蝴蝶龘"}},{"type":"label","style":{"font":"/fonts/complete.ttf","fontSize":29},"labelProps":{"text":"实验触摸录音 阈值蝴蝶龘"}}]}]})";
  assert(!nm::localTextSupported("阈值蝴蝶龘",24));assert(!files.write("/complete-font-ui.json",0,reinterpret_cast<const uint8_t*>(fullFontUi),strlen(fullFontUi),true,wrote));
  assert(prepareUi("/storage/ram/complete-font-ui.json"));for(int x=0;x<480;x+=16)assert(renderUiBand(x,stripe));std::cerr<<"Full font: missing="<<uiMissingGlyphs<<" largest="<<completeFonts.largestRead<<" read="<<completeFonts.readBytes<<" live="<<uiMemoryUsed()<<"\n";assert(uiMissingGlyphs==0&&completeFonts.largestRead<=4096&&completeFonts.readBytes<1048576);assert(!vfs.canMutate("/fonts/complete.ttf"));
+ // A page without a font override follows the system font even after restoring
+ // an unrelated saved preference. No application writes global configuration.
+ assert(policies.defaults(R"({"system":{"/sys/ui":{"font_file":"/fonts/complete.ttf"}}})"));
+ assert(policies.restore(R"({"system":{"/sys/ui":{"font_cache_glyphs":64}}})"));
+ const char*inheritedFontUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"container","style":{"fontSize":19},"children":[{"type":"label","labelProps":{"text":"阈值蝴蝶龘"}}]}]}]})";
+ assert(!files.write("/inherited-font-ui.json",0,reinterpret_cast<const uint8_t*>(inheritedFontUi),strlen(inheritedFontUi),true,wrote));
+ assert(prepareUi("/storage/ram/inherited-font-ui.json")&&renderUiBand(0,stripe)&&uiMissingGlyphs==0);
+ // Font defaults belong to a presentation transaction. Validation can prepare
+ // explicitly styled external fonts while a new system default is pending;
+ // validation and rejected candidates preserve the current tree's snapshot.
+ {auto tree=uiRoot;auto before=uiFontPolicy;
+  assert(!strcmp(before.file,"/fonts/complete.ttf")&&before.cacheGlyphs==64);
+  assert(policies.defaults(R"({"system":{"/sys/ui":{"font_file":"/fonts/missing.ttf","font_face_cache":3}}})"));
+  assert(prepareUi("/storage/ram/complete-font-ui.json",UiView{},true));
+  assert(uiRoot==tree&&!strcmp(uiFontPolicy.file,before.file)&&uiFontPolicy.cacheFaces==before.cacheFaces);
+  assert(!prepareUi("/storage/ram/inherited-font-ui.json"));
+  assert(uiRoot==tree&&!strcmp(uiFontPolicy.file,before.file)&&uiFontPolicy.cacheGlyphs==64);
+  assert(renderUiBand(0,stripe));
+  // An ordinary app can explicitly select the compiled family even when the
+  // configured external default is unavailable. It has no special privileges.
+  const char*builtinUi=R"({"version":"0.1.1","assets":[{"type":"viewScreen","children":[{"type":"label","style":{"font":"builtin","fontSize":16},"labelProps":{"text":"WishOS Home"}}]}]})";
+  JsonDocument builtinDoc;assert(!deserializeJson(builtinDoc,builtinUi));assert(prepareUiDocument("/builtin.json",builtinDoc.as<JsonObjectConst>(),UiView{},false));assert(renderUiBand(0,stripe)&&uiMissingGlyphs==0);
+  a.clear();assert(!uiHandler("fonts",a.as<JsonObjectConst>(),r.to<JsonObject>()));unsigned builtinCount=0;bool systemListed=false;for(auto f:r["fonts"].as<JsonArrayConst>()){if(f["id"]=="builtin")++builtinCount;if(f["id"]=="system")systemListed=true;}assert(builtinCount==sizeof fontSizes&&systemListed);
+  assert(policies.defaults(R"({"system":{"/sys/ui":{"font_file":"/fonts/complete.ttf","font_face_cache":3}}})"));
+  assert(policies.restore(R"({"system":{"/sys/ui":{"font_cache_glyphs":17}}})"));
+  assert(prepareUi("/storage/ram/inherited-font-ui.json")&&renderUiBand(0,stripe));
+  assert(!strcmp(uiFontPolicy.file,"/fonts/complete.ttf")&&uiFontPolicy.cacheGlyphs==17&&uiFontPolicy.cacheFaces==3);
+  bool matched=false;for(auto family=uiVectorFamilies;family;family=family->next)for(auto face=family->faces;face;face=face->next)if(uiUsesFont(uiRoot,face->font)){assert(face->cacheGlyphs==17);matched=true;}assert(matched);
+ }
+ assert(policies.defaults("{}"));assert(policies.restore("{}"));
  JsonDocument fontPolicy;fontPolicy["changes"][0]["resource"]="/sys/ui";fontPolicy["changes"][0]["settings"]["font_file"]="/fonts/complete.ttf";assert(!policies.apply(fontPolicy.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));assert(renderUiBand(0,stripe)&&uiMissingGlyphs==0);
  a.clear();a["id"]="whole-family";a["file"]="/fonts/complete.ttf";assert(!uiHandler("font_register",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(!strcmp(uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()),"font_in_use"));
  {JsonDocument bench;bench["version"]="0.1.1";auto screen=bench["assets"].to<JsonArray>().add<JsonObject>();screen["type"]="viewScreen";auto label=screen["children"].to<JsonArray>().add<JsonObject>();label["type"]="label";label["style"]["fontSize"]=16;std::string text;for(char c=32;c<127;++c)text+=c;label["labelProps"]["text"]=text;std::string encoded;serializeJson(bench,encoded);assert(!files.write("/cache-benchmark.json",0,(const uint8_t*)encoded.data(),encoded.size(),true,wrote));
@@ -229,6 +324,7 @@ int main(){using namespace notesos;vfs.add(systemFiles);vfs.add(files);
   auto small=redraw(32),large=redraw(128);std::cerr<<"Font warm-render source reads: cache32="<<small<<" cache128="<<large<<"\n";assert(small>large&&uiMissingGlyphs==0);fontPolicy["changes"][0]["settings"]["font_cache_glyphs"]=32;
  }
  fontPolicy["changes"][0]["settings"]["font_file"]="";assert(!policies.apply(fontPolicy.as<JsonObjectConst>(),r.to<JsonObject>()));assert(prepareUi("/system/ui/home.json"));assert(!uiHandler("font_unregister",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(vfs.canMutate("/fonts/complete.ttf"));
+ fontFamilyScenarios();
  completeFonts.failOnce=true;auto kept=uiRoot;assert(!prepareUi("/storage/ram/complete-font-ui.json"));assert(uiRoot==kept&&!strcmp(uiError,"font_fixture_io")&&vfs.canMutate("/fonts/complete.ttf"));
  size_t fontBoundaries=0;for(size_t pass=0;pass==0||pass<=fontBoundaries;++pass){uiFailAt=SIZE_MAX;assert(prepareUi("/system/ui/home.json"));kept=uiRoot;uiAllocCalls=0;uiFailAt=pass?pass-1:SIZE_MAX;bool accepted=prepareUi("/storage/ram/complete-font-ui.json");if(!pass)fontBoundaries=uiAllocCalls;uiFailAt=SIZE_MAX;if(!accepted)assert(uiRoot==kept);assert(prepareUi("/system/ui/home.json"));assert(vfs.canMutate("/fonts/complete.ttf"));}
  assert(prepareUi("/storage/ram/complete-font-ui.json"));JsonDocument fontMemory;fontMemory["memory_limit_bytes"]=uint32_t(core.resources().promised()+1);assert(!core.resources().configure(fontMemory.as<JsonObjectConst>()));assert(!renderUiBand(32,stripe));assert(!strcmp(uiError,"ui_memory_budget"));fontMemory["memory_limit_bytes"]=nullptr;assert(!core.resources().configure(fontMemory.as<JsonObjectConst>()));assert(renderUiBand(32,stripe));

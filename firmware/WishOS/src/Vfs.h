@@ -37,8 +37,8 @@ public:
  // A volume quota is a storage policy, independent of medium/MCU capacity.
  void writeQuota(uint64_t bytes){writeQuota_=bytes;}
  uint64_t writeQuota()const{return writeQuota_;}
- const char*admitMetadata(){if(!writeQuota_)return nullptr;JsonDocument state;describe(state.to<JsonObject>());uint64_t capacity=0,free=0;if(state["volume_capacity_bytes"].isNull()||state["free_bytes"].isNull()||!parseOffset(state["volume_capacity_bytes"],capacity)||!parseOffset(state["free_bytes"],free)||free>capacity)return "quota_capacity_unknown";uint64_t used=capacity-free,reserve=state["growth_overhead_bytes"]|0u;return used>writeQuota_||reserve>writeQuota_-used?"storage_quota_exceeded":nullptr;}
- const char*admitGrowth(const char*path,uint64_t end){if(!writeQuota_)return nullptr;FileInfo prior;auto error=stat(path,prior);if(error&&strcmp(error,"not_found"))return error;uint64_t old=error?0:prior.size;if(end<=old)return nullptr;JsonDocument state;describe(state.to<JsonObject>());uint64_t capacity=0,free=0;if(state["volume_capacity_bytes"].isNull()||state["free_bytes"].isNull()||!parseOffset(state["volume_capacity_bytes"],capacity)||!parseOffset(state["free_bytes"],free)||free>capacity)return "quota_capacity_unknown";uint64_t unit=state["allocation_unit_bytes"]|1u,overhead=state["growth_overhead_bytes"]|0u;uint64_t growth=((end+unit-1)/unit-(old+unit-1)/unit)*unit+overhead;uint64_t used=capacity-free;if(used>writeQuota_||growth>writeQuota_-used)return "storage_quota_exceeded";return nullptr;}
+ const char*admitMetadata(){if(!writeQuota_)return nullptr;JsonDocument state;describe(state.to<JsonObject>());uint64_t capacity=0,free=0;if(state["volume_capacity_bytes"].isNull()||state["free_bytes"].isNull()||!parseOffset(state["volume_capacity_bytes"],capacity)||!parseOffset(state["free_bytes"],free)||free>capacity)return "quota_capacity_unknown";uint64_t used=capacity-free,reserve=state["growth_overhead_bytes"]|0u;return used>writeQuota_||reserve>writeQuota_-used?(state["free_needs_refresh"]==true?"storage_space_refresh_required":"storage_quota_exceeded"):nullptr;}
+ const char*admitGrowth(const char*path,uint64_t end){if(!writeQuota_)return nullptr;FileInfo prior;auto error=stat(path,prior);if(error&&strcmp(error,"not_found"))return error;uint64_t old=error?0:prior.size;if(end<=old)return nullptr;JsonDocument state;describe(state.to<JsonObject>());uint64_t capacity=0,free=0;if(state["volume_capacity_bytes"].isNull()||state["free_bytes"].isNull()||!parseOffset(state["volume_capacity_bytes"],capacity)||!parseOffset(state["free_bytes"],free)||free>capacity)return "quota_capacity_unknown";uint64_t unit=state["allocation_unit_bytes"]|1u,overhead=state["growth_overhead_bytes"]|0u;uint64_t growth=((end+unit-1)/unit-(old+unit-1)/unit)*unit+overhead;uint64_t used=capacity-free;if(used>writeQuota_||growth>writeQuota_-used)return state["free_needs_refresh"]==true?"storage_space_refresh_required":"storage_quota_exceeded";return nullptr;}
 
   const char *id,*mount,*medium;bool persistent,removable,writable;
   FileProvider(const char*i,const char*m,const char*t,bool p,bool r,bool w):id(i),mount(m),medium(t),persistent(p),removable(r),writable(w){}
@@ -50,6 +50,11 @@ public:
   }
   virtual const char*operations()const{return "stat,read,list";}
   virtual uint64_t changeRevision()const{return 0;}
+  // A nonzero token guarantees source content identity across independent
+  // operations, including observed media replacement. A removable provider's
+  // local write counter alone supplies no such guarantee. Reliable adapters
+  // can override this with their media/content epoch; zero requests rereading.
+  virtual uint64_t contentRevision()const{return removable?0:changeRevision();}
   virtual bool caseInsensitive()const{return false;}
   virtual const char*canonicalPath(const char*,char*,size_t,FileInfo&){return "unsupported_operation";}
   virtual bool sameName(const char*a,const char*b)const{return caseInsensitive()?!strcasecmp(a,b):!strcmp(a,b);}
@@ -59,6 +64,8 @@ public:
   virtual bool busyPath(const char*)const{return false;}
   virtual const char*createFile(const char*){return "unsupported_operation";}
   virtual const char*createTemporary(const char*,uint32_t){return "temporary_files_unsupported";}
+  virtual bool temporaryOwnership()const{return false;}
+  virtual const char*setTemporaryOwner(const char*,uint32_t){return "temporary_files_unsupported";}
   virtual void retireTemporary(uint32_t){}
   virtual void reapTemporary(Vfs&){}
   virtual const char*resize(const char*,uint64_t){return "unsupported_operation";}
@@ -99,7 +106,7 @@ public:
   // Short file operations use unique scope identities; application/driver lease
   // owner numbers cannot collide with or release them. Never hold this mutex
   // across physical I/O: only the lease record survives the operation.
-  class Access {Vfs&vfs_;bool write_,subtree_;public:Access(Vfs&v,bool write,bool subtree=true):vfs_(v),write_(write),subtree_(subtree){}Access(const Access&)=delete;Access&operator=(const Access&)=delete;~Access(){vfs_.releaseScope(this);}const char*add(const char*path,bool folded=false){return vfs_.scoped(path,this,write_,folded,subtree_);}};
+  class Access {Vfs&vfs_;bool write_,subtree_;public:Access(Vfs&v,bool write,bool subtree=true):vfs_(v),write_(write),subtree_(subtree){}Access(const Access&)=delete;Access&operator=(const Access&)=delete;~Access(){clear();}void clear(){vfs_.releaseScope(this);}const char*add(const char*path,bool folded=false){return vfs_.scoped(path,this,write_,folded,subtree_);}};
   bool lockRead(const char*path,uint32_t owner){std::lock_guard<std::recursive_mutex>lock(leaseMutex_);if(!owner||strlen(path)>=256)return false;
     const char*relative;auto provider=resolve(path,relative);bool folded=provider&&provider->caseInsensitive();
     for(auto&l:leases_)if(l.write&&overlap(path,l.path,folded||l.folded,true,l.subtree))return false;
@@ -151,8 +158,10 @@ public:
   const char*flush(const char*p)override{FileInfo i;return stat(p,i);}
   const char*createFile(const char*p)override{if(find(p))return "exists";size_t wrote=0;uint8_t b=0;return write(p,0,&b,0,false,wrote);}
   const char*createTemporary(const char*p,uint32_t owner)override{if(!owner)return "temporary_file_owner_required";if(auto e=createFile(p))return e;find(p)->temporaryOwner=owner;return nullptr;}
+  bool temporaryOwnership()const override{return true;}
+  const char*setTemporaryOwner(const char*p,uint32_t owner)override{if(!owner)return "temporary_file_owner_required";auto e=find(p);if(!e)return "not_found";if(e->temporaryOwner&&e->temporaryOwner!=owner)return "temporary_file_owned_by_other";e->temporaryOwner=owner;return nullptr;}
   void retireTemporary(uint32_t owner)override{for(auto&e:files_)if(e.temporaryOwner==owner)e.retiring=true;}
-  void reapTemporary(Vfs&vfs)override{for(auto&e:files_)if(e.retiring){char full[256];if(!absolutePath(e.path,full,sizeof full))continue;Vfs::Access lease(vfs,true);if(lease.add(full))continue;remove(e.path);return;}}
+  void reapTemporary(Vfs&vfs)override{for(auto&e:files_)if(e.retiring){char full[256];if(!absolutePath(e.path,full,sizeof full))continue;Vfs::Access lease(vfs,true);if(lease.add(full))continue;if(!remove(e.path))return;}}
   const char*resize(const char*p,uint64_t size)override{
     if(!present_)return "provider_unavailable";auto e=find(p);if(!e)return "not_found";if(e->directory)return "is_directory";
     if(size>budget_-used_+e->capacity)return "quota_exceeded";

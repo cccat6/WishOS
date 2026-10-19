@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -25,10 +25,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +41,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,7 +69,7 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -88,9 +89,9 @@
             "height": 65
           },
           "style": {
-            "fontSize": 17,
-            "lineHeight": 22,
-            "textColor": "#262822"
+            "fontSize": 18,
+            "lineHeight": 23,
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "可继续查询，或放弃本机的待确认记录。",
@@ -108,7 +109,7 @@
           "style": {
             "fontSize": 14,
             "lineHeight": 19,
-            "textColor": "#60645B"
+            "textColor": "#424B45"
           },
           "labelProps": {
             "text": "放弃不会删除云端会话；请先检查列表，避免重复新建。",
@@ -133,9 +134,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -145,9 +146,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 16,
-                "lineHeight": 21,
-                "textColor": "#262822"
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "继续核对",
@@ -175,9 +176,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -187,9 +188,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 16,
-                "lineHeight": 21,
-                "textColor": "#262822"
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "放弃此创建",

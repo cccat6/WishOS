@@ -1,8 +1,5 @@
 name: Device firmware
 on:
-  pull_request:
-  push:
-    branches: [main, master]
   workflow_dispatch:
     inputs:
       board:
@@ -45,7 +42,7 @@ jobs:
           version=os.environ.get('RELEASE_VERSION','')
           if version and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}',version):
               raise SystemExit('Invalid release version')
-          command=['python3','tools/wishos_catalog.py','--github-output',os.environ['GITHUB_OUTPUT']]
+          command=['python3','tools/wishos_catalog.py','--supported-only','--github-output',os.environ['GITHUB_OUTPUT']]
           if os.environ['EVENT']=='workflow_dispatch':command+=['--board',os.environ['BOARD']]
           elif os.environ.get('BASE') and set(os.environ['BASE'])!={'0'}:command+=['--base',os.environ['BASE']]
           subprocess.run(command,check=True)
@@ -101,7 +98,7 @@ jobs:
   driver-sdk:
     strategy:
       matrix:
-        target: [esp32c3, esp32c6, esp32s3]
+        target: [esp32s3]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

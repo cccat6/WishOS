@@ -1,0 +1,8 @@
+# Compact C6 image plus managed LittleFS runtime files, 4 MiB Flash.
+# Name, Type, SubType, Offset, Size
+nvs,data,nvs,0x9000,0x5000
+otadata,data,ota,0xe000,0x2000
+app0,app,ota_0,0x10000,0x3C0000
+spiffs,data,spiffs,0x3D0000,0x2B000
+zb_storage,data,fat,0x3FB000,0x4000
+zb_fct,data,fat,0x3FF000,0x1000

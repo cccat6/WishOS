@@ -1,6 +1,7 @@
 #pragma once
 #include "LuaRuntime.h"
 #include "Policy.h"
+#include "BudgetJson.h"
 #include <atomic>
 namespace notesos {
 // Isolated compute jobs. Only the main loop accesses the resource registry and VFS.
@@ -8,7 +9,7 @@ class Workers {
 public:
  struct Backend {unsigned cores=1;bool(*launch)(void(*)(void*),void*,unsigned)=nullptr;void(*yield)(void*)=nullptr;bool(*admit)(size_t)=nullptr;size_t nativeMemoryBytes=0;};
 private:
- struct Job{uint32_t id=0,owner=0;bool orphan=false;unsigned core=0,budget=0;LuaRuntime*vm=nullptr;char*source=nullptr;size_t size=0;JsonDocument input,result;std::atomic<bool>cancel{false},started{false},done{false};bool ok=false,notified=false;const char*failure=nullptr;void(*yield)(void*)=nullptr;~Job(){delete vm;free(source);}};
+ struct Job{ResourceBudget&memory;BudgetJson json;uint32_t id=0,owner=0;bool orphan=false;unsigned core=0,budget=0;LuaRuntime*vm=nullptr;char*source=nullptr;size_t size=0;JsonDocument input,result;std::atomic<bool>cancel{false},started{false},done{false};bool ok=false,notified=false;const char*failure=nullptr;void(*yield)(void*)=nullptr;explicit Job(ResourceBudget&m):memory(m),json(m),input(&json),result(&json){}~Job(){delete vm;memory.freeAllocation(source);}};
  Core&core_;Vfs&vfs_;Backend backend_;bool registered_=false;Job*jobs_[2]{};uint32_t next_=1;
  static void execute(void*arg){auto&j=*(Job*)arg;j.started=true;j.vm->isolate(j.yield,[](void*p){return ((Job*)p)->cancel.load();},&j);
    j.ok=!j.cancel.load()&&j.vm->load(j.source,j.size);if(j.ok)j.ok=j.vm->compute(j.input.as<JsonVariantConst>(),j.result.to<JsonVariant>());if(j.result.overflowed()){j.ok=false;j.failure="result_memory_low";}j.done.store(true,std::memory_order_release);
@@ -31,16 +32,16 @@ public:
      if(measureJson(a["input"])>4096)return "worker_input_limit";
      Job**slot=nullptr;for(auto&j:jobs_)if(!j){slot=&j;break;}if(!slot)return "worker_capacity";
      if(!next_)return "worker_id_exhausted";
-     auto j=new(std::nothrow)Job;if(!j)return "memory_low";
+     auto j=new(std::nothrow)Job(core_.resources());if(!j)return "memory_low";
      if(a["file"].is<const char*>()){
        if(a.containsKey("source")){delete j;return "one_script_source_required";}char full[256];const char*rel;
        if(!normalizePath("/",a["file"],full,sizeof full)){delete j;return "script_path";}auto p=vfs_.resolve(full,rel);if(!p){delete j;return "unknown_script_mount";}
        constexpr uint32_t lease=0xffffffe8u;if(!vfs_.lockRead(full,lease)){delete j;return "file_lease_capacity";}
        FileInfo info;const char*e=p->stat(rel,info);if(!e&&(info.directory||!info.size||info.size>8192))e="script_size";
-       if(!e){j->size=info.size;j->source=(char*)malloc(j->size+1);if(!j->source)e="memory_low";else{size_t got=0;e=p->read(rel,0,(uint8_t*)j->source,j->size,got);if(!e&&got!=j->size)e="script_short_read";j->source[j->size]=0;}}
+       if(!e){j->size=info.size;j->source=(char*)core_.resources().allocate(j->size+1);if(!j->source)e="memory_low";else{size_t got=0;e=p->read(rel,0,(uint8_t*)j->source,j->size,got);if(!e&&got!=j->size)e="script_short_read";j->source[j->size]=0;}}
        vfs_.release(lease);if(e){delete j;return e;}
-     }else{const char*s=a["source"]|"";j->size=strlen(s);if(!j->size||j->size>8192){delete j;return "script_size";}j->source=strdup(s);if(!j->source){delete j;return "memory_low";}}
-     j->vm=new(std::nothrow)LuaRuntime(core_,budget,steps);if(!j->vm){delete j;return "memory_low";}if(!j->vm->admitted()){delete j;return "system_memory_budget";}if(!j->input.set(a["input"])){delete j;return "memory_low";}j->id=next_++;j->owner=core_.callerOwner();j->core=affinity;j->budget=budget;j->yield=backend_.yield;
+     }else{const char*s=a["source"]|"";j->size=strlen(s);if(!j->size||j->size>8192){delete j;return "script_size";}j->source=(char*)core_.resources().allocate(j->size+1);if(!j->source){delete j;return "memory_low";}memcpy(j->source,s,j->size+1);}
+     j->vm=new(std::nothrow)LuaRuntime(core_,budget,steps);if(!j->vm){delete j;return "memory_low";}if(!j->vm->admitted()){delete j;return "system_memory_budget";}j->vm->jsonAllocationBackend(&j->json);if(!j->input.set(a["input"])){delete j;return "memory_low";}j->id=next_++;j->owner=core_.callerOwner();j->core=affinity;j->budget=budget;j->yield=backend_.yield;
      // VM admission has already charged its selected heap. Only native task
      // overhead is checked here, after source/input allocations are materialized.
      if(backend_.admit&&!backend_.admit(backend_.nativeMemoryBytes)){delete j;return "worker_memory_budget";}

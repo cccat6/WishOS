@@ -27,19 +27,20 @@ struct Request:DisplayRequest {char path[256]{};UiView view;};
 struct Adapter {
  enum Mode{Immediate,Dma,Epd,Scanout}mode=Immediate;
  bool finish=false,fault=false,rendered=false;unsigned starts=0,releases=0;
- std::vector<uint16_t>pixels;unsigned width=0,height=0;
+ std::vector<uint16_t>pixels;unsigned width=0,height=0,rowsPerTurn=0,rasterRow=0;
  DisplayBegin readiness(){return fault?DisplayBegin::failed("device_disconnected"):DisplayBegin{};}
  DisplayBegin begin(Request&r,uint64_t){
   ++starts;uiLeaseOwner=r.id;if(!vfs.lockRead(r.path,r.id))return DisplayBegin::failed("asset_lease_capacity");
   if(!prepareUi(r.path,r.view))return DisplayBegin::failed(uiError);
   width=lv_display_get_horizontal_resolution(uiDisplay);height=lv_display_get_vertical_resolution(uiDisplay);
-  pixels.assign(width*height,0);rendered=false;return {};
+  pixels.assign(width*height,0);rendered=false;rasterRow=0;return {};
  }
  DisplayOutcome poll(Request&,uint64_t){
   if(!rendered){UiSink sink{this,[](void*context,const lv_area_t&a,const uint16_t*source){
    auto&self=*static_cast<Adapter*>(context);unsigned row=a.x2-a.x1+1;
+   if(self.rowsPerTurn)assert(a.y1>=int(self.rasterRow)&&a.y2<int(std::min(self.height,self.rasterRow+self.rowsPerTurn)));
    for(int y=a.y1;y<=a.y2;++y)for(int x=a.x1;x<=a.x2;++x){assert(x>=0&&y>=0&&unsigned(x)<self.width&&unsigned(y)<self.height);self.pixels[y*self.width+x]=source[(y-a.y1)*row+x-a.x1];}
-  }};lv_area_t area{0,0,int32_t(width)-1,int32_t(height)-1};if(!renderUiRegion(area,sink))return DisplayOutcome::failed(uiError);rendered=true;}
+  }};unsigned end=rowsPerTurn?std::min(height,rasterRow+rowsPerTurn):height;lv_area_t area{0,int32_t(rasterRow),int32_t(width)-1,int32_t(end)-1};if(!renderUiRegion(area,sink,rowsPerTurn!=0))return DisplayOutcome::failed(uiError);rasterRow=end;rendered=end==height;if(!rendered)return {};}
   if(mode!=Immediate&&!finish)return {};
   if(fault)return DisplayOutcome::failed("device_disconnected");
   return DisplayOutcome::success(mode==Epd?DisplayEvidence::DeviceReady:mode==Scanout?DisplayEvidence::FrameLatched:DisplayEvidence::TransportComplete,"fixture_native_completion");
@@ -63,7 +64,7 @@ static const char*effect(const char*,JsonObjectConst a,JsonObject){effects.empla
 int main(){using namespace notesos;MemoryFiles files("memory","/","ram");assert(vfs.add(files));
  const char*page=R"({"version":"0.1.1","assets":[{"type":"viewScreen","style":{"bgColor":"#123456","padding":0},"children":[{"type":"label","placement":{"x":4,"y":4},"labelProps":{"text":"WishOS"},"style":{"fontSize":16,"textColor":"#ffffff"}}]}]})";
  size_t wrote=0;assert(!files.write("/page.json",0,(const uint8_t*)page,strlen(page),true,wrote));
- core.add({"/sys/ui","read,open,update,refresh,close","",uiHandler,uiAsyncDescription,"read"});
+ core.add({"/sys/ui","font_check,read,open,update,refresh,close","",uiHandler,uiServiceDescription,"font_check,read"});
  core.add({"/effect","write","",effect});
  core.add({"/sys/capabilities","describe","",[](const char*,JsonObjectConst a,JsonObject o){return core.describe(a["path"]|"",o);},nullptr,"describe"});
  core.add({"/sys/timers","write","",[](const char*,JsonObjectConst a,JsonObject o){return core.timer(a,o);}});
@@ -98,6 +99,14 @@ end
   assert(adapter.width==TEST_UI_WIDTH&&adapter.height==TEST_UI_HEIGHT);
   assert(adapter.pixels.back()==0x11aa); // A true RGB565 color, not six-color quantization.
   assert(!app.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(!presentationState.active());assert(vfs.canMutate("/page.json"));assert(core.resources().promised()==0);
+ }
+ // The same raster is produced in bounded regions, leaving real input/timer
+ // dispatch opportunities between them. No panel completion is emitted early.
+ {auto full=adapter.pixels;effects.clear();adapter.mode=Adapter::Immediate;adapter.rowsPerTurn=8;
+  assert(!app.invoke("load",load.as<JsonObjectConst>(),out.to<JsonObject>()));pump();unsigned turns=0;
+  while(scheduler.active()){assert(!count("display"));emit("/input/key");pump();assert(++turns<=TEST_UI_HEIGHT/8+2);}
+  assert(turns>1&&count("key")==turns&&count("display")==1&&adapter.pixels==full);
+  assert(!app.invoke("stop",empty.as<JsonObjectConst>(),out.to<JsonObject>()));assert(core.resources().promised()==0);adapter.rowsPerTurn=0;
  }
  // Replace the application while a native refresh owns its source. The old
  // callback disappears, the physical operation still finishes, then the new view

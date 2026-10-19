@@ -12,12 +12,22 @@
     "/control/setup.html": "@runtime/control/setup.html",
     "/control/locale.js": "@runtime/control/locale.js",
     "/control/settings.js": "@runtime/control/settings.js",
-    "/control/session.json": "@runtime/control/session.json"
+    "/control/session.json": "@runtime/control/session.json",
+    "/recovery/launcher.lua": "assets/recovery/launcher.lua",
+    "/recovery/launcher.json": "assets/recovery/launcher.json"
   },
   "gzip_assets": [
     "/control/control.js",
     "/control/display.js",
     "/control/setup.html",
     "/control/locale.js"
-  ]
+  ],
+  "compiled_assets": {
+    "/applications.json": "assets/applications.json",
+    "/defaults.json": "assets/defaults.json",
+    "/services.json": "assets/services.json",
+    "/recovery/launcher.lua": "assets/recovery/launcher.lua",
+    "/recovery/launcher.json": "assets/recovery/launcher.json",
+    "/control/setup.html": "assets/recovery/setup.html"
+  }
 }

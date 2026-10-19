@@ -1,0 +1,7 @@
+# Xingzhi Cube N16R8: executable, writable runtime files and crash data.
+# Name, Type, SubType, Offset, Size
+nvs,data,nvs,0x9000,0x5000
+otadata,data,ota,0xe000,0x2000
+app0,app,ota_0,0x10000,0x600000
+nfs_test,data,spiffs,0x610000,0x9E0000
+coredump,data,coredump,0xFF0000,0x10000

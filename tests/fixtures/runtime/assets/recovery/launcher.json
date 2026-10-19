@@ -1,0 +1,1 @@
+{"format":"wishos-app/1","id":"launcher","title":"WishOS","entry":"launcher.lua","memory_bytes":49152,"help":{"controls":"A/C 选择，B 打开；长按 C 开热点 / A/C select, B opens; hold C for AP","home":"长按 A / Hold A"},"source":{"repository":"https://github.com/cccat6/WishOS","path":"tests/fixtures/runtime/assets/recovery"}}

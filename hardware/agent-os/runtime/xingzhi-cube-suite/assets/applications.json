@@ -1,0 +1,32 @@
+{
+  "launcher": "launcher",
+  "voice": "voice",
+  "applications": [
+    {
+      "id": "launcher",
+      "title": "WishOS",
+      "manifest": "/system/apps/launcher.json",
+      "fallback_manifest": "/system/recovery/launcher.json"
+    },
+    {
+      "id": "voice",
+      "title": "对话",
+      "manifest": "/system/apps/voice.json"
+    }
+  ],
+  "navigation": {
+    "home_buttons": 1,
+    "voice_buttons": 1,
+    "home_hold_ms": 2000,
+    "voice_hold_ms": 600,
+    "debounce_ms": 25,
+    "home_clicks": 3,
+    "home_click_window_ms": 240
+  },
+  "buttons": {
+    "defaults": {
+      "click_window_ms": 240,
+      "max_clicks": 3
+    }
+  }
+}

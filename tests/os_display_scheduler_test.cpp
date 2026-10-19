@@ -1,4 +1,5 @@
 #include "DisplayScheduler.h"
+#include "ButtonGestures.h"
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -6,7 +7,7 @@ using namespace notesos;
 struct Frame:DisplayRequest {unsigned width=0,height=0;};
 struct TestAdapter {
  enum Type{Immediate,Dma,Epd,Scanout}type;
- PresentationState&views;std::vector<JsonDocument>receipts;
+ PresentationState&views;std::vector<JsonDocument>receipts;InputPresentation inputPresentation;
  unsigned starts=0,polls=0,leases=0,disposed=0,suspends=0;
  bool defer=false,reject=false,ready=true,done=false,failComplete=false,nativeReadsSource=false,scanoutRunning=false;
  explicit TestAdapter(Type t,PresentationState&v):type(t),views(v){}
@@ -20,7 +21,7 @@ struct TestAdapter {
   return DisplayOutcome::success(type==Epd?DisplayEvidence::DeviceReady:DisplayEvidence::TransportComplete,type==Epd?"busy_inactive":"transfer_callback");
  }
  void suspend(Frame&){assert(leases);--leases;++suspends;}
- void completed(Frame&f,const DisplayOutcome&o,uint64_t elapsed){if(f.id==begunId)assert(!nativeReadsSource);JsonDocument d;o.describe(f,d.to<JsonObject>(),elapsed);assert(measureJson(d)<MAX_EVENT);receipts.push_back(std::move(d));}
+ void completed(Frame&f,const DisplayOutcome&o,uint64_t elapsed){if(f.id==begunId)assert(!nativeReadsSource);if(o.ok())inputPresentation={f.stamp.view,f.stamp.revision,f.stamp.activation};JsonDocument d;o.describe(f,d.to<JsonObject>(),elapsed);assert(measureJson(d)<MAX_EVENT);receipts.push_back(std::move(d));}
  void dispose(Frame&f){++disposed;if(f.id==begunId&&leases)--leases;}
  uint32_t begunId=0;
 };
@@ -76,6 +77,24 @@ int main(){
  assert(!q.cancelQueued(7)&&q.active()&&adapter.nativeReadsSource);assert(q.cancelQueued(8)&&q.pending()==1);
  assert(adapter.receipts.back()["job_id"]==8&&adapter.receipts.back()["state"]=="cancelled");assert(!q.cancelQueued(8));
  adapter.done=true;q.tick(24);q.tick(25);assert(!q.active()&&q.pending()==0&&adapter.receipts.back()["job_id"]==9&&adapter.leases==0);
+ // A BUSY display keeps physical input tied to its completed view, not a
+ // transfer job ID or a newer desired revision. Debounce preserves that stamp
+ // if the next optical frame completes while the key is already down.
+ {PresentationState v;uint32_t id;assert(!v.create(8,true,false,id)&&!v.activate(id,false,8));
+  Adapter a(TestAdapter::Epd,v);DisplayScheduler<Frame,Adapter>epd(v,a);
+  auto first=frame(v,id,401);assert(first.id!=first.stamp.view);assert(!epd.enqueue(first,decltype(epd)::Policy::Latest,2).error);
+  epd.tick(0);assert(a.inputPresentation==InputPresentation{});a.done=true;epd.tick(100);
+  auto physical=InputPresentation{first.stamp.view,first.stamp.revision,first.stamp.activation};assert(a.inputPresentation==physical);
+  std::vector<JsonDocument>input;ButtonGestures keys({"A","B"},&input,[](void*p,const char*,JsonObjectConst data){static_cast<std::vector<JsonDocument>*>(p)->emplace_back(data);});
+  bool levels[]={true,true};keys.sampleAll(levels,2,110,a.inputPresentation);
+  assert(!v.revise(id,8));a.done=false;auto second=frame(v,id,402);assert(!epd.enqueue(second,decltype(epd)::Policy::Latest,2).error);epd.tick(111);
+  assert(a.inputPresentation==physical);a.done=true;epd.tick(120);assert(a.inputPresentation.revision==second.stamp.revision);
+  keys.sampleAll(levels,2,140,a.inputPresentation);assert(input.size()==2);
+  for(auto&e:input)assert(e["presentation_id"]==physical.view&&e["presentation_revision"]==physical.revision&&e["presentation_activation"]==physical.activation);
+  auto prior=a.inputPresentation;a.done=false;assert(!epd.enqueue(frame(v,id,403),decltype(epd)::Policy::Fifo,2).error);epd.tick(150);
+  a.failComplete=true;a.done=true;epd.tick(160);assert(a.inputPresentation==prior);
+  a.failComplete=false;a.ready=true;Frame clear;clear.id=404;clear.system=true;assert(!epd.enqueue(clear,decltype(epd)::Policy::Fifo,2).error);epd.tick(170);assert(a.inputPresentation==InputPresentation{});
+ }
  // A headless runtime can host other resources without constructing a display.
  // Component metadata contains actual geometry/protocol, not an E6 frame contract.
  DisplayComponent mono{"ssd1306","oled","i2c",128,64,DisplayEvidence::TransportComplete,"i2c_transfer","continuous"};JsonDocument description;mono.describe(description.to<JsonObject>());assert(description["width"]==128&&description["completion"]["kind"]=="transport_complete");

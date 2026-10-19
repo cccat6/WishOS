@@ -1,0 +1,5 @@
+{
+  "format": "notes-driver/1",
+  "id": "adc-power",
+  "description": "ADC battery divider and external-power clamp interpretation"
+}

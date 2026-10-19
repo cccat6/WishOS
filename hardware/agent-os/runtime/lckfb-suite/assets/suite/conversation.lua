@@ -16,6 +16,7 @@ local function draw_history()
  local pieces=math.max(1,math.ceil(utf8.len(historyText)/64));local hidden={};if historyIndex==1 and historyPart==1 then hidden[#hidden+1]='session_previous' end;if historyPart==pieces and not historyNext then hidden[#hidden+1]='session_next' end
  C.open('conversation-history',{answer=part(historyText,(historyPart-1)*64+1,64),page=tostring(historyIndex)..' · '..historyPart..' / '..pieces},hidden)
 end
+function P.ensure() return S.ensure() end
 function P.reference() return S.reference() end
 function P.matches(reference) return same(reference,S.reference()) end
 function P.title() return S.title() end
@@ -40,7 +41,8 @@ function P.init(returnVoice,onReady)
   elseif state=='list' then rows=data.entries or {};nextCursor=data.next_cursor~=notes.null and data.next_cursor or nil;notice=nil;if screen=='sessions' then draw() end
   elseif state=='messages' then local entry=data.entries and data.entries[1];historyText=entry and ((entry.role=='user' and C.t('我：','Me: ') or 'Agent: ')..entry.text..(entry.truncated and C.t('\n（节选）','\n(excerpt)') or '')) or C.t('本页没有公开消息','No public messages on this page');historyPart=1;historyNext=data.next_cursor~=notes.null and data.next_cursor or nil;if screen=='history' then draw_history() end
   elseif state=='creation_pending' then screen='creation';C.open('pending-session')
-  elseif state=='selected' then screen=nil;backToVoice()
+  elseif state=='selected' then if screen then screen=nil;backToVoice()else C.update({session_title=S.title()})end
+  elseif state=='ready' then if ready then ready(data) end
   elseif state=='idle' then if wantsList and screen=='sessions' and S.supports('list') then wantsList=false;S.list(cursors[index] or nil) end;if ready then ready(S.reference()) end end
   if not screen then C.update({session_title=S.title()}) end
  end)
@@ -60,7 +62,7 @@ function P.init(returnVoice,onReady)
   if screen=='history' then if historyPart*64<utf8.len(historyText) then historyPart=historyPart+1;draw_history() elseif historyNext then historyIndex=historyIndex+1;historyCursors[historyIndex]=historyNext;S.messages(historyNext) end
   elseif screen=='sessions' and nextCursor then index=index+1;cursors[index]=nextCursor;S.list(nextCursor) end
  end)
- S.status()
+ local link=C.call('/services/link','read');if link and link.connected then if S.reference()then S.status()else S.ensure()end else C.update({session_title=C.t('未连接 Agent','Agent offline')})end
 end
 function P.stop() S.stop() end
 return P

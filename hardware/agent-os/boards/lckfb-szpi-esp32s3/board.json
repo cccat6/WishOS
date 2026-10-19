@@ -35,7 +35,12 @@
   "hardware": {
     "i2c_hz": 100000,
     "lcd_spi_hz": 80000000,
-    "sd_max_hz": 40000000
+    "sd_max_hz": 40000000,
+    "backlight_active_low": true,
+    "backlight_ledc_timer": 1,
+    "backlight_ledc_channel": 2,
+    "backlight_pwm_hz": 20000,
+    "backlight_pwm_bits": 10
   },
   "buttons": [
     "KEY"
@@ -70,6 +75,8 @@
   },
   "flash_bytes": 16777216,
   "assets": {
-    "/services.json": "services.json"
-  }
+    "/services.json": "services.json",
+    "/defaults.json": "defaults.json"
+  },
+  "release_supported": true
 }

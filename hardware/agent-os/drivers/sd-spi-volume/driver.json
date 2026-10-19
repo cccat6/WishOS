@@ -1,0 +1,9 @@
+{
+  "format": "notes-driver/1",
+  "id": "sd-spi-volume",
+  "description": "SPI card clock planning and SdFat volume provider",
+  "dependencies": [
+    "SdFat",
+    "ESP32NFS"
+  ]
+}

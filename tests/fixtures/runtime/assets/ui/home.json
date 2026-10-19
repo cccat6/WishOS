@@ -1,0 +1,221 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "id": "home",
+      "style": {
+        "bgColor": "#ffffff",
+        "padding": 16
+      },
+      "layout": {
+        "type": "flex",
+        "flexFlow": "column",
+        "gap": 4
+      },
+      "children": [
+        {
+          "type": "label",
+          "id": "brand",
+          "labelProps": {
+            "text": "WishOS",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        },
+        {
+          "type": "container",
+          "id": "header",
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 56,
+                "height": 56
+              },
+              "imageProps": {
+                "src": "status.bin"
+              }
+            },
+            {
+              "type": "label",
+              "id": "title",
+              "labelProps": {
+                "text": "你的随身终端",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 32,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 48,
+                "width": 360
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "gap": 4
+          },
+          "placement": {
+            "height": 64
+          }
+        },
+        {
+          "type": "container",
+          "id": "content",
+          "children": [
+            {
+              "type": "label",
+              "id": "power",
+              "labelProps": {
+                "text": "电池供电",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 24,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 32
+              }
+            },
+            {
+              "type": "label",
+              "id": "voltage",
+              "labelProps": {
+                "text": "等待电压读数",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 20,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 28
+              }
+            },
+            {
+              "type": "container",
+              "id": "network_card",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "ssid",
+                  "labelProps": {
+                    "text": "未连接",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 24,
+                    "textColor": "#172e56"
+                  },
+                  "placement": {
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "id": "ip",
+                  "labelProps": {
+                    "text": "192.168.4.1",
+                    "missingGlyph": "replace"
+                  },
+                  "style": {
+                    "fontSize": 20,
+                    "textColor": "#172e56"
+                  },
+                  "placement": {
+                    "height": 28
+                  }
+                }
+              ],
+              "style": {
+                "padding": 0,
+                "radius": 8,
+                "borderWidth": 0,
+                "bgColor": "#e0ebf8"
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "column",
+                "gap": 4
+              },
+              "placement": {
+                "height": 76
+              }
+            },
+            {
+              "type": "label",
+              "id": "help",
+              "labelProps": {
+                "text": "按任意按钮打开菜单。\n长按 B 使用语音输入。",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 20,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 56
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "column",
+            "gap": 4
+          }
+        },
+        {
+          "type": "label",
+          "id": "message",
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#aa322d"
+          },
+          "placement": {
+            "height": 44
+          }
+        },
+        {
+          "type": "label",
+          "id": "keys",
+          "labelProps": {
+            "text": "长按 A 返回   长按 B 语音",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        }
+      ]
+    }
+  ]
+}

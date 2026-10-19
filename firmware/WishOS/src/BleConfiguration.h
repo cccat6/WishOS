@@ -7,7 +7,7 @@ inline bool validBleUuid(const char*s){size_t n=strlen(s);if(n!=4&&n!=8&&n!=36)r
 inline const char*normalizeBleProfile(JsonObjectConst in,JsonObject out){
  for(auto f:in)if(strcmp(f.key().c_str(),"name")&&strcmp(f.key().c_str(),"mode")&&strcmp(f.key().c_str(),"report_map_hex")&&strcmp(f.key().c_str(),"service_uuid")&&strcmp(f.key().c_str(),"characteristics"))return "unknown_ble_setting";
  for(auto k:{"name","mode","report_map_hex","service_uuid"})if(in.containsKey(k)&&(!in[k].is<const char*>()||in[k].as<JsonString>().size()!=strlen(in[k].as<const char*>())))return "ble_profile_type";
- const char*name=in["name"]|"Agentic Notes",*mode=in["mode"]|"central";
+ const char*name=in["name"]|"WishOS",*mode=in["mode"]|"central";
  if(!*name||strlen(name)>29)return "ble_name_limit";
  if(strcmp(mode,"gatt")&&strcmp(mode,"central")&&strcmp(mode,"hid"))return "ble_mode";
  if(strcmp(mode,"hid")&&in.containsKey("report_map_hex"))return "ble_setting_not_supported_in_mode";
@@ -32,7 +32,7 @@ class BleConfiguration {
  }
 public:
  using Persist=bool(*)(const char*,size_t);
- BleConfiguration(){data_["auto_start"]=false;data_["profile"]["name"]="Agentic Notes";data_["profile"]["mode"]="central";}
+ BleConfiguration(){data_["auto_start"]=false;data_["profile"]["name"]="WishOS";data_["profile"]["mode"]="central";}
  bool restore(const char*text){JsonDocument d,normalized;if(deserializeJson(d,text)||validate(d.as<JsonObjectConst>(),normalized.to<JsonObject>())){valid_=false;return false;}if(normalized.overflowed()){valid_=false;return false;}swap(data_,normalized);nextBootAutoStart_=autoStart();persisted_=true;valid_=true;return true;}
  const char*configure(JsonObjectConst a,JsonObject out,Persist persist){
    if(a.containsKey("persist")&&!a["persist"].is<bool>())return "boolean_required";

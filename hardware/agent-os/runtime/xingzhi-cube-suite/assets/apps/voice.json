@@ -1,0 +1,75 @@
+{
+  "format": "wishos-app/1",
+  "id": "voice",
+  "title": "对话",
+  "entry": "voice.lua",
+  "source": {
+    "repository": "https://github.com/cccat6/WishOS",
+    "path": "hardware/agent-os/runtime/xingzhi-cube-suite"
+  },
+  "help": {
+    "controls": "单击切换选项，双击确认，三击返回桌面。长按用户键说话，松开发送。",
+    "start": "首次对话自动取得或建立云端会话，可以直接说话；会话列表用于以后切换对话。"
+  },
+  "memory_bytes": 196608,
+  "instruction_budget": 200000,
+  "system_call_budget": 64,
+  "requires": [
+    {
+      "path": "/sys/ui",
+      "methods": [
+        "open",
+        "update"
+      ]
+    },
+    {
+      "path": "/dev/buttons",
+      "methods": [
+        "read"
+      ]
+    },
+    {
+      "path": "/dev/mic",
+      "methods": [
+        "start",
+        "stop"
+      ]
+    },
+    {
+      "path": "/services/ai",
+      "methods": [
+        "submit",
+        "read",
+        "release"
+      ]
+    },
+    {
+      "path": "/services/link",
+      "methods": [
+        "read"
+      ]
+    },
+    {
+      "path": "/sys/timers",
+      "methods": [
+        "write",
+        "remove"
+      ]
+    },
+    {
+      "path": "/fs",
+      "methods": [
+        "read",
+        "write"
+      ]
+    },
+    {
+      "path": "/sys/apps",
+      "methods": [
+        "read",
+        "home",
+        "voice_input"
+      ]
+    }
+  ]
+}

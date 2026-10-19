@@ -1,0 +1,172 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F6F7F2",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "container",
+          "placement": {
+            "x": 12,
+            "y": 84,
+            "width": 216,
+            "height": 62
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "radius": 14,
+            "borderWidth": 0,
+            "padding": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 8
+          },
+          "children": [
+            {
+              "id": "item_icon",
+              "type": "image",
+              "placement": {
+                "width": 28,
+                "height": 28
+              },
+              "imageProps": {
+                "src": "../icons/voice.png",
+                "fit": "contain"
+              }
+            },
+            {
+              "id": "message",
+              "type": "label",
+              "placement": {
+                "width": 144,
+                "height": 26
+              },
+              "style": {
+                "fontSize": 22,
+                "lineHeight": 22,
+                "textColor": "#34413C",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "",
+                "missingGlyph": "replace",
+                "metrics": "ink",
+                "longMode": "ellipsis",
+                "verticalAlign": "center",
+                "minFontSize": 16
+              }
+            }
+          ]
+        },
+        {
+          "id": "title",
+          "type": "label",
+          "placement": {
+            "x": 10,
+            "y": 43,
+            "width": 220,
+            "height": 30
+          },
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 22,
+            "textColor": "#242722",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "metrics": "ink",
+            "longMode": "clip",
+            "verticalAlign": "center"
+          }
+        },
+        {
+          "id": "detail",
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 155,
+            "width": 216,
+            "height": 40
+          },
+          "style": {
+            "fontSize": 12,
+            "lineHeight": 16,
+            "textColor": "#424B45",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace",
+            "longMode": "wrap"
+          }
+        },
+        {
+          "id": "hint",
+          "type": "label",
+          "placement": {
+            "x": 8,
+            "y": 197,
+            "width": 224,
+            "height": 40
+          },
+          "style": {
+            "fontSize": 12,
+            "lineHeight": 16,
+            "textColor": "#424B45",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "metrics": "line",
+            "longMode": "wrap",
+            "missingGlyph": "replace"
+          }
+        },
+        {
+          "id": "brand",
+          "type": "image",
+          "placement": {
+            "x": 60,
+            "y": 43,
+            "width": 30,
+            "height": 30
+          },
+          "imageProps": {
+            "src": "../brand/logo.png",
+            "fit": "contain"
+          }
+        },
+        {
+          "id": "brand_name",
+          "type": "label",
+          "placement": {
+            "x": 98,
+            "y": 46,
+            "width": 108,
+            "height": 25
+          },
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 22,
+            "textColor": "#17241E"
+          },
+          "labelProps": {
+            "text": "WishOS",
+            "metrics": "ink",
+            "longMode": "clip",
+            "verticalAlign": "center"
+          }
+        }
+      ]
+    }
+  ]
+}

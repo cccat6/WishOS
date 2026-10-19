@@ -12,6 +12,12 @@
         "root": "/wishos/downloads",
         "quota_bytes": "10354688",
         "allow_internal": true
+      },
+      {
+        "provider": "ram",
+        "root": "/transient/downloads",
+        "quota_bytes": "524288",
+        "explicit_only": true
       }
     ]
   },

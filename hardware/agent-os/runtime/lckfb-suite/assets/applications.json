@@ -60,9 +60,17 @@
   ],
   "navigation": {
     "home_buttons": 1,
-    "voice_buttons": 0,
+    "voice_buttons": 1,
     "home_hold_ms": 1800,
     "voice_hold_ms": 600,
-    "debounce_ms": 30
+    "debounce_ms": 30,
+    "home_clicks": 3,
+    "home_click_window_ms": 240
+  },
+  "buttons": {
+    "defaults": {
+      "click_window_ms": 240,
+      "max_clicks": 3
+    }
   }
 }

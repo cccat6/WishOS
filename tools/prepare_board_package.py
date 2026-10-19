@@ -9,7 +9,7 @@ import re
 import shutil
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT = ROOT / 'hardware/agent-os/boards/e6-nova-c6'
+DEFAULT = ROOT / 'hardware/agent-os/boards/lckfb-szpi-esp32s3'
 HARDWARE = ROOT / 'hardware/agent-os'
 
 def read_json(path):
@@ -155,6 +155,7 @@ def load(package):
         if len(vpath)>=256 or not vpath.startswith('/') or str(Path(vpath)) != vpath or '..' in Path(vpath).parts or '\\' in vpath:
             raise ValueError('invalid asset path')
         raw = asset.read_bytes()
+        if Path(vpath).suffix=='.lua' and (not raw or len(raw)>8192):raise ValueError('runtime Lua asset empty or too large: '+vpath)
         if p.get('asset_file_limit_bytes') and len(raw)>p['asset_file_limit_bytes']:
             raise ValueError('system asset limit')
         if Path(vpath).suffix in ('.json','.lua','.html','.js','.css','.svg','.txt'):
@@ -210,9 +211,9 @@ def load(package):
             if applications.get(role) and applications[role] not in ids:raise ValueError('application role not installed')
     filesystem=b.get('runtime_filesystem')
     if filesystem is not None:
-        if not isinstance(filesystem,dict) or set(filesystem)!={'format','partition','root','mount'} or filesystem['format']!='littlefs':raise ValueError('runtime filesystem configuration')
+        if not isinstance(filesystem,dict) or set(filesystem)-{'format','partition','root','mount','native_mount'} or not {'format','partition','root','mount'}<=set(filesystem) or filesystem['format']!='littlefs':raise ValueError('runtime filesystem configuration')
         import posixpath
-        for key in ('root','mount'):
+        for key in ('root','mount')+ (('native_mount',) if 'native_mount' in filesystem else ()):
             value=filesystem[key]
             if not isinstance(value,str) or not value.startswith('/') or value=='/' or posixpath.normpath(value)!=value or '..' in value.split('/'):raise ValueError('runtime filesystem path')
         if not isinstance(filesystem['partition'],str) or not filesystem['partition'] or ',' in filesystem['partition']:raise ValueError('runtime filesystem partition')
@@ -278,6 +279,9 @@ def generate(package, output, full_runtime=False):
     lines=['#pragma once','#include <stddef.h>','#include <stdint.h>','namespace notesos::boardpack {',f'inline constexpr char ID[]={literal(b["id"])};',f'inline constexpr char MCU[]={literal(b["mcu"])};',f'inline constexpr char FINGERPRINT[]={literal(fingerprint)};','struct Asset {const char*path;const char*data;size_t size;size_t stored;};','inline constexpr Asset ASSETS[]={']
     insertion=lines.index('struct Asset {const char*path;const char*data;size_t size;size_t stored;};')
     filesystem=b.get('runtime_filesystem',{})
+    lines.insert(insertion,f'inline constexpr char FLASH_PARTITION[]={literal(filesystem.get("partition",""))};')
+    lines.insert(insertion,f'inline constexpr char FLASH_MOUNT[]={literal(filesystem.get("mount","/storage/flash"))};')
+    lines.insert(insertion,f'inline constexpr char FLASH_NATIVE_MOUNT[]={literal(filesystem.get("native_mount","/wishos-flash"))};')
     lines.insert(insertion,f'inline constexpr char RUNTIME_PATH[]={literal(filesystem.get("mount","")+filesystem.get("root",""))};')
     lines.insert(insertion,f'inline constexpr char APPLICATION_PROVIDERS[]={literal(",".join(b.get("application_providers",[])))};')
     lines.insert(insertion,f'inline constexpr size_t FLASH_BYTES={b["flash_bytes"]};')

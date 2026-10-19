@@ -1,0 +1,73 @@
+{
+  "format": "notes-board/1",
+  "id": "fixture-device",
+  "name": "Host configuration fixture",
+  "mcu": "ESP32-C6FH4",
+  "pins": {
+    "KEY_A": 0,
+    "KEY_B": 1,
+    "KEY_C": 2,
+    "BUSY": 3,
+    "BATTERY": 4,
+    "IMU_INT": 5,
+    "SDA": 6,
+    "SCL": 7,
+    "DC": 8,
+    "RESET": 9,
+    "USB_DM": 12,
+    "USB_DP": 13,
+    "SHUTDOWN": 14,
+    "MISO": 15,
+    "SD_CS": 16,
+    "MOSI": 17,
+    "SCLK": 18,
+    "PANEL_CS": 19,
+    "PERIPHERAL_ENABLE": 20,
+    "MIC_WS": 21,
+    "MIC_DATA": 22,
+    "MIC_BCLK": 23
+  },
+  "hardware": {
+    "i2c_hz": 100000,
+    "battery_divider": 2.0,
+    "vbus_clamps_battery_adc": true,
+    "crystal_mhz": 40,
+    "crystal_load_pf": 8
+  },
+  "display": {
+    "width": 480,
+    "height": 720
+  },
+  "buttons": [
+    "KEY_A",
+    "KEY_B",
+    "KEY_C"
+  ],
+  "resources": {
+    "heap_reserve_bytes": 20000,
+    "external_heap_reserve_bytes": 0,
+    "default_vm_memory_bytes": 32768,
+    "application_memory": "auto",
+    "memory_limit_bytes": null
+  },
+  "runtime": "../runtime",
+  "drivers": [
+    "esp32-c6-radio",
+    "esp-wakenet"
+  ],
+  "platform": "esp32-c6",
+  "composition": "../composition",
+  "fqbn": "esp32:esp32:esp32c6:CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=huge_app,ZigbeeMode=zczr",
+  "application_bytes": 3932160,
+  "partition_file": "partitions.csv",
+  "application_providers": [
+    "user"
+  ],
+  "runtime_filesystem": {
+    "format": "littlefs",
+    "partition": "spiffs",
+    "root": "/factory",
+    "mount": "/storage/flash"
+  },
+  "flash_bytes": 4194304
+}

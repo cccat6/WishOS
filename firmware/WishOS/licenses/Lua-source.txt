@@ -3,3 +3,5 @@ SHA256 4f18ddae154e793e46eeab727c59ef1c0c0c2b744e7b94219710d76f530629ae
 License and copyright: see src/lua/lua.h. Standalone compiler/interpreter and host OS libraries are not included.
 
 Local portability patch: luaconf.h supplies GCC long-long limit macros when ESP-IDF newlib hides the C99 macros from C++ translation units. Numeric ABI remains 64-bit integer / double.
+
+Local embedded-stack configuration: luaconf.h defaults LUAI_MAXCCALLS to32. Hardware packages may override this compiled native recursion bound alongside their task-stack validation.

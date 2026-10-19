@@ -1,0 +1,6 @@
+{
+  "format": "notes-app/1",
+  "entry": "ui/home.json",
+  "policy_scope": "app:basic",
+  "bindings": []
+}

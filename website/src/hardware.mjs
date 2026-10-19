@@ -1,0 +1,5 @@
+// Public device selection. Native adapter validation is tracked separately.
+export const hardware = [
+ {id:'xingzhi-cube-154tft-wifi',name:'方屏小智 · Xingzhi Cube',nameEn:'Xingzhi Cube 1.54 TFT',kind:'voice',chip:'ESP32-S3',status:'supported',featured:true,tag:'VOICE + DISPLAY',description:['1.54英寸彩屏、单个用户键、麦克风和扬声器。','A 1.54-inch color display, one user button, microphone and speaker.'],scope:['已完成显示、单键导航与语音收发实物验证。','Display, single-button navigation and voice input/output verified on hardware.'],video:null,poster:null,source:'https://github.com/cccat6/WishOS/tree/main/hardware/agent-os/boards/xingzhi-cube-154tft-wifi'},
+ {id:'lckfb-szpi-esp32s3',name:'立创·实战派 ESP32-S3',nameEn:'LCKFB ESP32-S3 Kit',kind:'display',art:'kit',chip:'ESP32-S3',model:'LCKFB-SZPI-ESP32-S3-VA',status:'supported',featured:true,tag:'TOUCH + CAMERA + AUDIO',description:['彩色触摸屏、摄像头、双麦克风、扬声器、IMU和SD卡槽。','Color touchscreen, camera, two microphones, speaker, IMU and SD slot.'],scope:['已完成触摸、音频、相机、SD与NFS文件路径验证。','Touch, audio, camera, SD and NFS file paths verified on hardware.'],video:null,poster:null,source:'https://item.szlcsc.com/43285221.html'}
+];

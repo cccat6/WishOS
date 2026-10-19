@@ -1,0 +1,70 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#FFFFFF"
+      },
+      "children": [
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 35,
+            "width": 216,
+            "height": 80
+          },
+          "labelProps": {
+            "text": "WishOS Recovery\nOpen this address to\nrepair the Launcher."
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#000000",
+            "textAlign": "center",
+            "font": "builtin"
+          }
+        },
+        {
+          "id": "url",
+          "type": "label",
+          "placement": {
+            "x": 6,
+            "y": 125,
+            "width": 228,
+            "height": 40
+          },
+          "labelProps": {
+            "text": ""
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#000000",
+            "textAlign": "center",
+            "font": "builtin"
+          }
+        },
+        {
+          "id": "network",
+          "type": "label",
+          "placement": {
+            "x": 6,
+            "y": 180,
+            "width": 228,
+            "height": 40
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#000000",
+            "textAlign": "center",
+            "font": "builtin"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -58,7 +58,7 @@ def select(changed=None, board=None, entries=None, previous_lock=None):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--board');parser.add_argument('--base');parser.add_argument('--head',default='HEAD')
+    parser.add_argument('--supported-only',action='store_true');parser.add_argument('--board');parser.add_argument('--base');parser.add_argument('--head',default='HEAD')
     parser.add_argument('--changed',nargs='*');parser.add_argument('--github-output')
     args=parser.parse_args()
     changes=args.changed
@@ -71,6 +71,7 @@ def main():
         previous=subprocess.run([git,'show',args.base+':tools/dependencies/arduino.json'],cwd=ROOT,text=True,capture_output=True)
         if previous.returncode==0:previous_lock=json.loads(previous.stdout)
     boards=select(changes,args.board,previous_lock=previous_lock)
+    if args.supported_only:boards=[id for id in boards if catalog()[id]['board'].get('release_supported',False)]
     matrix={'include':[{'board':id} for id in boards]}
     print(json.dumps({'boards':boards,'matrix':matrix},separators=(',',':')))
     if args.github_output:

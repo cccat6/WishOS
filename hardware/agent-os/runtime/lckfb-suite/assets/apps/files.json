@@ -8,7 +8,7 @@
     "path": "hardware/agent-os/runtime/lckfb-suite"
   },
   "help": {
-    "controls": "触摸文件夹进入子目录；左上角返回上级；筛选书籍文档、图片、音频；共享在设置中。长按用户键2秒返回桌面。"
+    "controls": "单击切换选项，双击确认，三击返回桌面。长按用户键说话，松开发送。可用触屏直接点选；返回上层可选中返回。"
   },
   "memory_bytes": 196608,
   "instruction_budget": 200000,

@@ -1,0 +1,108 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F6F7F2",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "label",
+          "id": "title",
+          "placement": {
+            "x": 12,
+            "y": 8,
+            "width": 216,
+            "height": 32
+          },
+          "style": {
+            "fontSize": 20,
+            "lineHeight": 25,
+            "textColor": "#17241E",
+            "textAlign": "left"
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace",
+            "metrics": "ink",
+            "longMode": "ellipsis",
+            "verticalAlign": "center",
+            "minFontSize": 14
+          }
+        },
+        {
+          "type": "label",
+          "id": "message",
+          "placement": {
+            "x": 16,
+            "y": 52,
+            "width": 208,
+            "height": 140
+          },
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 23,
+            "textColor": "#17241E",
+            "textAlign": "left"
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace",
+            "metrics": "line",
+            "longMode": "wrap"
+          }
+        },
+        {
+          "type": "label",
+          "id": "page",
+          "placement": {
+            "x": 12,
+            "y": 198,
+            "width": 50,
+            "height": 28
+          },
+          "style": {
+            "fontSize": 14,
+            "lineHeight": 19,
+            "textColor": "#17241E",
+            "textAlign": "left"
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace",
+            "metrics": "ink",
+            "longMode": "ellipsis",
+            "verticalAlign": "center",
+            "minFontSize": 14
+          }
+        },
+        {
+          "type": "label",
+          "id": "hint",
+          "placement": {
+            "x": 60,
+            "y": 198,
+            "width": 168,
+            "height": 28
+          },
+          "style": {
+            "fontSize": 14,
+            "lineHeight": 19,
+            "textColor": "#17241E",
+            "textAlign": "left"
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace",
+            "metrics": "ink",
+            "longMode": "ellipsis",
+            "verticalAlign": "center",
+            "minFontSize": 12
+          }
+        }
+      ]
+    }
+  ]
+}

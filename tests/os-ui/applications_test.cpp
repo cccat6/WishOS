@@ -2,9 +2,11 @@
 #include "SystemNavigation.h"
 #include <cassert>
 #include <iostream>
+#include <fstream>
 using namespace notesos;
 static void write(MemoryFiles&f,const char*path,const char*data){size_t n;assert(!f.write(path,0,(const uint8_t*)data,strlen(data),true,n));}
 struct Mountable:MemoryFiles {bool ready=true;Mountable():MemoryFiles("removable","/card","ram"){}bool available()const override{return ready;}void describe(JsonObject o)const override{MemoryFiles::describe(o);o["prepare"]["path"]="/card-device";o["prepare"]["method"]="mount";o["prepare"]["args"].to<JsonObject>();}};
+static unsigned voiceBegins=0,voiceEnds=0;
 static Applications*manager;static Core*systemCore;static ScriptHost*contextHost;
 int main(){Core core;systemCore=&core;Vfs vfs;MemoryFiles memory("apps","/apps","ram");vfs.add(memory);ScriptHost host(core,vfs);contextHost=&host;
  write(memory,"/home.json",R"({"format":"wishos-app/1","id":"launcher","title":"Launcher","entry":"home.lua"})");write(memory,"/home.lua","function on_start() print('home') end");write(memory,"/one.json",R"({"format":"wishos-app/1","id":"one","title":"User application","version":"1","entry":"one.lua"})");write(memory,"/one.lua","function on_start() assert(notes.call('/sys/timers','write',{delay_ms=100,period_ms=100}).ok) end function on_stop() while true do end end");
@@ -48,6 +50,11 @@ int main(){Core core;systemCore=&core;Vfs vfs;MemoryFiles memory("apps","/apps",
  // subsequently updated. Direct runtime stop does not leave an app marked in use.
  write(memory,"/alternate.json",R"({"format":"wishos-app/1","id":"on-card","title":"New revision","entry":"one.lua"})");a.clear();a["id"]="on-card";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));a.clear();a["manifest"]="/apps/alternate.json";assert(!apps.invoke("install",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="on-card");
  host.invoke("stop",JsonObjectConst(),o.to<JsonObject>());a.clear();a["id"]="on-card";assert(!apps.invoke("remove",a.as<JsonObjectConst>(),o.to<JsonObject>()));
+ // Preparing a rejected candidate preserves the live instance and its owned
+ // resources; ordinary application switches share ScriptHost's atomic boundary.
+ apps.requestHome();apps.poll();host.invoke("read",JsonObjectConst(),o.to<JsonObject>());auto preservedOwner=o["owner"].as<uint32_t>();
+ write(memory,"/one.lua","function on_prepare() error('rejected before activation') end");a.clear();a["id"]="one";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();
+ apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="launcher"&&o["last_error"]=="script_load_failed");host.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["owner"]==preservedOwner&&o["fault"]==false);
  // on_start may fail after its candidate replaces the old VM. The manager
  // still knows which instance faulted and restores the launcher on the next poll.
  write(memory,"/one.lua","function on_start() error('failed start') end");a.clear();a["id"]="one";assert(!apps.invoke("launch",a.as<JsonObjectConst>(),o.to<JsonObject>()));apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["last_error"]=="script_start_failed"&&strstr(o["last_detail"]|"","failed start"));apps.poll();apps.poll();apps.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="launcher");
@@ -80,6 +87,39 @@ int main(){Core core;systemCore=&core;Vfs vfs;MemoryFiles memory("apps","/apps",
    Applications managed(core,vfs,host,"launcher","voice");assert(managed.defaults(R"([{"id":"launcher","title":"Home","manifest":"/apps/missing-home.json","fallback_manifest":"/apps/seed.json"},{"id":"voice","title":"Voice","manifest":"/apps/voice.json"}])"));
    managed.requestHome();for(unsigned i=0;i<4;++i)managed.poll();managed.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="launcher"&&o["runtime"]==true);
    managed.requestVoice();for(unsigned i=0;i<8;++i)managed.poll();managed.invoke("read",JsonObjectConst(),o.to<JsonObject>());assert(o["current"]=="launcher"&&o["runtime"]==true);
+ }
+
+ // Protected voice is routed to an explicitly opted-in foreground activation.
+ // Replacement releases the claim; a late release never targets the new VM.
+ {
+  Core c;Vfs files;MemoryFiles data("voice","/voice","ram");files.add(data);Mountable media;files.add(media);ScriptHost runtime(c,files);Applications routed(c,files,runtime,"home","voice");contextHost=&runtime;c.setEventObserver([](const Event&e){return contextHost->event(e);});
+  c.add(Device::bind("/sys/apps",Applications::Methods,"",routed));
+  write(data,"/home.json",R"({"format":"wishos-app/1","id":"home","title":"Home","entry":"home.lua"})");write(data,"/home.lua","function on_start() end");
+  write(data,"/voice.json",R"({"format":"wishos-app/1","id":"voice","title":"Voice","entry":"voice.lua"})");write(data,"/voice.lua","function on_start() end");write(media,"/voice.json",R"({"format":"wishos-app/1","id":"voice","title":"Voice","entry":"voice.lua"})");write(media,"/voice.lua","function on_start() end");
+  c.add({"/card-device","mount","",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["operation_id"]=77;return nullptr;},[](JsonObject o){asyncContract(o,"mount","/card-device",{"volume_ready","bad_volume"})["operation_id"]="operation_id";}});
+  write(data,"/tool.json",R"({"format":"wishos-app/1","id":"tool","title":"Tool","entry":"tool.lua","memory_bytes":65536})");std::ifstream libraryFile("firmware/WishOS/lib/ai.lua");assert(libraryFile);std::string voiceLibrary((std::istreambuf_iterator<char>(libraryFile)),{});write(data,"/ai.lua",voiceLibrary.c_str());
+  c.add({"/test/voice","begin,end","",[](const char*m,JsonObjectConst,JsonObject)->const char*{if(!strcmp(m,"begin"))++voiceBegins;else ++voiceEnds;return nullptr;}});
+  write(data,"/tool.lua","local ai=notes.require('./ai.lua');local entry function on_start() entry=ai.voice_input(function(i) assert(notes.call('/test/voice','begin',i).ok) end,function(i) assert(notes.call('/test/voice','end',i).ok) end) end function on_stop() entry.stop() end");
+  assert(routed.defaults(R"([{"id":"home","manifest":"/voice/home.json"},{"id":"voice","manifest":"/card/voice.json"},{"id":"tool","manifest":"/voice/tool.json"}])"));
+  JsonDocument input,result;input["id"]="tool";assert(!routed.invoke("launch",input.as<JsonObjectConst>(),result.to<JsonObject>()));routed.poll();runtime.invoke("read",JsonObjectConst(),result.to<JsonObject>());auto owner=result["owner"].as<uint32_t>();if(!owner||result["fault"]!=false){serializeJson(result,std::cerr);routed.invoke("read",JsonObjectConst(),result.to<JsonObject>());serializeJson(result,std::cerr);}assert(owner&&result["fault"]==false);
+  routed.invoke("read",JsonObjectConst(),result.to<JsonObject>());assert(result["voice_input_owner"]==owner);
+  auto after=c.sequence();routed.requestVoice();auto began=c.sequence();routed.requestVoice();assert(c.sequence()==began);assert(!routed.transitionPending());routed.invoke("read",JsonObjectConst(),result.to<JsonObject>());assert(result["current"]=="tool"&&result["voice_input_held"]==true);auto request=result["voice_request_id"].as<uint32_t>();uint32_t voiceCursor=0;c.dispatch(voiceCursor);runtime.tick(1);if(voiceBegins!=1||voiceEnds!=0){runtime.invoke("read",JsonObjectConst(),result.to<JsonObject>());serializeJson(result,std::cerr);std::cerr<<" begins="<<voiceBegins<<" ends="<<voiceEnds;}assert(voiceBegins==1&&voiceEnds==0);
+  c.events(after,8,result.to<JsonObject>());assert(result["events"][0]["event"]=="voice_requested"&&result["events"][0]["target_owner"]==owner&&result["events"][0]["data"]["request_id"]==request&&result["events"][0]["data"]["route"]=="application");
+  after=c.sequence();routed.releaseVoice();auto ended=c.sequence();routed.releaseVoice();assert(c.sequence()==ended);c.events(after,8,result.to<JsonObject>());assert(result["events"][0]["event"]=="voice_released"&&result["events"][0]["target_owner"]==owner&&result["events"][0]["data"]["request_id"]==request);c.dispatch(voiceCursor);runtime.tick(2);assert(voiceBegins==1&&voiceEnds==1);
+  routed.requestVoice();routed.requestHome();routed.poll();after=c.sequence();routed.releaseVoice();assert(c.sequence()==after);routed.invoke("read",JsonObjectConst(),result.to<JsonObject>());assert(result["current"]=="home"&&result["voice_input_owner"]==0);
+  // No claim uses the ordinary configured voice app and captures source context.
+  routed.requestVoice();routed.poll();routed.invoke("read",JsonObjectConst(),result.to<JsonObject>());assert(result["current"]=="voice"&&result["arguments"]["record"]==true&&result["arguments"]["voice_request_id"].as<uint32_t>()>request);routed.invoke("context",JsonObjectConst(),result.to<JsonObject>());assert(result["launch_origin"]["application_id"]=="home");
+  runtime.invoke("read",JsonObjectConst(),result.to<JsonObject>());auto defaultOwner=result["owner"].as<uint32_t>();after=c.sequence();routed.releaseVoice();c.events(after,8,result.to<JsonObject>());assert(result["events"][0]["target_owner"]==defaultOwner);
+  // Repeated entry on the same default VM preserves its owner; release during
+  // loading cancels held input rather than delivering it to a later app.
+  routed.requestVoice();runtime.invoke("read",JsonObjectConst(),result.to<JsonObject>());assert(result["owner"]==defaultOwner);routed.releaseVoice();routed.requestHome();routed.poll();routed.requestVoice();routed.releaseVoice();routed.poll();routed.invoke("read",JsonObjectConst(),result.to<JsonObject>());assert(result["voice_input_held"]==false&&result["arguments"]["record"]==false);
+  // Voice release/re-entry while the default app waits for its medium keeps
+  // the frozen source identity, while the released input cannot start later.
+  routed.requestHome();routed.poll();media.ready=false;routed.requestVoice();routed.poll();assert(routed.transitionPending());routed.releaseVoice();routed.requestVoice();routed.poll();media.ready=true;JsonDocument mounted;mounted["operation_id"]=77;c.emit("/card-device","volume_ready",mounted.as<JsonObjectConst>());routed.poll();
+  routed.invoke("context",JsonObjectConst(),result.to<JsonObject>());assert(result["current"]["application_id"]=="voice"&&result["launch_origin"]["application_id"]=="home");routed.releaseVoice();
+  // An unrelated owner cannot claim a different foreground activation.
+  auto outsider=c.acquireOwner();input.clear();input["enabled"]=true;assert(!strcmp(c.invoke("/sys/apps","voice_input",input.as<JsonObjectConst>(),result.to<JsonObject>(),outsider),"foreground_owner_required"));c.releaseOwner(outsider);
+  runtime.invoke("stop",JsonObjectConst(),result.to<JsonObject>());contextHost=&host;
  }
  host.invoke("stop",JsonObjectConst(),o.to<JsonObject>());std::cout<<"Installed application references, deferred activation, replaceable launcher and independent recovery input passed\n";
 }

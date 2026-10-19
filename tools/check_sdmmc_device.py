@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Live SDMMC/LCD scenario; never formats media, only cleans its unique test directory."""
-import argparse,sys,json,time,uuid,urllib.request,urllib.parse,socket,struct,pathlib
+import argparse,sys,json,time,uuid,urllib.request,urllib.parse,socket,struct,pathlib,tempfile
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent));from os_client import Client,RpcError
 urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
 parser=argparse.ArgumentParser(description="Nonformatting SDMMC, LCD and sensor scenario on an explicitly identified device")
 parser.add_argument('--url',required=True);parser.add_argument('--mac',required=True);parser.add_argument('--board',required=True);parser.add_argument('--output',type=pathlib.Path,required=True);args=parser.parse_args()
-c=Client(url=args.url,timeout=12);checks=[];report={'checks':checks};root='/storage/user/wishos-check-'+uuid.uuid4().hex[:10];created=[];nfs=False
+c=Client(url=args.url,timeout=12);checks=[];report={'checks':checks};root='/storage/user/wishos-check-'+uuid.uuid4().hex[:10];created=[];nfs=False;installed=None;catalog_persisted=False
 
 def call(p,m='read',a=None):return c.call(p,m,a)
 def wait(fn,seconds=30):
@@ -31,16 +31,34 @@ def opaque(b):return u(len(b))+b+b'\0'*((-len(b))%4)
 try:
  report['board']=call('/sys/board');assert report['board']['mac']==args.mac.upper() and report['board']['board']==args.board
  wait(lambda:not call('/sys/apps').get('pending'));assert call('/sys/runtime')['file'].startswith('/storage/flash/factory/');checks.append('managed_filesystem_launcher_running')
+ catalog_persisted=call('/sys/apps')['persisted'];call('/sys/runtime','stop');wait(lambda:not call('/dev/display')['active'] and not call('/dev/display')['pending']);wait(lambda:not call('/dev/sd')['operation_pending']);op('unmount')
  report['resources_before']=call('/sys/resources');assert report['resources_before']['heaps'][1]['capacity_bytes']>0;checks.append('external_heap_and_vm_admission')
  expect('fixed_clock_unavailable',lambda:call('/dev/sd','configure',{'clock_hz':25000000,'read_only':True}));assert call('/dev/sd')['clock_mode']=='auto';checks.append('unsupported_fixed_clock_rejects_complete_change')
- call('/dev/sd','configure',{'read_only':True});op('probe');s=call('/dev/sd');assert s['link_ready'] and not s['mounted'];report['link']=s;checks.append('content_independent_link_probe_separate_from_mount')
+ report['clock_trials']=[]
+ choices=call('/sys/capabilities','describe',{'path':'/dev/sd'})['settings']['clock_hz']['fixed_choices']
+ for hz in choices:
+  call('/dev/sd','configure',{'clock_hz':hz});op('probe');state=call('/dev/sd');assert state['actual_hz']==hz,state;report['clock_trials'].append({'requested_hz':hz,'actual_hz':state['actual_hz'],'link_ready':state['link_ready']});op('unmount')
+ call('/dev/sd','configure',{'clock_hz':'auto','read_only':True});op('probe');s=call('/dev/sd');assert s['link_ready'] and not s['mounted'];report['link']=s;checks.append('content_independent_link_probe_separate_from_mount')
  op('mount');page=call('/fs','list',{'path':'/storage/user','limit':8});report['initial_root_entries']=len(page['entries']);expect('read_only',lambda:call('/fs','mkdir',{'path':root}));checks.append('read_only_mount_rejects_write')
  op('unmount');call('/dev/sd','configure',{'read_only':False});op('mount');op('space');call('/fs','mkdir',{'path':root});created.append(root)
  data=bytes((i*73+19)%256 for i in range(8192));file=root+'/中文-Ä.txt';created.append(file)
  for at in range(0,len(data),1024):assert call('/fs','write',{'file':file,'offset':str(at),'hex':data[at:at+1024].hex(),'truncate':at==0})['written']==1024
  call('/fs','flush',{'file':file});assert b''.join(read(file,at) for at in range(0,8192,1024))==data;assert read(file,3073,511)==data[3073:3584];checks.append('sd_utf8_file_chunk_write_read_and_random_seek')
  # An app stored on SD holds the provider until the application is replaced.
- code=root+'/main.lua';created.append(code);call('/fs','write',{'file':code,'text':'function on_start() end','truncate':True});call('/sys/runtime','load',{'file':code,'root':root});expect('storage_in_use',lambda:call('/dev/sd','unmount'));call('/sys/apps','home');wait(lambda:not call('/sys/apps').get('pending'));checks.append('sd_application_provider_lease_blocks_unmount_and_releases_on_home')
+ with tempfile.TemporaryDirectory() as local:
+  local=pathlib.Path(local);app_id='sd-check-'+uuid.uuid4().hex[:10]
+  (local/'app.json').write_text(json.dumps({'format':'wishos-app/1','id':app_id,'title':'SD application check','entry':'main.lua','requires':[{'path':'/sys/ui','methods':['open']}]}))
+  (local/'main.lua').write_text("function on_start() local r=notes.call('/sys/ui','open',{path=notes.resolve('ui.json')});assert(r.ok,r.error) end")
+  (local/'ui.json').write_text(json.dumps({'version':'0.1.1','assets':[{'type':'viewScreen','style':{'bgColor':'#FFFFFF'},'children':[{'type':'label','style':{'fontSize':20},'labelProps':{'text':'SD application running'}}]}]}))
+  installed=app_id
+  try:published=c.publish_app(local,root,persist=False)
+  finally:
+   if getattr(c,'last_publication_root','').startswith(root+'/'):
+    created.append(c.last_publication_root);created.extend(c.last_publication_root+'/'+name for name in ['app.json','main.lua','ui.json','files.jsonl','package.json'])
+  assert call('/sys/runtime')['file']==published['entry'];expect('storage_in_use',lambda:call('/dev/sd','unmount'))
+  view=call('/sys/ui')['view_id'];wait(lambda:call('/sys/ui')['presentation']['last_presented_view']==view)
+  call('/sys/apps','home');wait(lambda:not call('/sys/apps').get('pending'));call('/sys/apps','remove',{'id':installed});installed=None
+ checks.append('sd_package_native_validate_install_launch_display_and_provider_lease')
  # Simultaneous sensor sampling, LCD DMA and network/file access.
  call('/dev/imu','configure',{});call('/dev/touch','configure',{});view=call('/sys/ui')['view_id'];max_ms=0
  for i in range(12):
@@ -52,7 +70,7 @@ try:
   result=wait(lambda:(s if (s:=call('/sys/operations','read',{'id':ident})).get('ready') else None));assert result['event']=='completed' and result['data']['completion']['kind']=='transport_complete';report['lcd_refresh_ms']=result['data']['total_ms'];checks.append('ui_request_retains_dma_completion_for_runtime_callbacks')
  finally:call('/sys/operations','release',{'id':ident})
  # Real NFSv3 TCP uses the same mounted SD provider, including Unicode paths.
- call('/services/nfs','start',{'provider':'user','export_path':'/sd','port':2049,'read_only':True,'bytes_per_second':0});nfs=True
+ call('/services/nfs','start',{'provider':'user','export_path':'/sd','port':2049,'read_only':False,'bytes_per_second':0});nfs=True
  with socket.create_connection((urllib.parse.urlparse(args.url).hostname,2049),timeout=8) as conn:
   def exact(n):
    buf=b''
@@ -63,6 +81,11 @@ try:
    body=u(xid,0,2,prog,3,proc,0,0,0,0)+args;conn.sendall(u(len(body)|0x80000000)+body);sz=struct.unpack('>I',exact(4))[0];r=exact(sz&0x7fffffff);assert r[:24]==u(xid,1,0,0,0,0);return r[24:]
   def handle(r):assert r[:4]==u(0),r.hex();n=struct.unpack('>I',r[4:8])[0];return r[8:8+n]
   h=handle(rpc(1,100005,1,opaque(b'/sd')));directory=handle(rpc(2,100003,3,opaque(h)+opaque(root.rsplit('/',1)[1].encode())));f=handle(rpc(3,100003,3,opaque(directory)+opaque('中文-ä.TXT'.encode())));r=rpc(4,100003,6,opaque(f)+struct.pack('>Q',3073)+u(511));assert r[:8]==u(0,1),r.hex();n=struct.unpack('>I',r[100:104])[0];assert r[104:104+n]==data[3073:3584];checks.append('real_nfs_v3_sd_unicode_case_lookup_and_random_read')
+  replacement=b'NFS write crosses the original HTTP file boundary: '+bytes(range(64))
+  r=rpc(5,100003,7,opaque(f)+struct.pack('>Q',4090)+u(len(replacement),2)+opaque(replacement));assert r[:4]==u(0),r.hex();count,stable=struct.unpack('>II',r[-16:-8]);assert count==len(replacement) and stable==2
+  data=data[:4090]+replacement+data[4090+len(replacement):];assert read(file,4090,len(replacement))==replacement
+  r=rpc(6,100003,6,opaque(f)+struct.pack('>Q',4080)+u(256));assert r[:8]==u(0,1);n=struct.unpack('>I',r[100:104])[0];assert r[104:104+n]==data[4080:4080+n]
+  checks.append('real_nfs_v3_stable_write_http_readback_and_nfs_readback')
  call('/services/nfs','stop');nfs=False
  op('unmount');op('mount');assert read(file,4096)==data[4096:5120];checks.append('durable_data_survives_remount')
  # Exercise the Lua callback path, rather than only the host observation API.
@@ -90,8 +113,17 @@ try:
 finally:
  try:
   if nfs:call('/services/nfs','stop')
-  for file in reversed(created):call('/fs','remove',{'file':file})
-  call('/sys/apps','home');wait(lambda:not call('/sys/apps').get('pending'));report['cleanup_ok']=True
+  call('/sys/apps','home');wait(lambda:not call('/sys/apps').get('pending'))
+  if installed:
+   try:call('/sys/apps','remove',{'id':installed})
+   except RpcError as e:
+    if str(e)!='application_not_installed':raise
+  wait(lambda:not call('/dev/display')['active'] and not call('/dev/display')['pending'])
+  for file in reversed(created):
+   try:call('/fs','remove',{'file':file})
+   except RpcError as e:
+    if str(e)!='not_found':raise
+  call('/sys/apps','home');wait(lambda:not call('/sys/apps').get('pending'));call('/sys/apps','configure',{'persist':catalog_persisted});report['cleanup_ok']=True
  except Exception as e:report['cleanup_error']=str(e)
  args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
 print(json.dumps(report,ensure_ascii=False,indent=2))

@@ -1,5 +1,5 @@
-#include "SdClockPlan.h"
-#include "compositions/agentic-notes-e6/Defaults.h"
+#include "drivers/sd-spi-volume/SdClockPlan.h"
+#include "fixtures/composition/Defaults.h"
 #include <cassert>
 #include <cstring>
 using namespace notesos;

@@ -39,5 +39,5 @@ function on_start()
   end)
  end)
 
- C.button(function() if not pending then C.launch('voice',{record=true}) end end)
+
 end

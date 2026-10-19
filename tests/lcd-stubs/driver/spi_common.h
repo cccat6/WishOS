@@ -1,0 +1,3 @@
+#pragma once
+typedef enum {ESP_INTR_CPU_AFFINITY_AUTO,ESP_INTR_CPU_AFFINITY_0,ESP_INTR_CPU_AFFINITY_1} esp_intr_cpu_affinity_t;
+struct spi_bus_config_t{esp_intr_cpu_affinity_t isr_cpu_id=ESP_INTR_CPU_AFFINITY_AUTO;};

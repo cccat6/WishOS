@@ -71,7 +71,10 @@ class Core {
   mutable std::recursive_mutex eventMutex_;
   Device devices_[MAX_DEVICES]{};
   unsigned count_ = 0;
-  Event events_[MAX_EVENTS]{};
+  static void*defaultEventStorage(size_t bytes){return malloc(bytes);}
+  static Event*newEventStorage(void*(*allocate)(size_t)){auto memory=static_cast<Event*>(allocate(sizeof(Event)*MAX_EVENTS));if(memory)for(unsigned i=0;i<MAX_EVENTS;++i)new(memory+i)Event;return memory;}
+  Event*events_=newEventStorage(defaultEventStorage);
+  void(*freeEvents_)(void*)=free;
   RuleIndex rules_;
   Timer timers_[MAX_TIMERS]{};
   uint32_t seq_ = 0, nextRule_ = 1, ruleOverruns_ = 0;
@@ -87,7 +90,13 @@ class Core {
 
   void*diagnosticsContext_=nullptr;void(*diagnosticEvent_)(void*,const char*,const char*,JsonObjectConst,uint32_t)=nullptr;void(*diagnosticCall_)(void*,const char*,const char*,const char*,uint32_t)=nullptr;
 public:
-  ~Core(){resources_.freeAllocation(deferred_);rules_.releaseMissing(RuleIndex(),resources_);}
+  ~Core(){freeEvents_(events_);resources_.freeAllocation(deferred_);rules_.releaseMissing(RuleIndex(),resources_);}
+  // Native bootstrap selects a heap for kernel data. The portable journal keeps
+  // its records and identities; applications never choose native memory caps.
+  bool eventStorage(void*(*allocate)(size_t),void(*release)(void*)){
+    std::lock_guard<std::recursive_mutex>lock(eventMutex_);auto next=newEventStorage(allocate);if(!next)return false;
+    if(events_)memcpy(next,events_,sizeof(Event)*MAX_EVENTS);freeEvents_(events_);events_=next;freeEvents_=release;return true;
+  }
   void diagnostics(void*ctx,void(*event)(void*,const char*,const char*,JsonObjectConst,uint32_t),void(*call)(void*,const char*,const char*,const char*,uint32_t)){diagnosticsContext_=ctx;diagnosticEvent_=event;diagnosticCall_=call;}
   ResourceBudget&resources(){return resources_;}
   CompletionStore<MAX_DEVICES+1>&completions(){return completions_;}
@@ -199,6 +208,7 @@ public:
     if(diagnosticEvent_)diagnosticEvent_(diagnosticsContext_,path,name,data,targetOwner);
     completions_.record(path,name,data,targetOwner,timestamp,source?size_t(source-devices_):MAX_DEVICES);
     std::lock_guard<std::recursive_mutex>lock(eventMutex_);
+    if(!events_)return false;
     auto &e = events_[seq_ % MAX_EVENTS];
     e.sequence = ++seq_;
     e.time = timestamp;
@@ -213,6 +223,7 @@ public:
   }
   void events(uint32_t after, unsigned limit, JsonObject out) const {
     std::lock_guard<std::recursive_mutex>lock(eventMutex_);
+    if(!events_){out["error"]="event_storage_unavailable";return;}
     if (limit > 8)
       limit = 8;
     uint32_t oldest = seq_ >= MAX_EVENTS ? seq_ - MAX_EVENTS + 1 : 1;

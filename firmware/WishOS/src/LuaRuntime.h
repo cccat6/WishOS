@@ -3,6 +3,7 @@
 #include "Vfs.h"
 #include "RuntimeCallbacks.h"
 #include "RuntimeCallbacksBytecode.h"
+#include "RuntimeCompileCache.h"
 static_assert(notesos::CALLBACK_BYTECODE_SOURCE_HASH==notesos::callbackSourceHash(),"Regenerate the runtime callback library");
 #include <cmath>
 #include <stddef.h>
@@ -24,7 +25,8 @@ private:
   JsonDocument*document(){return jsonAllocator_?new(std::nothrow)JsonDocument(jsonAllocator_):new(std::nothrow)JsonDocument;}
   Resize resize_=nullptr;void*allocatorContext_=nullptr;bool ownerReleased_=false;
   void releaseOwned(){if(!isolated_&&!ownerReleased_){ownerReleased_=true;clearCallbacks();core_.releaseOwner(owner_);}}
-  Reader reader_=nullptr;void*readerContext_=nullptr;char base_[256]="/";
+  Reader reader_=nullptr;void*readerContext_=nullptr;char base_[256]="/",chunk_[256]="application";RuntimeCompileCache*compileCache_=nullptr;
+  int compileChunk(lua_State*L,const char*source,size_t size,const char*path){return compileCache_?compileCache_->load(L,path,source,size):luaL_loadbufferx(L,source,size,path,"t");}
   struct Module {char path[256]{};bool ready=false;int ref=LUA_NOREF;};
   Module*modules_=nullptr;unsigned moduleCount_=0,moduleCapacity_=0;
   uint32_t reservation_=0,owner_=0;bool stopped_=false,isolated_=false;
@@ -145,10 +147,13 @@ private:
     lua_pushcfunction(L,resolve);lua_setfield(L,-2,"resolve");lua_pushcfunction(L,findLiteral);lua_setfield(L,-2,"find");lua_pushcfunction(L,requireModule);lua_setfield(L,-2,"require");
     const char*names[]={"hex","unhex","base64","unbase64"};for(int i=0;i<4;++i){lua_pushinteger(L,i);lua_pushcclosure(L,bytes,1);lua_setfield(L,-2,names[i]);}
     for(auto name:{"on","off","request"}){lua_pushstring(L,name);lua_pushcclosure(L,callbackApi,1);lua_setfield(L,-2,name);}
-    lua_setglobal(L,"notes");lua_gc(L,LUA_GCINC,100,200,10);return 0;
+    // Keep the upstream incremental collector defaults. The allocator enforces
+    // the VM ceiling and Lua performs emergency collection on allocation failure.
+    // A pause of100 kept rescanning the live heap during ordinary API calls.
+    lua_setglobal(L,"notes");return 0;
   }
   static int run(lua_State*L){auto&s=self(L);
-    if(s.operation_==0){if(luaL_loadbufferx(L,s.source_,s.sourceSize_,"application","t")!=LUA_OK)return lua_error(L);lua_callk(L,0,0,0,continuation);return 0;}
+    if(s.operation_==0){if(s.compileChunk(L,s.source_,s.sourceSize_,s.chunk_)!=LUA_OK)return lua_error(L);lua_callk(L,0,0,0,continuation);return 0;}
     bool dispatch=s.operation_==2&&s.callbacksRef_!=LUA_NOREF;
     if(dispatch||s.operation_==6){lua_rawgeti(L,LUA_REGISTRYINDEX,s.callbacksRef_);lua_getfield(L,-1,dispatch?"dispatch":"flush");lua_remove(L,-2);}
     else lua_getglobal(L,s.operation_==1?"on_start":s.operation_==3?"on_stop":s.operation_==4?"compute":s.operation_==5?"on_prepare":"on_event");
@@ -176,7 +181,8 @@ private:
 public:
   LuaRuntime(Core&core,size_t budget=0,uint32_t steps=20000,uint32_t calls=32):core_(core),budget_(budget?budget:core.resources().defaultVmLimit()),stepLimit_(steps),callLimit_(calls),owner_(core.acquireOwner()){reservation_=core_.resources().acquireApplication(budget_,owner_);if(!reservation_)copy(error_,sizeof error_,"system_memory_budget");}
   ~LuaRuntime(){releaseOwned();loading_=true;cleanup();if(state_)lua_close(state_);core_.resources().freeAllocation(modules_);core_.resources().freeAllocation(subscriptions_);core_.resources().release(reservation_);}
-  void fileContext(const char*file,Reader reader,void*context){reader_=reader;readerContext_=context;copy(base_,sizeof base_,file);auto end=strrchr(base_,'/');if(end==base_)end[1]=0;else if(end)*end=0;else strcpy(base_,"/");}
+  void fileContext(const char*file,Reader reader,void*context){reader_=reader;readerContext_=context;copy(chunk_,sizeof chunk_,*file?file:"application");copy(base_,sizeof base_,file);auto end=strrchr(base_,'/');if(end==base_)end[1]=0;else if(end)*end=0;else strcpy(base_,"/");}
+  void compilationCache(RuntimeCompileCache*cache){if(!state_)compileCache_=cache;}
   bool stop(){if(stopped_)return !fault_;stopped_=true;bool ok=fault_?false:execute(3);releaseOwned();return ok;}
   void jsonAllocationBackend(ArduinoJson::Allocator*allocator){jsonAllocator_=allocator;}
   void allocationBackend(Resize resize,void*context){if(!state_){resize_=resize;allocatorContext_=context;}}

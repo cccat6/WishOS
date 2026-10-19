@@ -1,0 +1,1 @@
+{"format":"notes-driver/1","id":"esp-ledc-backlight","platforms":["esp32"],"description":"ESP-IDF LEDC brightness with compiled wiring and system policy inheritance"}

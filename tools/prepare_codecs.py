@@ -16,8 +16,8 @@ def prepare():
  expected['library.properties']=b'name=WishCodecs\nversion=1.0.0\nauthor=Espressif\nmaintainer=WishOS\nsentence=Pinned ES7210 and ES8311 codec implementations\nparagraph=Uses WishOS shared I2C arbitration\ncategory=Signal Input/Output\narchitectures=esp32\n'
  expected['src/WishCodecs.h']=b'#pragma once\n#include "es7210_adc.h"\n#include "es8311_codec.h"\n#include "audio_codec_ctrl_if.h"\n'
  if target.exists():
-  for name,raw in expected.items():
-   if not (target/name).is_file()or(target/name).read_bytes()!=raw:raise RuntimeError('Prepared codec snapshot modified: '+name)
+  actual={str(p.relative_to(target)):p.read_bytes() for p in target.rglob('*') if p.is_file()}
+  if actual!=expected:raise RuntimeError('Prepared codec snapshot modified')
   return target
  with tempfile.TemporaryDirectory(dir=target.parent) as temp:
   stage=Path(temp)/'library';stage.mkdir()

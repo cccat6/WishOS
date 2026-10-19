@@ -1,0 +1,109 @@
+{
+  "format": "notes-composition/1",
+  "id": "xingzhi-cube-154tft-wifi",
+  "entry": "Port.inc",
+  "flags": [
+    "-DWISHOS_LCD_RASTER_ROWS=32",
+    "-DWISHOS_RESOURCE_CAPACITY=64"
+  ],
+  "required_pins": [
+    "LCD_MOSI",
+    "LCD_SCLK",
+    "LCD_DC",
+    "LCD_CS",
+    "LCD_RST",
+    "LCD_BL",
+    "MIC_BCLK",
+    "MIC_WS",
+    "MIC_DATA",
+    "SPK_BCLK",
+    "SPK_WS",
+    "SPK_DATA",
+    "POWER_HOLD",
+    "CHARGE_SENSE",
+    "BATTERY_ADC",
+    "KEY_USER"
+  ],
+  "pin_constraints": {
+    "BATTERY_ADC": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ]
+  },
+  "display": {
+    "width": 240,
+    "height": 240
+  },
+  "button_count": 1,
+  "asset_file_limit_bytes": 16777216,
+  "asset_budget_bytes": 131072,
+  "drivers": [
+    "esp-i2s-input",
+    "esp-i2s-output",
+    "energy-activity",
+    "esp-lcd-spi",
+    "esp-nimble-external",
+    "esp-wakenet",
+    "esp-ledc-backlight"
+  ],
+  "optional_drivers": [],
+  "dependencies": [
+    "ArduinoJson",
+    "WebSockets",
+    "ESP32NFS",
+    "lvgl"
+  ],
+  "platforms": [
+    "esp32-s3"
+  ],
+  "hardware_schema": {
+    "lcd_spi_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 80000000
+    },
+    "backlight_active_low": {
+      "type": "boolean"
+    },
+    "backlight_ledc_timer": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "backlight_ledc_channel": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7
+    },
+    "backlight_pwm_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "backlight_pwm_bits": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 14
+    }
+  },
+  "system_stack_bytes": 16384,
+  "minimum_system_stack_bytes": 16384
+}

@@ -13,3 +13,15 @@ hub/config.local.json
 # Separate repositories and local hardware experiments
 /hub/
 /libraries/
+
+# Local credentials, generated evidence and dependency caches
+**/.dev.vars*
+**/.wrangler/
+**/node_modules/
+**/dist/
+**/build/
+*.local.json
+*.pem
+*.key
+*.p12
+.DS_Store

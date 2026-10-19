@@ -1,4 +1,4 @@
-import importlib.util, struct, tempfile, unittest
+import importlib.util, json, struct, tempfile, unittest
 from pathlib import Path
 from PIL import Image
 ROOT=Path(__file__).parents[1]
@@ -21,4 +21,31 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dst=Path(tmp)/'icon.bin';result=m.compile_image(ROOT/'examples/agent-os/dashboard/icon.svg',dst,64,64)
             self.assertTrue(result['streamable']);self.assertEqual(result['width'],64);self.assertEqual(result['height'],64)
+    def test_factory_action_icons_visible_bounds(self):
+        for path in (ROOT/'hardware/agent-os/runtime/lckfb-suite/assets/icons').glob('*.png'):
+            im=Image.open(path).convert('RGBA');box=im.getchannel('A').getbbox()
+            self.assertIsNotNone(box,str(path))
+            self.assertLessEqual(abs(box[0]+box[2]-im.width),1,str(path))
+            self.assertLessEqual(abs(box[1]+box[3]-im.height),1,str(path))
+    def test_factory_lcd_text_contrast_after_rgb565(self):
+        # This verifies actual numeric output colors. Physical panel quality is
+        # separately checked on hardware, not inferred from this calculation.
+        def rgb(value):
+            n=int(value.lstrip('#'),16)
+            return [round(((n>>16)&255)/255*31)/31,
+                    round(((n>>8)&255)/255*63)/63,round((n&255)/255*31)/31]
+        def luminance(color):
+            return sum(w*(c/12.92 if c<=.04045 else ((c+.055)/1.055)**2.4)
+                       for w,c in zip((.2126,.7152,.0722),color))
+        def visit(node,bg,fg,path):
+            style=node.get('style',{})
+            if 'bgColor' in style and style.get('bgOpacity',255)==255:bg=style['bgColor']
+            fg=style.get('textColor',fg)
+            if node['type']=='label':
+                a,b=sorted((luminance(rgb(bg)),luminance(rgb(fg))))
+                self.assertGreaterEqual((b+.05)/(a+.05),4.5,(str(path),node.get('id'),bg,fg))
+            for child in node.get('children',[]):visit(child,bg,fg,path)
+        for suite in ('lckfb-suite','xingzhi-cube-suite'):
+            for path in (ROOT/'hardware/agent-os/runtime'/suite/'assets/ui').glob('*.json'):
+                for node in json.loads(path.read_text())['assets']:visit(node,'#ffffff','#000000',path)
 if __name__=='__main__':unittest.main()

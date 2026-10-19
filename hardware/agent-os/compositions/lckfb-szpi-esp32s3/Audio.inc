@@ -4,13 +4,13 @@ static audio::EverestDuplex audioHardware(wireI2c.bus,{pins::AUDIO_MCLK,pins::AU
 static audio::Playback playback(core,audioHardware);
 static std::mutex audioMutex;
 static constexpr unsigned AUDIO_WORKER_STACK_BYTES=8192,AUDIO_INTERNAL_WORKSPACE_BYTES=28672;
-static std::atomic<uint32_t>audioStackFree{0};
+static std::atomic<uint32_t>audioStackFree{0},recordingStackFree{0};
 static bool audioPending=false;static uint64_t audioStartDeadline=0;
 static std::atomic<unsigned>audioUsers{0};static std::atomic<bool>audioWorkerActive{false};static bool audioStopping=false;static unsigned audioRate=16000;static uint32_t audioReservation=0;static char audioFailure[80]{};
 static const char*requestAudio(unsigned,unsigned);static void releaseMic(){audioUsers.fetch_and(~1u);}static const char*startMic(unsigned rate){return requestAudio(1,rate);}
 static audio::CompressedCapture microphone(core,bootId,startMic,releaseMic,"/dev/mic","MMR");
 struct RecordingTask{void(*run)(void*);void*context;};
-static void recordingTask(void*p){auto e=*static_cast<RecordingTask*>(p);delete static_cast<RecordingTask*>(p);e.run(e.context);vTaskDelete(nullptr);}
+static void recordingTask(void*p){auto e=*static_cast<RecordingTask*>(p);delete static_cast<RecordingTask*>(p);e.run(e.context);recordingStackFree=uxTaskGetStackHighWaterMark(nullptr);vTaskDelete(nullptr);}
 static audio::RecordingStorage microphoneStorage(core,vfs,sdVolume.provider(),{[](void(*run)(void*),void*context){auto entry=new(std::nothrow)RecordingTask{run,context};if(!entry)return false;if(xTaskCreate(recordingTask,"wish-recording",8192,entry,1,nullptr)!=pdPASS){delete entry;return false;}return true;},12288},&microphone,[](void*p,const char*id,const char*file,bool pending,bool durable,const char*error,uint64_t missing){static_cast<audio::CompressedCapture*>(p)->storageStatus(id,file,pending,durable,error,missing);});
 static const char*speechAcquire(unsigned rate,const char*roles){if(strcmp(roles,"M"))return "capture_layout_unavailable";return requestAudio(4,rate);}static void speechRelease(){audioUsers.fetch_and(~4u);}
 static audio::EnergyActivity activityDetector;
@@ -31,7 +31,7 @@ static void audioWorker(void*){
   if(uint32_t(millis()-stackMeasuredAt)>=1000){audioStackFree=uxTaskGetStackHighWaterMark(nullptr);stackMeasuredAt=millis();}
   vTaskDelay(1);
  }
- if(error){{std::lock_guard<std::mutex>lock(audioMutex);copy(audioFailure,sizeof audioFailure,error);}microphone.failed(audioFailure);speechService.inputFailed(audioFailure);playback.failed(audioFailure);}
+ if(error){{std::lock_guard<std::mutex>lock(audioMutex);audioStopping=true;copy(audioFailure,sizeof audioFailure,error);}microphone.failed(audioFailure);speechService.inputFailed(audioFailure);playback.failed(audioFailure);}
  audioHardware.shutdown();audioStackFree=uxTaskGetStackHighWaterMark(nullptr);{std::lock_guard<std::mutex>lock(audioMutex);audioUsers=0;audioStopping=false;audioWorkerActive=false;core.resources().release(audioReservation);audioReservation=0;}vTaskDelete(nullptr);
 }
 // Accepted input/output can wait for transient native work to release internal
@@ -52,10 +52,10 @@ static void pollAudio(){const char*error=nullptr;{std::lock_guard<std::mutex>loc
 static const char*speakerHandler(const char*m,JsonObjectConst a,JsonObject o){if(!strcmp(m,"start")){std::lock_guard<std::mutex>lock(audioMutex);if(audioWorkerActive&&audioRate!=(a["sample_rate_hz"]|16000u))return "capture_format_conflict";}
  auto e=playback.invoke(m,a,o);if(!e&&!strcmp(m,"start")){e=requestAudio(2,a["sample_rate_hz"]|16000u);if(e)playback.failed(e);}return e;
 }
-static const char*audioStatus(const char*m,JsonObjectConst a,JsonObject o){if(strcmp(m,"read"))return "unsupported_method";if(a.size())return "unknown_audio_argument";std::lock_guard<std::mutex>stateLock(audioMutex);o["running"]=audioWorkerActive.load();o["starting"]=audioPending;o["start_timeout_ms"]=policies.get<uint32_t>("/dev/audio","start_timeout_ms",3000);o["users"]=audioUsers.load();o["sample_rate_hz"]=audioRate;o["error"]=audioFailure;o["native_state"]=audioHardware.stage();o["worker_stack_bytes"]=AUDIO_WORKER_STACK_BYTES;o["worker_stack_free_bytes"]=audioStackFree.load();std::lock_guard<std::mutex>lock(audioLevelsMutex);o["frames"]=audioLevels.frames;auto list=o["inputs"].to<JsonArray>();for(unsigned c=0;c<3;++c){auto p=list.add<JsonObject>();p["role"]=c<2?"microphone":"playback_reference";p["peak"]=audioLevels.peaks[c];p["rms"]=audioLevels.frames?sqrt(audioLevels.squares[c]/audioLevels.frames):0;}return nullptr;}
+static const char*audioStatus(const char*m,JsonObjectConst a,JsonObject o){if(strcmp(m,"read"))return "unsupported_method";if(a.size())return "unknown_audio_argument";std::lock_guard<std::mutex>stateLock(audioMutex);o["running"]=audioWorkerActive.load();o["starting"]=audioPending;o["start_timeout_ms"]=policies.get<uint32_t>("/dev/audio","start_timeout_ms",3000);o["users"]=audioUsers.load();o["sample_rate_hz"]=audioRate;o["error"]=audioFailure;o["native_state"]=audioHardware.stage();o["worker_stack_bytes"]=AUDIO_WORKER_STACK_BYTES;o["worker_stack_free_bytes"]=audioStackFree.load();o["recording_worker_stack_bytes"]=8192;o["recording_worker_stack_free_bytes"]=recordingStackFree.load();std::lock_guard<std::mutex>lock(audioLevelsMutex);o["frames"]=audioLevels.frames;auto list=o["inputs"].to<JsonArray>();for(unsigned c=0;c<3;++c){auto p=list.add<JsonObject>();p["role"]=c<2?"microphone":"playback_reference";p["peak"]=audioLevels.peaks[c];p["rms"]=audioLevels.frames?sqrt(audioLevels.squares[c]/audioLevels.frames):0;}return nullptr;}
 static void registerAudio(){
  microphone.storage(microphoneStorage);
- core.add({"/dev/mic","read,describe,start,stop,read_chunk,ack,release,list","compressed microphone capture",[](const char*m,JsonObjectConst a,JsonObject o){return microphone.invoke(m,a,o);},[](JsonObject o){microphone.describe(o);},"read,describe,read_chunk,list"});
+ core.add({"/dev/mic","read,describe,start,stop,read_chunk,read_batch,ack,release,list","compressed microphone capture",[](const char*m,JsonObjectConst a,JsonObject o){return microphone.invoke(m,a,o);},[](JsonObject o){microphone.describe(o);},audio::CompressedCapture::ReadMethods});
  core.add({"/dev/speaker","read,describe,start,write,finish,stop,pause,resume,volume","codec speaker output",speakerHandler,[](JsonObject o){playback.describe(o);},"read,describe"});
  core.add({"/dev/speech","read,describe,start,stop","speech detection",[](const char*m,JsonObjectConst a,JsonObject o){return speechService.invoke(m,a,o);},[](JsonObject o){speechService.describe(o);},"read,describe"});
  core.add({"/dev/audio","read","shared-clock audio status",audioStatus,nullptr,"read"});

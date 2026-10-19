@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include "NativeOperation.h"
 #include "LittleFsProvider.h"
 #include <esp_littlefs.h>
@@ -26,6 +27,14 @@ public:
    copy(method_,sizeof method_,m);wasMounted_=mounted_;ready_=mounted_;if(strcmp(m,"space"))mounted_=false;provider_.background(true);auto error=operation_.start(m,o);if(error){mounted_=wasMounted_;provider_.background(false);}return error;
   }
   if(!strcmp(m,"cancel"))return operation_.cancel(a);if(strcmp(m,"read"))return "unsupported_method";provider_.describe(o);operation_.read(o["operation"].to<JsonObject>());return nullptr;
+ }
+ // The system storage facade selects a volume; the native endpoint retains
+ // its direct argument and completion contract.
+ const char*invokeSelected(const char*m,JsonObjectConst a,JsonObject o){
+  if(auto e=argumentFields(a,!strcmp(m,"cancel")?"provider,operation_id":"provider"))return e;
+  if(a.containsKey("provider")&&a["provider"]!=provider_.id)return "storage_provider_not_found";
+  JsonDocument request;if(a.containsKey("operation_id"))request["operation_id"]=a["operation_id"];
+  return invoke(m,request.as<JsonObjectConst>(),o);
  }
  void describe(JsonObject o)const{for(auto m:{"mount","format","space"})NativeOperation::describe(o,m,"/dev/flash");o["format_scope"]="explicit_system_request";}
 };

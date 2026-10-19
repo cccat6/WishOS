@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -25,10 +25,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#F6F7F2",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +41,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,7 +69,7 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -85,12 +86,12 @@
             "x": 12,
             "y": 56,
             "width": 296,
-            "height": 78
+            "height": 84
           },
           "style": {
-            "fontSize": 17,
-            "lineHeight": 22,
-            "textColor": "#262822"
+            "fontSize": 18,
+            "lineHeight": 23,
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "",
@@ -103,14 +104,14 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 140,
+            "y": 148,
             "width": 296,
             "height": 42
           },
           "style": {
-            "fontSize": 13,
-            "lineHeight": 18,
-            "textColor": "#262822"
+            "fontSize": 12,
+            "lineHeight": 17,
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "",
@@ -137,9 +138,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -151,7 +152,7 @@
               "style": {
                 "fontSize": 14,
                 "lineHeight": 19,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "Previous",
@@ -182,9 +183,9 @@
                 "width": 96
               },
               "style": {
-                "fontSize": 13,
-                "lineHeight": 18,
-                "textColor": "#262822",
+                "fontSize": 12,
+                "lineHeight": 17,
+                "textColor": "#17241E",
                 "textAlign": "center"
               },
               "labelProps": {
@@ -214,9 +215,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -228,7 +229,7 @@
               "style": {
                 "fontSize": 14,
                 "lineHeight": 19,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "Next",

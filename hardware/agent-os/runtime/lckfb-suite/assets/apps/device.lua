@@ -7,5 +7,5 @@ function on_start()
  end)
  notes.on('/dev/imu','failed',function(e) pending=false;C.update({status=e.data.error or ''}) end)
  C.timer(250,C.config.imu_interval_ms,function() if not pending then pending=C.call('/dev/imu','measure')~=nil end end)
- C.button(function() C.launch('voice',{record=true}) end)
+
 end

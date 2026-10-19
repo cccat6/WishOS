@@ -1,0 +1,58 @@
+{
+  "format": "wishos-app/1",
+  "id": "launcher",
+  "title": "WishOS",
+  "entry": "launcher.lua",
+  "source": {
+    "repository": "https://github.com/cccat6/WishOS",
+    "path": "hardware/agent-os/runtime/xingzhi-cube-suite"
+  },
+  "help": {
+    "controls": "单击切换选项，双击确认，三击返回桌面。长按用户键说话，松开发送。"
+  },
+  "memory_bytes": 131072,
+  "instruction_budget": 200000,
+  "system_call_budget": 64,
+  "requires": [
+    {
+      "path": "/sys/ui",
+      "methods": [
+        "open",
+        "update"
+      ]
+    },
+    {
+      "path": "/dev/buttons",
+      "methods": [
+        "read"
+      ]
+    },
+    {
+      "path": "/dev/wifi",
+      "methods": [
+        "read",
+        "configure"
+      ]
+    },
+    {
+      "path": "/sys/apps",
+      "methods": [
+        "list",
+        "launch"
+      ]
+    },
+    {
+      "path": "/sys/timers",
+      "methods": [
+        "write"
+      ]
+    },
+    {
+      "path": "/fs",
+      "methods": [
+        "read",
+        "write"
+      ]
+    }
+  ]
+}

@@ -19,7 +19,7 @@ class ProxyClient:public NetworkClient {
 public:
  ProxyClient()=default;explicit ProxyClient(ProxySettings c):config_(c),snapshot_(true){}
  int connect(const char*host,uint16_t port)override{return connect(host,port,10000);}
- int connect(const char*host,uint16_t port,int32_t timeout)override{auto c=snapshot_?config_:networkProxy.snapshot();IPAddress address;if(!Network.hostByName(c.applies(host)?c.host:host,address))return 0;if(!c.applies(host))return NetworkClient::connect(address,port,timeout);if(!NetworkClient::connect(address,c.port,timeout))return 0;if(establishProxy(*this,c,host,port))return 1;stop();return 0;}
+ int connect(const char*host,uint16_t port,int32_t timeout)override{auto c=snapshot_?config_:networkProxy.snapshot();IPAddress address;if(Network.hostByName(c.applies(host)?c.host:host,address)!=1)return 0;if(!c.applies(host))return NetworkClient::connect(address,port,timeout);if(!NetworkClient::connect(address,c.port,timeout))return 0;if(establishProxy(*this,c,host,port))return 1;stop();return 0;}
  int connect(IPAddress ip,uint16_t port)override{return connect(ip.toString().c_str(),port);}
  int connect(IPAddress ip,uint16_t port,int32_t timeout)override{return connect(ip.toString().c_str(),port,timeout);}
 };
@@ -29,7 +29,7 @@ public:
  void usePlatformRoots(){attach_ssl_certificate_bundle(sslclient.get(),true);_use_ca_bundle=true;}
  ProxySecureClient()=default;explicit ProxySecureClient(ProxySettings c):config_(c),snapshot_(true){}
  int connect(const char*host,uint16_t port)override{return connect(host,port,10000);}
- int connect(const char*host,uint16_t port,int32_t timeout)override{auto c=snapshot_?config_:networkProxy.snapshot();_stillinPlainStart=false;if(!c.applies(host)){IPAddress address;if(!Network.hostByName(host,address))return 0;_timeout=timeout;return NetworkClientSecure::connect(address,port,host,_CA_cert,_cert,_private_key);}IPAddress proxy;if(!Network.hostByName(c.host,proxy))return 0;_timeout=timeout;setPlainStart();
+ int connect(const char*host,uint16_t port,int32_t timeout)override{auto c=snapshot_?config_:networkProxy.snapshot();_stillinPlainStart=false;if(!c.applies(host)){IPAddress address;if(Network.hostByName(host,address)!=1)return 0;_timeout=timeout;return NetworkClientSecure::connect(address,port,host,_CA_cert,_cert,_private_key);}IPAddress proxy;if(Network.hostByName(c.host,proxy)!=1)return 0;_timeout=timeout;setPlainStart();
  // TCP connects to the proxy, but CA verification and SNI use the origin host.
  if(!NetworkClientSecure::connect(proxy,c.port,host,_CA_cert,_cert,_private_key))return 0;
  // The SDK plain-start connected()/available() path performs a blocking

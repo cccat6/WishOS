@@ -15,7 +15,7 @@ inline esp32_nfs::Status nfsError(const char*e){
  if(!strcmp(e,"memory_low")||!strcmp(e,"file_lease_capacity"))return Jukebox;
  if(!strcmp(e,"quota_exceeded")||!strcmp(e,"storage_quota_exceeded")||!strcmp(e,"no_space")||!strcmp(e,"entry_capacity"))return NoSpace;
  if(!strcmp(e,"unsupported_operation")||!strcmp(e,"directory_rename_not_supported"))return NotSupported;
- if(!strcmp(e,"file_in_use")||!strcmp(e,"bus_busy")||!strcmp(e,"spi_busy")||!strcmp(e,"resource_busy"))return Jukebox;
+ if(!strcmp(e,"file_in_use")||!strcmp(e,"bus_busy")||!strcmp(e,"spi_busy")||!strcmp(e,"resource_busy")||!strcmp(e,"storage_space_refresh_required"))return Jukebox;
  if(!strcmp(e,"provider_unavailable"))return Stale;
  return Io;
 }
@@ -48,7 +48,7 @@ public:
  esp32_nfs::Status validateName(const char*name)const override{return esp32_nfs::name_detail::component(name,provider_.caseInsensitive());}
  esp32_nfs::Status resolve(const char*input,char*out,size_t cap,esp32_nfs::Attr&a)override{
    using namespace esp32_nfs;if(auto status=name_detail::path(input,provider_.caseInsensitive()))return status;
-   if(auto e=guard(input,false))return nfsError(e);Vfs::Access access(vfs_,false);if(auto e=leasePath(access,input))return nfsError(e);char wanted[PathSize];if(strlen(input)>=sizeof wanted)return NameTooLong;strcpy(wanted,input);
+   if(auto e=guard(input,false))return nfsError(e);Vfs::Access access(vfs_,false,false);if(auto e=leasePath(access,input))return nfsError(e);char wanted[PathSize];if(strlen(input)>=sizeof wanted)return NameTooLong;strcpy(wanted,input);
    char canonical[PathSize]="/";
    if(provider_.caseInsensitive()){
      FileInfo info;auto error=provider_.canonicalPath(input,canonical,sizeof canonical,info);
@@ -68,7 +68,7 @@ public:
  }
  uint64_t maxFileSize()const override{return provider_.maxFileSize();}
  esp32_nfs::Status stat(const char*p,esp32_nfs::Attr&a)override{
-   if(auto e=guard(p,false))return nfsError(e);Vfs::Access access(vfs_,false);if(auto e=leasePath(access,p))return nfsError(e);FileInfo i;if(auto e=provider_.stat(p,i))return nfsError(e);
+   if(auto e=guard(p,false))return nfsError(e);Vfs::Access access(vfs_,false,false);if(auto e=leasePath(access,p))return nfsError(e);FileInfo i;if(auto e=provider_.stat(p,i))return nfsError(e);
    a={};a.type=i.directory?2:1;a.mode=i.directory?0777:0666;if(!writable())a.mode&=~0222;a.size=a.used=i.size;return esp32_nfs::Ok;
  }
  esp32_nfs::Status read(const char*p,uint64_t off,uint8_t*b,size_t&n)override{
@@ -108,7 +108,7 @@ public:
    if(strcmp(e,"not_found"))return nfsError(e);return changed(provider_.rename(a,b));
  }
  esp32_nfs::Status entry(const char*p,uint64_t index,char*name,size_t cap,bool&eof)override{
-   if(index>UINT32_MAX)return esp32_nfs::BadCookie;if(auto e=guard(p,false))return nfsError(e);Vfs::Access access(vfs_,false);if(auto e=leasePath(access,p))return nfsError(e);
+   if(index>UINT32_MAX)return esp32_nfs::BadCookie;if(auto e=guard(p,false))return nfsError(e);Vfs::Access access(vfs_,false,false);if(auto e=leasePath(access,p))return nfsError(e);
    JsonDocument d;if(auto e=provider_.list(p,uint32_t(index),1,d.to<JsonObject>()))return nfsError(e);
    auto entries=d["entries"].as<JsonArrayConst>();eof=!entries.size();if(eof)return esp32_nfs::Ok;
    const char*s=entries[0]["name"]|"";if(!*s||strlen(s)>=cap)return esp32_nfs::NameTooLong;

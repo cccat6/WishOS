@@ -1,6 +1,7 @@
 #pragma once
 #include "ResourceBudget.h"
 #include <new>
+#include <atomic>
 namespace notesos {
 // Result observations have their own lifetime. The lossy event journal only
 // announces them. Native producer tasks may record here without touching Core.

@@ -56,10 +56,16 @@ int main(){
  // error and releases buffers even before the output backend opened.
  owner=core.acquireOwner();a.clear();assert(!core.request("/dev/speaker","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));observation=o["completion_id"];speaker.failed("fixture_controller_failure");result.clear();assert(!core.completions().read(observation,owner,result.to<JsonObject>()));assert(result["event"]=="failed"&&result["data"]["error"]=="fixture_controller_failure");assert(!core.completions().release(observation,owner));assert(!speaker.active()&&core.resources().promised()==0);
  CompressedCapture capture(core,"fixture",beginCapture,release,"/dev/mic","MMR");recorder=&capture;capture.sink([](const char*,const RecordingBuffer<>::Chunk&chunk){recorded.push_back(chunk);});
- core.add({"/dev/mic","describe,start,stop,read,read_chunk,release,list","",[](const char*m,JsonObjectConst a,JsonObject o){return recorder->invoke(m,a,o);}});
+ core.add({"/dev/mic","describe,start,stop,read,read_chunk,release,list","",[](const char*m,JsonObjectConst a,JsonObject o){return recorder->invoke(m,a,o);},nullptr,CompressedCapture::ReadMethods});
+ assert(core.readOnly("/dev/mic","read")&&!core.readOnly("/dev/mic","read_chunk"));
  a.clear();assert(!capture.invoke("describe",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["chunk_read"]["acknowledgement_cursor"]=="after_sequence"&&o["chunk_read"]["maximum_chunks"]==16);a["channel"]=1;a["buffer_blocks"]=1;assert(!core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));std::string recording=o["recording_id"].as<const char*>();int16_t stereo[480];for(unsigned i=0;i<160;++i){stereo[i*3]=0;stereo[i*3+1]=1000;stereo[i*3+2]=-1000;}
  capture.process({stereo,160,16000,"MMR"});capture.process({stereo,160,16000,"MMR"});assert(recorded.size()==2);for(auto&block:recorded){int16_t decoded[160];size_t count=0;assert(decodeVoiceBlock(block.data,block.bytes,decoded,160,count)&&count==160&&decoded[159]>900);}
  a.clear();assert(!core.invoke("/dev/mic","read",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));assert(o["dropped_samples"]=="160"&&o["buffered_chunks"]==1);
+ {ScriptHost candidate(core,vfs);JsonDocument input,result;input["source"]=R"lua(function on_prepare() notes.call('/dev/mic','read_chunk',{after_sequence=2}) end)lua";
+  assert(!strcmp(candidate.invoke("load",input.as<JsonObjectConst>(),result.to<JsonObject>()),"script_load_failed"));
+  assert(strstr(result["detail"]|"","Preparation requires a driver-declared read method"));
+  assert(!core.invoke("/dev/mic","read",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner)&&o["buffered_chunks"]==1);
+ }
  core.releaseOwner(owner);capture.process({stereo,160,16000,"MMR"});assert(!capture.active()&&captures==0);assert(!core.invoke("/dev/mic","list",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["recordings"].size()==0);
  // Delivery retention is independent from microphone ownership. Returning
  // Home stops capture, but a system receiver can drain the compressed tail;
@@ -69,6 +75,15 @@ int main(){
  // emit no started event; cancelling before a first frame releases ownership
  // without requiring the native input to ever deliver a frame.
  {auto inputOwner=core.acquireOwner();a.clear();auto before=core.sequence();assert(!core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),inputOwner));capture.process({stereo,0,16000,"MMR"});assert(core.sequence()==before);a.clear();assert(!core.invoke("/dev/mic","stop",a.as<JsonObjectConst>(),o.to<JsonObject>(),inputOwner));capture.poll();assert(!capture.active()&&captures==0);core.releaseOwner(inputOwner);}
+ // A different native driver may return more than one codec block at once.
+ // Every input frame is encoded, and a duration limit clips the final block.
+ {owner=core.acquireOwner();a.clear();a["buffer_blocks"]=8;a["channel"]=1;a["max_ms"]=15;recorded.clear();assert(!core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner));
+  int16_t larger[1200];for(unsigned i=0;i<400;++i){larger[3*i]=0;larger[3*i+1]=i<160?1000:-1000;larger[3*i+2]=0;}
+  capture.process({larger,400,16000,"MMR"});assert(!capture.active()&&captures==0);assert(recorded.size()==2&&recorded[0].samples==160&&recorded[1].samples==80&&recorded[1].sampleStart==160);
+  int16_t decoded[160];size_t got=0;assert(decodeVoiceBlock(recorded[1].data,recorded[1].bytes,decoded,160,got)&&got==80&&decoded[79]<-900);core.releaseOwner(owner);
+  a.clear();a["buffer_blocks"]=8;assert(!core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>()));recorded.clear();capture.process({larger,400,16000,"MMR"});assert(recorded.size()==3&&recorded[2].samples==80&&recorded[2].sampleStart==320);
+  assert(!core.invoke("/dev/mic","stop",JsonObjectConst(),o.to<JsonObject>()));capture.process({larger,1,16000,"MMR"});a.clear();a["recording_id"]=capture.id();assert(!core.invoke("/dev/mic","release",a.as<JsonObjectConst>(),o.to<JsonObject>()));a.clear();
+ }
  owner=core.acquireOwner();assert(!acquire(48000));a["sample_rate"]=16000;assert(!strcmp(core.invoke("/dev/mic","start",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner),"capture_format_conflict"));assert(!capture.active()&&captures==1);release();a.clear();assert(!core.invoke("/dev/mic","list",a.as<JsonObjectConst>(),o.to<JsonObject>()));assert(o["recordings"].size()==0);core.releaseOwner(owner);recorder=nullptr;
  std::cout<<"Audio shared input, detector ownership, runtime-defined wake actions, streamed playback, drain completion, failure rollback, duplicate blocks, backpressure, pause and owner cleanup passed\n";
 }

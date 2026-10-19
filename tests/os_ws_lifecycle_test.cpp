@@ -58,7 +58,7 @@ int main(){JsonDocument a,out,empty,send,completion;a["host"]="test";a["headers"
  // The call returns while the native connect remains blocked. Closing keeps the
  // state alive until that task has left the transport; another app cannot steal it.
  holdTransport=true;entered=false;assert(!core.request("/net/ws","connect",a.as<JsonObjectConst>(),out.to<JsonObject>(),owner));uint32_t receipt=out["completion_id"];
- while(!entered.load())std::this_thread::yield();assert(!strcmp(core.invoke("/net/ws","close",empty.to<JsonObject>(),out.to<JsonObject>(),other),"ws_owned_by_other"));
+ while(!entered.load())std::this_thread::yield();assert(wsSession&&wsSession->incomingStorage&&wsSession->outgoingStorage&&!wsSession->incoming->dynamic&&!wsSession->outgoing->dynamic);assert(core.resources().allocationSize(wsSession->incomingStorage)==WsIncoming*sizeof(WsMessage));assert(!strcmp(core.invoke("/net/ws","close",empty.to<JsonObject>(),out.to<JsonObject>(),other),"ws_owned_by_other"));
  assert(!core.invoke("/net/ws","close",empty.as<JsonObjectConst>(),out.to<JsonObject>(),owner));pollWebSocket();assert(wsSession&&!wsSession->done);
  holdTransport=false;join();assert(!wsSession&&queues==0);assert(!core.completions().read(receipt,owner,completion.to<JsonObject>()));assert(completion["ready"]==true);assert(!core.completions().release(receipt,owner));assert(core.resources().promised()==0);
  // Queue payloads survive the call, get an individual terminal receipt and can
@@ -75,5 +75,8 @@ int main(){JsonDocument a,out,empty,send,completion;a["host"]="test";a["headers"
  // A complete fragmented control response fits in the native sender window
  // and drains without another system-loop poll (which may be rendering UI).
  a.remove("port");holdTransport=true;entered=false;assert(!controlSocket::wsHandler("connect",a.as<JsonObjectConst>(),out.to<JsonObject>()));while(!entered.load())std::this_thread::yield();for(unsigned i=0;i<controlSocket::WsOutgoing;++i){controlSocket::WsMessage packet;packet.binary=true;packet.size=1;packet.data[0]=i;packet.generation=1;assert(xQueueSend(controlSocket::wsSession->outgoing,&packet,0)==pdTRUE);}holdTransport=false;deadline=millis()+2000;while(uxQueueMessagesWaiting(controlSocket::wsSession->incoming)<controlSocket::WsOutgoing){assert(millis()<deadline);std::this_thread::yield();}for(unsigned i=0;i<controlSocket::WsOutgoing;++i){controlSocket::WsMessage packet;assert(xQueueReceive(controlSocket::wsSession->incoming,&packet,0)==pdTRUE&&packet.data[0]==i);}controlSocket::stopWebSocket();join();controlSocket::pollWebSocket();assert(!controlSocket::wsSession&&queues==0&&core.resources().promised()==0);
+ // A valid transport with no room for either queue payload rejects before
+ // launch and releases the handshake reservation and partially built session.
+ JsonDocument policy;policy["memory_limit_bytes"]=28000u;assert(!core.resources().configure(policy.as<JsonObjectConst>()));assert(!strcmp(wsHandler("connect",a.as<JsonObjectConst>(),out.to<JsonObject>()),"memory_low"));assert(!wsSession&&queues==0&&core.resources().promised()==0);policy["memory_limit_bytes"]=nullptr;assert(!core.resources().configure(policy.as<JsonObjectConst>()));
  std::cout<<"WebSocket blocked connect, retained headers, queued sends, result correlation, receive, deferred close, owner isolation and failed launch passed\n";
 }

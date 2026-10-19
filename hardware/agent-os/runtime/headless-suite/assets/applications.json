@@ -9,7 +9,8 @@
       "source": {
         "repository": "https://github.com/cccat6/WishOS",
         "path": "hardware/agent-os/runtime/headless-suite"
-      }
+      },
+      "fallback_manifest": "/system/recovery/launcher.json"
     }
   ]
 }

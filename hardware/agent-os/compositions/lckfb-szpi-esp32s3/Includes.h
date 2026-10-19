@@ -8,6 +8,7 @@
 #include "Policy.h"
 #include "PackedFont.h"
 #include "UiMemory.h"
+#include "UiSettings.h"
 #include "display/NativeText.h"
 #include "ButtonGestures.h"
 #include <lvgl.h>
@@ -32,3 +33,12 @@
 #include <BLESecurity.h>
 
 #include <WishNimbleMemory.h>
+
+#include "drivers/esp-lcd-spi/DmaCompletion.h"
+#include "drivers/esp-lcd-spi/NativeExecutor.h"
+#include "drivers/esp-lcd-spi/RasterFrame.h"
+
+#include "drivers/esp-ledc-backlight/EspLedcBacklight.h"
+#define WISHOS_LCD_BACKLIGHT_RESOURCE "/dev/backlight"
+
+#define WISHOS_NATIVE_EARLY_INIT() backlight.holdOff()

@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -25,10 +25,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +41,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,7 +69,7 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -97,9 +98,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -109,9 +110,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 17,
-                "lineHeight": 22,
-                "textColor": "#262822"
+                "fontSize": 18,
+                "lineHeight": 23,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "开启配网热点",
@@ -139,9 +140,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -151,9 +152,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 17,
-                "lineHeight": 22,
-                "textColor": "#262822"
+                "fontSize": 18,
+                "lineHeight": 23,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "语言 / Language",
@@ -181,9 +182,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -193,9 +194,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 17,
-                "lineHeight": 22,
-                "textColor": "#262822"
+                "fontSize": 18,
+                "lineHeight": 23,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "文件共享",
@@ -216,7 +217,7 @@
           "style": {
             "fontSize": 12,
             "lineHeight": 17,
-            "textColor": "#60645B"
+            "textColor": "#424B45"
           },
           "labelProps": {
             "text": "",

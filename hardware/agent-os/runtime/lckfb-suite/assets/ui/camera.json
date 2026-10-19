@@ -4,211 +4,249 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
         {
-          "type": "button",
-          "id": "home",
-          "placement": {
-            "x": 8,
-            "y": 4,
-            "width": 44,
-            "height": 44
-          },
-          "layout": {
-            "type": "flex",
-            "flexFlow": "row",
-            "mainAlign": "center",
-            "crossAlign": "center",
-            "gap": 10
-          },
-          "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
-            "padding": 0
-          },
-          "children": [
-            {
-              "type": "image",
-              "placement": {
-                "width": 28,
-                "height": 28
-              },
-              "imageProps": {
-                "src": "../icons/back.png",
-                "fit": "contain"
-              }
-            }
-          ]
-        },
-        {
-          "type": "container",
-          "placement": {
-            "x": 64,
-            "y": 4,
-            "width": 248,
-            "height": 28
-          },
-          "style": {
-            "padding": 0,
-            "borderWidth": 0,
-            "bgOpacity": 0
-          },
-          "children": [
-            {
-              "type": "label",
-              "placement": {
-                "align": "center",
-                "width": 248
-              },
-              "style": {
-                "fontSize": 22,
-                "lineHeight": 27,
-                "textColor": "#262822",
-                "textAlign": "left"
-              },
-              "labelProps": {
-                "text": "相机",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              }
-            }
-          ]
-        },
-        {
-          "type": "container",
-          "placement": {
-            "x": 64,
-            "y": 32,
-            "width": 248,
-            "height": 18
-          },
-          "style": {
-            "padding": 0,
-            "borderWidth": 0,
-            "bgOpacity": 0
-          },
-          "children": [
-            {
-              "type": "label",
-              "placement": {
-                "align": "center",
-                "width": 248
-              },
-              "style": {
-                "fontSize": 11,
-                "lineHeight": 16,
-                "textColor": "#60645B",
-                "textAlign": "left"
-              },
-              "labelProps": {
-                "text": "点击拍照",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              },
-              "id": "status"
-            }
-          ]
-        },
-        {
           "type": "image",
           "placement": {
-            "x": 8,
-            "y": 54,
-            "width": 304,
-            "height": 132
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 240
           },
           "imageProps": {
             "src": "../icons/camera.png",
             "fit": "contain"
           },
-          "id": "frame"
+          "id": "frame",
+          "style": {}
         },
         {
-          "type": "button",
-          "id": "capture",
+          "type": "container",
           "placement": {
-            "x": 8,
-            "y": 192,
-            "width": 148,
-            "height": 44
-          },
-          "layout": {
-            "type": "flex",
-            "flexFlow": "row",
-            "mainAlign": "center",
-            "crossAlign": "center",
-            "gap": 10
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 52
           },
           "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
-            "padding": 0
+            "padding": 0,
+            "borderWidth": 0,
+            "bgColor": "#F6F7F2",
+            "bgOpacity": 235
           },
           "children": [
             {
-              "type": "label",
+              "type": "button",
+              "id": "home",
               "placement": {
-                "width": "content"
+                "x": 8,
+                "y": 4,
+                "width": 44,
+                "height": 44
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "row",
+                "mainAlign": "center",
+                "crossAlign": "center",
+                "gap": 10
               },
               "style": {
-                "fontSize": 17,
-                "lineHeight": 22,
-                "textColor": "#262822"
+                "bgColor": "#FFFFFF",
+                "borderWidth": 0,
+                "borderColor": "#BEC8BB",
+                "radius": 12,
+                "padding": 0
               },
-              "labelProps": {
-                "text": "拍照",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              }
+              "children": [
+                {
+                  "type": "image",
+                  "placement": {
+                    "width": 28,
+                    "height": 28
+                  },
+                  "imageProps": {
+                    "src": "../icons/back.png",
+                    "fit": "contain"
+                  },
+                  "style": {}
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 64,
+                "y": 4,
+                "width": 248,
+                "height": 28
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 248
+                  },
+                  "style": {
+                    "fontSize": 22,
+                    "lineHeight": 27,
+                    "textColor": "#17241E",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "相机",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "container",
+              "placement": {
+                "x": 64,
+                "y": 32,
+                "width": 248,
+                "height": 18
+              },
+              "style": {
+                "padding": 0,
+                "borderWidth": 0,
+                "bgOpacity": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "align": "center",
+                    "width": 248
+                  },
+                  "style": {
+                    "fontSize": 12,
+                    "lineHeight": 16,
+                    "textColor": "#424B45",
+                    "textAlign": "left"
+                  },
+                  "labelProps": {
+                    "text": "点击拍照",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "status"
+                }
+              ]
             }
           ]
         },
         {
-          "type": "button",
-          "id": "save",
+          "type": "container",
           "placement": {
-            "x": 164,
-            "y": 192,
-            "width": 148,
-            "height": 44
-          },
-          "layout": {
-            "type": "flex",
-            "flexFlow": "row",
-            "mainAlign": "center",
-            "crossAlign": "center",
-            "gap": 10
+            "x": 0,
+            "y": 188,
+            "width": 320,
+            "height": 52
           },
           "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
-            "padding": 0
+            "padding": 0,
+            "borderWidth": 0,
+            "bgColor": "#F6F7F2",
+            "bgOpacity": 235
           },
           "children": [
             {
-              "type": "label",
+              "type": "button",
+              "id": "capture",
               "placement": {
-                "width": "content"
+                "x": 8,
+                "y": 4,
+                "width": 148,
+                "height": 44
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "row",
+                "mainAlign": "center",
+                "crossAlign": "center",
+                "gap": 10
               },
               "style": {
-                "fontSize": 16,
-                "lineHeight": 21,
-                "textColor": "#262822"
+                "bgColor": "#FFFFFF",
+                "borderWidth": 0,
+                "borderColor": "#BEC8BB",
+                "radius": 12,
+                "padding": 0
               },
-              "labelProps": {
-                "text": "保存到 SD",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              }
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "width": "content"
+                  },
+                  "style": {
+                    "fontSize": 18,
+                    "lineHeight": 23,
+                    "textColor": "#17241E"
+                  },
+                  "labelProps": {
+                    "text": "拍照",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "capture_label"
+                }
+              ]
+            },
+            {
+              "type": "button",
+              "id": "save",
+              "placement": {
+                "x": 164,
+                "y": 4,
+                "width": 148,
+                "height": 44
+              },
+              "layout": {
+                "type": "flex",
+                "flexFlow": "row",
+                "mainAlign": "center",
+                "crossAlign": "center",
+                "gap": 10
+              },
+              "style": {
+                "bgColor": "#FFFFFF",
+                "borderWidth": 0,
+                "borderColor": "#BEC8BB",
+                "radius": 12,
+                "padding": 0
+              },
+              "children": [
+                {
+                  "type": "label",
+                  "placement": {
+                    "width": "content"
+                  },
+                  "style": {
+                    "fontSize": 14,
+                    "lineHeight": 19,
+                    "textColor": "#17241E"
+                  },
+                  "labelProps": {
+                    "text": "保存到 SD",
+                    "longMode": "ellipsis",
+                    "metrics": "ink"
+                  },
+                  "id": "save_label"
+                }
+              ]
             }
           ]
         }

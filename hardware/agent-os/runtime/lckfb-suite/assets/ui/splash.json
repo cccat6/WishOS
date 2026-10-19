@@ -1,0 +1,47 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F6F7F2",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "image",
+          "placement": {
+            "x": 80,
+            "y": 12,
+            "width": 160,
+            "height": 160
+          },
+          "imageProps": {
+            "src": "../brand/boot-logo.png",
+            "fit": "contain"
+          }
+        },
+        {
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 172,
+            "width": 296,
+            "height": 44
+          },
+          "style": {
+            "fontSize": 32,
+            "textColor": "#17241E",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "WishOS",
+            "metrics": "ink",
+            "longMode": "clip",
+            "verticalAlign": "center"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded Notes hardware ABI client over HTTP or USB CDC; no Flash cache."""
 from __future__ import annotations
-import argparse, hashlib, json, time, urllib.request, urllib.error, uuid, subprocess
+import argparse, hashlib, json, time, urllib.request, urllib.error, uuid, subprocess, posixpath
 from pathlib import Path
 
 class RpcError(RuntimeError):
@@ -17,13 +17,15 @@ class Client:
         if port:
             import serial
             self.serial=serial.Serial();self.serial.port=port;self.serial.baudrate=115200;self.serial.timeout=.1;self.serial.dtr=False;self.serial.rts=False;self.serial.open()
-    def call(self,path,method='read',args=None,request_id=None):
+    def call(self,path,method='read',args=None,request_id=None,*,timeout=None):
+        timeout=self.timeout if timeout is None else min(self.timeout,timeout)
+        if timeout<=0:raise TimeoutError('Request deadline expired')
         request={'id':request_id or uuid.uuid4().hex,'path':path,'method':method,'args':args or {}}
         if self.boot_id:request['expected_boot_id']=self.boot_id
         data=json.dumps(request,separators=(',',':'),ensure_ascii=False).encode()
         if len(data)>4096: raise ValueError('Request exceeds 4096 byte limit')
         if self.serial:
-            self.serial.write(data+b'\n'); deadline=time.monotonic()+self.timeout
+            self.serial.write(data+b'\n'); deadline=time.monotonic()+timeout
             while time.monotonic()<deadline:
                 self.serial_buffer.extend(self.serial.readline())
                 if len(self.serial_buffer)>32768: raise ValueError('CDC response exceeds limit')
@@ -36,12 +38,66 @@ class Client:
         else:
             r=urllib.request.Request(self.url+'/os/invoke',data=data,headers={'Content-Type':'application/json'})
             try:
-                with urllib.request.urlopen(r,timeout=self.timeout) as res: reply=json.load(res)
+                with urllib.request.urlopen(r,timeout=timeout) as res: reply=json.load(res)
             except urllib.error.HTTPError as e: reply=json.load(e)
         if self.boot_id and reply.get('boot_id')!=self.boot_id:raise RuntimeError('Device rebooted; create a new client before reusing handles')
         if reply.get('boot_id'):self.boot_id=reply['boot_id']
         if not reply.get('ok'): raise RpcError(reply.get('error',reply))
         return reply['result']
+    def _refresh_capacity(self, destination):
+        """Refresh the matching provider only after explicit pre-effect rejection."""
+        destination=posixpath.normpath('/'+destination.lstrip('/'))
+        deadline=time.monotonic()+self.timeout
+        def call(path,method,args,check_after=True):
+            remaining=deadline-time.monotonic()
+            if remaining<=0:raise TimeoutError('Storage capacity refresh timed out')
+            result=self.call(path,method,args,timeout=remaining)
+            if check_after and time.monotonic()>=deadline:raise TimeoutError('Storage capacity refresh timed out')
+            return result
+        cursor=0;provider=None
+        while True:
+            page=call('/fs','mounts',{'cursor':cursor,'limit':4})
+            for item in page['providers']:
+                mount=item['mount'].rstrip('/') or '/'
+                if (mount=='/' or destination==mount or destination.startswith(mount+'/')) and (provider is None or len(mount)>len(provider['mount'])):
+                    provider={**item,'mount':mount}
+            if not page.get('more'):break
+            next_cursor=page['next_cursor']
+            if type(next_cursor) is not int or next_cursor<=cursor:raise ValueError('Invalid storage provider cursor')
+            cursor=next_cursor
+        refresh=(provider or {}).get('capacity_refresh')
+        if not refresh:return False
+        path=refresh['path'];method=refresh['method'];arguments=refresh.get('args',{})
+        schema=call('/sys/capabilities','describe',{'path':path})
+        success=schema['async'][method]['success_events']
+        if not success:raise ValueError('Storage capacity refresh has no completion contract')
+        accepted=call('/sys/operations','request',{'path':path,'method':method,'args':arguments},False)
+        ident=accepted['completion_id'];failure=None
+        try:
+            while True:
+                result=call('/sys/operations','read',{'id':ident})
+                if result.get('ready'):
+                    if result.get('event') not in success or result.get('data',{}).get('ok') is False:
+                        raise RpcError(result.get('data',{}).get('error','storage_capacity_refresh_failed'))
+                    return True
+                time.sleep(min(.02,max(0,deadline-time.monotonic())))
+        except BaseException as error:
+            failure=error;raise
+        finally:
+            try:self.call('/sys/operations','release',{'id':ident})
+            except Exception as error:
+                if failure is None:raise
+                if hasattr(failure,'add_note'):failure.add_note('Storage completion cleanup failed: '+str(error))
+
+    def _write_file_chunk(self, arguments):
+        try:return self.call('/fs','write',arguments)
+        except RpcError as error:
+            if str(error)!='storage_space_refresh_required':raise
+            if not self._refresh_capacity(arguments['file']):raise
+        # Only the explicit refusal above is retryable. A missing reply from
+        # either write remains uncertain and is propagated without replay.
+        return self.call('/fs','write',arguments)
+
     def upload(self, source, destination):
         """Write with bounded chunks. Use a fresh version path to preserve displayed assets."""
         with Path(source).open('rb') as stream:
@@ -50,7 +106,7 @@ class Client:
             while True:
                 chunk=stream.read(1024)
                 if not chunk and offset:break
-                result=self.call('/fs','write',{'file':destination,'offset':str(offset),'hex':chunk.hex(),'truncate':offset==0})
+                result=self._write_file_chunk({'file':destination,'offset':str(offset),'hex':chunk.hex(),'truncate':offset==0})
                 if int(result.get('written',-1))!=len(chunk):raise IOError('Incomplete file write')
                 offset+=len(chunk)
                 if not chunk:break
@@ -62,6 +118,7 @@ class Client:
         if relative.is_absolute() or '..' in relative.parts:raise ValueError('Entry must be within package')
         if not (directory/relative).is_file():raise FileNotFoundError(entry)
         root=mount.rstrip('/')+'/app-'+uuid.uuid4().hex[:12]
+        self.last_publication_root=root
         self.call('/fs','mkdir',{'path':root})
         for local in sorted(directory.rglob('*')):
             if local.is_symlink():raise ValueError('Symlinks are not package assets')
@@ -127,6 +184,7 @@ class Client:
         if any(len(line)>1024 for line in inventory.splitlines()):raise ValueError('Package inventory line exceeds limit')
         prior=self.call('/sys/apps','read')
         root=mount.rstrip('/')+'/app-'+uuid.uuid4().hex[:12]
+        self.last_publication_root=root
         if any(len(root+'/'+name)>=256 for _,name,_,_ in assets):raise ValueError('Package path exceeds device path limit')
         if persist:
             providers=[];cursor=0
@@ -155,7 +213,7 @@ class Client:
         for filename,payload in [('files.jsonl',inventory),('package.json',header)]:
             for offset in range(0,len(payload),1024):
                 piece=payload[offset:offset+1024]
-                result=self.call('/fs','write',{'file':root+'/'+filename,'offset':str(offset),'hex':piece.hex(),'truncate':offset==0})
+                result=self._write_file_chunk({'file':root+'/'+filename,'offset':str(offset),'hex':piece.hex(),'truncate':offset==0})
                 if result.get('written')!=len(piece):raise IOError('Incomplete package manifest')
         descriptor_path=root+'/'+relative.as_posix();app_id=descriptor['id'];target=root+'/'+local_entry.relative_to(directory).as_posix()
         admitted=self.call('/sys/apps','validate',{'manifest':descriptor_path,'package':root+'/package.json'})
@@ -186,8 +244,8 @@ class Client:
             except (OSError,TimeoutError):pass
             deadline=time.monotonic()+getattr(self,'timeout',10)
             while True:
-                active=self.call('/sys/runtime','read');state=self.call('/sys/apps','read')
-                if active.get('loaded') and active.get('file')==target and not active.get('fault'):break
+                state=self.call('/sys/apps','read');active=self.call('/sys/runtime','read')
+                if state.get('current',app_id)==app_id and active.get('loaded') and active.get('file')==target and not active.get('fault'):break
                 if not state.get('pending') or time.monotonic()>=deadline:
                     raise RuntimeError('Application activation outcome changed or failed: '+str(state.get('last_error','')))
                 time.sleep(.05)

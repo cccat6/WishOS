@@ -1,0 +1,156 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "id": "recording",
+      "style": {
+        "bgColor": "#ffffff",
+        "padding": 16
+      },
+      "layout": {
+        "type": "flex",
+        "flexFlow": "column",
+        "gap": 4
+      },
+      "children": [
+        {
+          "type": "label",
+          "id": "brand",
+          "labelProps": {
+            "text": "WishOS",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        },
+        {
+          "type": "container",
+          "id": "header",
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 56,
+                "height": 56
+              },
+              "imageProps": {
+                "src": "mic.bin"
+              }
+            },
+            {
+              "type": "label",
+              "id": "title",
+              "labelProps": {
+                "text": "语音输入",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 32,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 48,
+                "width": 360
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "gap": 4
+          },
+          "placement": {
+            "height": 64
+          }
+        },
+        {
+          "type": "container",
+          "id": "content",
+          "children": [
+            {
+              "type": "label",
+              "id": "capture",
+              "labelProps": {
+                "text": "正在录音",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 32,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 48
+              }
+            },
+            {
+              "type": "label",
+              "id": "help",
+              "labelProps": {
+                "text": "松开 B 结束录音",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 24,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 64
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "column",
+            "gap": 4
+          }
+        },
+        {
+          "type": "label",
+          "id": "message",
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#aa322d"
+          },
+          "placement": {
+            "height": 44
+          }
+        },
+        {
+          "type": "label",
+          "id": "keys",
+          "labelProps": {
+            "text": "长按 A 返回   长按 B 语音",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        }
+      ]
+    }
+  ]
+}

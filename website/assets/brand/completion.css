@@ -1,0 +1,1 @@
+@keyframes wish-pop{0%{opacity:0;transform:scale(0) rotate(-45deg)}12%{opacity:1;transform:scale(.35) rotate(0deg)}45%{opacity:1;transform:scale(1.55) rotate(170deg)}75%{opacity:1;transform:scale(.82) rotate(320deg)}100%{opacity:1;transform:scale(1) rotate(360deg)}}

@@ -1,0 +1,231 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "id": "services",
+      "style": {
+        "bgColor": "#ffffff",
+        "padding": 16
+      },
+      "layout": {
+        "type": "flex",
+        "flexFlow": "column",
+        "gap": 4
+      },
+      "children": [
+        {
+          "type": "label",
+          "id": "brand",
+          "labelProps": {
+            "text": "WishOS",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        },
+        {
+          "type": "container",
+          "id": "header",
+          "children": [
+            {
+              "type": "image",
+              "placement": {
+                "width": 56,
+                "height": 56
+              },
+              "imageProps": {
+                "src": "services.bin"
+              }
+            },
+            {
+              "type": "label",
+              "id": "title",
+              "labelProps": {
+                "text": "连接服务",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 32,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 48,
+                "width": 360
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "gap": 4
+          },
+          "placement": {
+            "height": 64
+          }
+        },
+        {
+          "type": "container",
+          "id": "content",
+          "children": [
+            {
+              "type": "label",
+              "id": "captionconnection",
+              "labelProps": {
+                "text": "服务状态",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#687882"
+              },
+              "placement": {
+                "height": 24
+              }
+            },
+            {
+              "type": "label",
+              "id": "connection",
+              "labelProps": {
+                "text": "未配置",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 24,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 32
+              }
+            },
+            {
+              "type": "label",
+              "id": "captionendpoint",
+              "labelProps": {
+                "text": "连接地址",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#687882"
+              },
+              "placement": {
+                "height": 24
+              }
+            },
+            {
+              "type": "label",
+              "id": "endpoint",
+              "labelProps": {
+                "text": "未配置",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 24,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 32
+              }
+            },
+            {
+              "type": "label",
+              "id": "captionroute",
+              "labelProps": {
+                "text": "AI 服务",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#687882"
+              },
+              "placement": {
+                "height": 24
+              }
+            },
+            {
+              "type": "label",
+              "id": "route",
+              "labelProps": {
+                "text": "未配置",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 24,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 32
+              }
+            },
+            {
+              "type": "label",
+              "id": "help",
+              "labelProps": {
+                "text": "在设备网页中配置服务地址。\n保存地址不代表已经连接。",
+                "missingGlyph": "replace"
+              },
+              "style": {
+                "fontSize": 16,
+                "textColor": "#172e56"
+              },
+              "placement": {
+                "height": 48
+              }
+            }
+          ],
+          "style": {
+            "padding": 0,
+            "radius": 8,
+            "borderWidth": 0
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "column",
+            "gap": 4
+          }
+        },
+        {
+          "type": "label",
+          "id": "message",
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#aa322d"
+          },
+          "placement": {
+            "height": 44
+          }
+        },
+        {
+          "type": "label",
+          "id": "keys",
+          "labelProps": {
+            "text": "长按 A 返回   长按 B 语音",
+            "missingGlyph": "replace"
+          },
+          "style": {
+            "fontSize": 16,
+            "textColor": "#172e56"
+          },
+          "placement": {
+            "height": 24
+          }
+        }
+      ]
+    }
+  ]
+}

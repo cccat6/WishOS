@@ -1,6 +1,7 @@
 #pragma once
 #include "Vfs.h"
 #include "FileReadCache.h"
+#include "TrueTypeCoverage.h"
 #include <string.h>
 namespace notesos {
 // Indexed monochrome glyphs prepared on the host. This pixel-font alternative

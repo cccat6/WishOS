@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -25,10 +25,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#F6F7F2",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +41,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,7 +69,7 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -90,7 +91,7 @@
           "style": {
             "fontSize": 14,
             "lineHeight": 19,
-            "textColor": "#60645B"
+            "textColor": "#424B45"
           },
           "labelProps": {
             "text": "加速度 / g",
@@ -108,7 +109,7 @@
           "style": {
             "fontSize": 18,
             "lineHeight": 23,
-            "textColor": "#262822"
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "—",
@@ -127,7 +128,7 @@
           "style": {
             "fontSize": 14,
             "lineHeight": 19,
-            "textColor": "#60645B"
+            "textColor": "#424B45"
           },
           "labelProps": {
             "text": "角速度 / °/s",
@@ -145,7 +146,7 @@
           "style": {
             "fontSize": 18,
             "lineHeight": 23,
-            "textColor": "#262822"
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "—",
@@ -164,7 +165,7 @@
           "style": {
             "fontSize": 14,
             "lineHeight": 19,
-            "textColor": "#60645B"
+            "textColor": "#424B45"
           },
           "labelProps": {
             "text": "—",
@@ -181,9 +182,9 @@
             "height": 18
           },
           "style": {
-            "fontSize": 11,
+            "fontSize": 12,
             "lineHeight": 16,
-            "textColor": "#60645B"
+            "textColor": "#424B45"
           },
           "labelProps": {
             "text": "—",

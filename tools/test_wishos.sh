@@ -24,7 +24,7 @@ else
 fi
 NFS_LIB=$("$PYTHON" "$ROOT/tools/prepare_os_dependencies.py")
 SDFAT_LIB=$("$PYTHON" "$ROOT/tools/prepare_sdfat.py" "$LIBS/SdFat")
-"$PYTHON" "$ROOT/tools/prepare_board_package.py" --output "$ROOT/build/os-host/include" --full-runtime
+"$PYTHON" "$ROOT/tools/prepare_board_package.py" "$ROOT/tests/fixtures/device-template" --output "$ROOT/build/os-host/include" --full-runtime
 export CPLUS_INCLUDE_PATH="$ROOT/hardware/agent-os:$ROOT/firmware/WishOS/src:$ROOT/build/os-host/include:$NFS_LIB/src${SDK:+:$SDK/usr/include/c++/v1}${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
 mkdir -p build/previews
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_core_test.cpp -o build/os-core-test
@@ -36,11 +36,32 @@ build/os-envelope-limits-test
 build/os-http-ingress-test
 build/os-rpc-link-test
 build/os-interaction-test
-"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_e6_color_test.cpp -o build/os-e6-color-test
-build/os-e6-color-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_display_scheduler_test.cpp -o build/os-display-scheduler-test
 build/os-display-scheduler-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$ROOT/tests/lcd-stubs" -I"$ROOT/hardware/agent-os" tests/os_lcd_dma_test.cpp -o build/os-lcd-dma-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/hardware/agent-os" tests/os_lcd_raster_test.cpp -o build/os-lcd-raster-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$ROOT/tests/backlight-stubs" -I"$ROOT/hardware/agent-os" -I"$ROOT/firmware/WishOS/src" -I"$LIBS/ArduinoJson/src" tests/os_backlight_test.cpp -o build/os-backlight-test
+build/os-backlight-test
+build/os-lcd-raster-test
+build/os-lcd-dma-test
+# The native SPI owner and IRQ use an explicit common core on every target.
+for cores in 1 2; do
+  selected=$((cores-1))
+  "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -DconfigNUMBER_OF_CORES=$cores -DTEST_EXPECT_CORE=$selected -I"$ROOT/tests/lcd-stubs" -I"$ROOT/hardware/agent-os" tests/os_lcd_native_test.cpp -o build/os-lcd-native-test
+  build/os-lcd-native-test
+done
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -DconfigNUMBER_OF_CORES=2 -DWISHOS_LCD_NATIVE_CORE=0 -DTEST_EXPECT_CORE=0 -I"$ROOT/tests/lcd-stubs" -I"$ROOT/hardware/agent-os" tests/os_lcd_native_test.cpp -o build/os-lcd-native-test
+build/os-lcd-native-test
+for spec in '1:1' '2:2' '2:-1'; do
+  cores=${spec%:*}; selected=${spec#*:}
+  if "$CXX" $SYSROOT_FLAGS -std=c++17 -fsyntax-only -DconfigNUMBER_OF_CORES=$cores -DWISHOS_LCD_NATIVE_CORE=$selected -DTEST_EXPECT_CORE=$selected -I"$ROOT/tests/lcd-stubs" -I"$ROOT/hardware/agent-os" tests/os_lcd_native_test.cpp 2> build/os-lcd-native-rejection.log; then
+    echo "Invalid LCD native core was accepted: $spec"; exit 1
+  fi
+  grep -q 'LCD native core must select' build/os-lcd-native-rejection.log
+done
 "$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" tests/os_native_operation_test.cpp -o build/os-native-operation-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -pthread -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" tests/os_completion_header_test.cpp -o build/os-completion-header-test
+build/os-completion-header-test
 build/os-native-operation-test
 build/os-core-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$LIBS/ArduinoJson/src" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" tests/os_retention_test.cpp -o build/os-retention-test
@@ -79,6 +100,8 @@ build/os-nfs-test
 build/os-nfs-scaling-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_network_test.cpp -o build/os-network-test
 build/os-network-test
+"$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/tests/proxy-stubs" -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_proxy_resolution_test.cpp -o build/os-proxy-resolution-test
+build/os-proxy-resolution-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_http_lifecycle_test.cpp -o build/os-http-lifecycle-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_ws_lifecycle_test.cpp -o build/os-ws-lifecycle-test
 "$CXX" $SYSROOT_FLAGS -std=c++17 -fsanitize=address,undefined -I"$ROOT/firmware/WishOS/src" -I"$ROOT/hardware/agent-os" -I"$LIBS/ArduinoJson/src" tests/os_ble_lifecycle_test.cpp -o build/os-ble-lifecycle-test
@@ -103,18 +126,28 @@ cmake -S tests/os-ui -B build/os-ui -G Ninja -DCMAKE_C_COMPILER="${CXX%++}" -DCM
 cmake --build build/os-ui -j 4
 "$PYTHON" -m unittest discover -s tests -p 'test_os_client.py' -v
 build/os-ui/notes_ui_test
-build/os-ui/notes_suite_test
+build/os-ui/notes_font_check_test
+build/os-ui/notes_retained_binding_test
+build/os-ui/notes_image_cache_oom_test
+build/os-ui/notes_image_scale_test
 for surface in 128x64 320x240 239x321; do build/os-ui/notes_portable_ui_$surface; done
 build/os-ui/notes_lua_test
 build/os-ui/notes_callback_test
+build/os-ui/notes_reply_output_test
 build/os-ui/notes_audio_test
 build/os-ui/notes_recording_storage_test
 build/os-ui/notes_sensor_test
 build/os-ui/notes_lckfb_suite_test
+build/os-ui/notes_xingzhi_suite_test
 build/os-ui/notes_input_test
+build/os-ui/notes_navigation_profile_test
+build/os-ui/notes_navigation_input_test
+build/os-ui/notes_camera_startup_test
+build/os-ui/notes_camera_clock_sdk_test
 build/os-ui/notes_touch_stream_test
 build/os-ui/notes_actuator_test
 build/os-ui/notes_memory_test
+build/os-ui/notes_runtime_cache_test
 build/os-ui/notes_app_test
 build/os-ui/notes_applications_test
 build/os-ui/notes_packages_test

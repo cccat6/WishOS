@@ -1,5 +1,5 @@
-#include "../firmware/WishOS/src/PowerMonitor.h"
-#include "compositions/agentic-notes-e6/Defaults.h"
+#include "../hardware/agent-os/drivers/adc-power/PowerMonitor.h"
+#include "fixtures/composition/Defaults.h"
 #include <cassert>
 #include <cmath>
 #include <cctype>

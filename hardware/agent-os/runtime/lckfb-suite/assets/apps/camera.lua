@@ -1,46 +1,12 @@
-local C=notes.require('../suite/common.lua');local frame,file,saveTimer;local candidateOwned=false;local busy=false;local lastFrame;local garbage={};local partial;local savePreparing=false
+local C=notes.require('../suite/common.lua');local P=notes.require('../suite/camera-preview.lua');local saveTimer,partial;local savePreparing=false
 local function status(text) C.update({status=text}) end
-local function clear(id) if id then C.call('/dev/camera','release',{frame_id=id}) end end
-local function release_camera()
- clear(frame);frame=nil
- local state=C.call('/dev/camera','read')
- if state and state.ready and not state.operation_pending then
-  local stopped=notes.request('/dev/camera','stop',{},function(e) busy=false;if e.event~='operation_completed' then status(e.data.error or 'camera_stop_failed') end end)
-  if not stopped.ok then busy=false end
- else busy=false end
-end
-local function failed_capture(error)
- if candidateOwned and file and file~=lastFrame then C.call('/fs','remove',{file=file}) end
- candidateOwned=false;file=nil;release_camera();status(error)
-end
-local function capture_ready()
- if busy or saveTimer or savePreparing then return end;busy=true;file=nil;candidateOwned=false;status(C.t('正在拍照','Capturing'))
- local r=notes.request('/dev/camera','capture',{},function(e)
-  if e.event~='operation_completed' then failed_capture(e.data.error or 'camera_capture_failed');return end
-  local s=C.call('/dev/camera','read');if not s or not s.frame_id or s.frame_id==0 then failed_capture('camera_frame_missing');return end
-  frame=s.frame_id;file='/storage/ram/wishos-camera-'..frame..'.bin'
-  local w,h=s.width,s.height;local header=string.format('19120000%02x%02x%02x%02x%02x%02x0000',w%256,w//256,h%256,h//256,(w*2)%256,(w*2)//256)
-  local created,err=C.call('/fs','create',{file=file,temporary=true});if not created then failed_capture(err);return end;candidateOwned=true
-  local ready,err=C.call('/fs','write',{file=file,hex=header});if not ready then failed_capture(err);return end
-  local copied,err=C.call('/dev/camera','copy_frame',{frame_id=frame,file=file,offset='12',pixel_format='rgb565le'})
-  if not copied then failed_capture(err);return end
-  release_camera()
-  local r,e=C.update({frame=file,status=C.t('已拍摄 · 可保存到 SD 卡','Captured · Save to SD if desired')});if r then if lastFrame then garbage[#garbage+1]=lastFrame end;lastFrame=file else C.call('/fs','remove',{file=file});status(e) end
- end)
- if not r.ok then failed_capture(r.error) end
-end
-local function capture()
- if busy or saveTimer or savePreparing then return end
- local s,e=C.call('/dev/camera','read');if not s then status(e);return end
- if s.operation_pending then status(C.t('相机正在准备，请稍后再试','Camera is preparing; try again shortly'));return end
- if s.ready then capture_ready();return end
- busy=true;status(C.t('正在准备相机','Preparing camera'))
- local configured,e=C.call('/dev/camera','configure',{frame_size='qvga'});if not configured then busy=false;status(e);return end
- local r=notes.request('/dev/camera','start',{},function(e) busy=false;if e.event=='operation_completed' then capture_ready() else status(e.data.error or 'camera_start_failed') end end)
- if not r.ok then busy=false;status(r.error) end
+local function camera_error(detail)
+ if detail=='camera_memory_budget' or detail=='native_operation_memory_budget' or detail=='native_task_allocation_failed' then return C.t('资源不足，请稍后重试','Resources busy; retry later') end
+ return detail or 'camera_failed'
 end
 local function save()
- if not lastFrame or saveTimer or savePreparing then return end
+ local lastFrame=P.current();if not lastFrame then status(C.t('先点拍照定格','Freeze a frame before saving'));return end;if saveTimer or savePreparing then return end
+ if partial then local removed,err=C.call('/fs','remove',{file=partial});if not removed and err~='not_found' then status(err);return end;partial=nil end
  savePreparing=true;status(C.t('正在准备保存','Preparing to save'))
  C.prepare_sd(function(s,e)
   savePreparing=false
@@ -61,11 +27,8 @@ local function save()
  end)
 end
 function on_start()
- C.init();C.open('camera',{status=C.t('点击拍照，可保存到 SD','Tap Capture, then Save to SD')});C.action('capture',capture);C.action('save',save);C.button(function() C.launch('voice',{record=true}) end)
- notes.on('/dev/display','completed',function() for i=#garbage,1,-1 do local r,e=C.call('/fs','remove',{file=garbage[i]});if r or e=='not_found' then table.remove(garbage,i) end end end)
+ C.init();C.open('camera',{status=C.t('正在准备预览','Preparing preview'),capture_label=C.t('拍照','Capture'),save_label=C.t('定格后保存','Freeze to save')})
+ P.init(C,function(state,detail)if state=='failed'then status(camera_error(detail))elseif state=='starting'then status(C.t('正在准备相机','Preparing camera'))end end)
+ C.action('capture',function()if not saveTimer and not savePreparing then P.toggle()end end);C.action('save',save);P.start()
 end
-function on_stop()
- C.cancel(saveTimer);clear(frame);if partial then C.call('/fs','remove',{file=partial}) end
- if candidateOwned and file and file~=lastFrame then C.call('/fs','remove',{file=file}) end
- if lastFrame then C.call('/fs','remove',{file=lastFrame}) end
-end
+function on_stop()C.cancel(saveTimer);P.stop();if partial then C.call('/fs','remove',{file=partial})end end

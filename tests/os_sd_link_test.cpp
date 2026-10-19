@@ -1,6 +1,6 @@
-#include "compositions/agentic-notes-e6/Defaults.h"
-#include "SdClockPlan.h"
-#include "SdConfiguration.h"
+#include "fixtures/composition/Defaults.h"
+#include "drivers/sd-spi-volume/SdClockPlan.h"
+#include "drivers/sd-spi-volume/SdConfiguration.h"
 #include <cassert>
 #include <cstring>
 
@@ -52,7 +52,7 @@ struct FakeSD {
 } SD;
 static SdLinkState sdLink;
 Policies policies(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));
-#include "drivers/esp32-services/SdLinkService.h"
+#include "fixtures/composition/SdLinkService.h"
 static void setBus(const char*mode,uint32_t hz,bool experimental=false,bool experimentalIo=false){
   JsonDocument input,output;auto a=input.to<JsonObject>();a["scope"]="system";
   auto change=a["changes"].to<JsonArray>().add<JsonObject>();change["resource"]="/sys/bus";

@@ -1,0 +1,151 @@
+{
+  "format": "notes-composition/1",
+  "id": "fixture-device",
+  "entry": "Port.inc",
+  "flags": [
+    "-DNOTES_SHARED_C6=1",
+    "-DSPI_DRIVER_SELECT=3",
+    "-DUSE_SD_CRC=1",
+    "-DWEBSOCKETS_MAX_DATA_SIZE=1024",
+    "-DUSE_UTF8_LONG_NAMES=1",
+    "-DWISHOS_RESOURCE_CAPACITY=64",
+    "-flto",
+    "-Oz"
+  ],
+  "required_pins": [
+    "KEY_A",
+    "KEY_B",
+    "KEY_C",
+    "BUSY",
+    "BATTERY",
+    "IMU_INT",
+    "SDA",
+    "SCL",
+    "DC",
+    "RESET",
+    "USB_DM",
+    "USB_DP",
+    "SHUTDOWN",
+    "MISO",
+    "SD_CS",
+    "MOSI",
+    "SCLK",
+    "PANEL_CS",
+    "PERIPHERAL_ENABLE",
+    "MIC_WS",
+    "MIC_DATA",
+    "MIC_BCLK"
+  ],
+  "pin_constraints": {
+    "USB_DM": [
+      12
+    ],
+    "USB_DP": [
+      13
+    ],
+    "KEY_A": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "KEY_B": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "KEY_C": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "IMU_INT": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "BATTERY": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]
+  },
+  "display": {
+    "width": 480,
+    "height": 720
+  },
+  "button_count": 3,
+  "asset_file_limit_bytes": 16384,
+  "asset_budget_bytes": 98304,
+  "drivers": [
+    "energy-activity",
+    "sc7a20",
+    "adc-power",
+    "sd-spi-volume"
+  ],
+  "optional_drivers": [
+    "esp-wakenet",
+    "esp32-c6-radio"
+  ],
+  "dependencies": [
+    "ArduinoJson",
+    "WebSockets",
+    "ESP32NFS",
+    "lvgl",
+    "SdFat",
+    "Adafruit_GFX_Library",
+    "Adafruit_BusIO"
+  ],
+  "platforms": [
+    "esp32-c6"
+  ],
+  "hardware_schema": {
+    "i2c_hz": {
+      "type": "integer",
+      "minimum": 10000,
+      "maximum": 400000
+    },
+    "battery_divider": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "vbus_clamps_battery_adc": {
+      "type": "boolean"
+    },
+    "crystal_mhz": {
+      "type": "integer",
+      "enum": [
+        40
+      ]
+    },
+    "crystal_load_pf": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  },
+  "system_stack_bytes": 12288,
+  "minimum_system_stack_bytes": 12288
+}

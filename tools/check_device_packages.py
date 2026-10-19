@@ -39,12 +39,26 @@ def operation(path,method):
         assert result['data'].get('ok',True),result
         return result
     finally:call('/sys/operations','release',{'id':ident})
+def refresh_download_capacity():
+    providers={};cursor=0
+    while True:
+        page=call('/fs','mounts',{'cursor':cursor,'limit':4})
+        providers.update((p['id'],p) for p in page['providers'])
+        if not page.get('more'):break
+        cursor=page['next_cursor']
+    for target in call('/sys/transfers')['policy']['targets']:
+        provider=providers.get(target['provider'])
+        if provider and provider['available']:
+            return client._refresh_capacity(provider['mount'].rstrip('/')+target['root'])
+    return False
+
 def transfer(method,params):
     until=time.monotonic()+30
     while True:
         try:return call('/sys/transfers',method,params)
         except RpcError as e:
-            if str(e)=='storage_space_refresh_required':operation('/dev/flash','space')
+            if str(e)=='storage_space_refresh_required':
+                if not refresh_download_capacity():raise
             elif str(e) not in ('resource_busy','spi_busy','operation_active'):raise
             if time.monotonic()>until:raise
             time.sleep(.01)

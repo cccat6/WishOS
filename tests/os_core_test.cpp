@@ -25,6 +25,14 @@ static JsonDocument json(const char *s) {
 static uint64_t nativeNow=0;
 static uint64_t nativeClock(){return nativeNow;}
 int main() {
+  static unsigned journalFreed=0;
+  {Core journal;JsonDocument payload,before,after;payload["value"]=42;
+   for(unsigned i=0;i<3;++i)assert(journal.emit("/input","sample",payload.as<JsonObjectConst>(),7,100+i));
+   journal.events(0,8,before.to<JsonObject>());std::string snapshot;serializeJson(before,snapshot);
+   assert(!journal.eventStorage([](size_t)->void*{return nullptr;},free));journal.events(0,8,after.to<JsonObject>());std::string rejected;serializeJson(after,rejected);assert(rejected==snapshot);
+   assert(journal.eventStorage([](size_t n)->void*{return malloc(n);},[](void*p){++journalFreed;free(p);}));journal.events(0,8,after.to<JsonObject>());std::string moved;serializeJson(after,moved);assert(moved==snapshot);
+   assert(journal.emit("/input","sample",payload.as<JsonObjectConst>(),8,200));journal.events(3,8,after.to<JsonObject>());assert(after["events"][0]["sequence"]==4&&after["events"][0]["target_owner"]==8);
+  }assert(journalFreed==1);
   Core timed;timed.clock(1);timed.clockSource(nativeClock);nativeNow=500;assert(timed.now()==500);timed.clock(2);assert(timed.now()==500);timed.clockSource(nullptr);assert(timed.now()==2);
   Core c;
   assert(c.add({"/button", "read", "", fake}));

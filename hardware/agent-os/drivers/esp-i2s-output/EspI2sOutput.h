@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <esp_attr.h>
 #include "audio/Playback.h"
 #include <driver/i2s_std.h>

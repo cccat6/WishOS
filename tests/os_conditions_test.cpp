@@ -1,8 +1,9 @@
 #include "NativeOperation.h"
 #include "RuntimeContract.h"
 #include "../firmware/WishOS/src/Conditions.h"
-#include "compositions/agentic-notes-e6/Defaults.h"
-#include "../firmware/WishOS/src/PowerMonitor.h"
+#include "ButtonGestures.h"
+#include "fixtures/composition/Defaults.h"
+#include "../hardware/agent-os/drivers/adc-power/PowerMonitor.h"
 #include <cassert>
 #include <cmath>
 #include <cctype>
@@ -44,13 +45,14 @@ static uint64_t clockMs=0;static uint32_t adc=1950;static float batteryGain=1.0f
 struct E{std::string name,id;};static std::vector<E> transitions;
 static uint64_t uptime(){return clockMs;}static uint32_t readBatteryAdcMv(){return adc;}
 static void emit(const char*p,const char*n,JsonObjectConst d){core.emit(p,n,d);}
-#include "compositions/agentic-notes-e6/DriverDescriptions.h"
-#include "drivers/esp32-services/PowerService.h"
+#include "fixtures/composition/DriverDescriptions.h"
+#include "fixtures/composition/PowerService.h"
 static const char*noop(const char*,JsonObjectConst,JsonObject){return nullptr;}
 static void advance(unsigned duration,unsigned value){adc=value;for(unsigned i=0;i<duration;i+=100){clockMs+=100;core.clock(clockMs);pollPowerSense();conditions.tick(clockMs);core.dispatch(cursor);}}
 static unsigned count(const char*id,const char*name){unsigned n=0;for(auto&e:transitions)if(e.id==id&&e.name==name)++n;return n;}
 static void run(){
   core.add({"/dev/battery","read,write","",batteryHandler,batteryDescription});core.add({"/sys/conditions","read,write,remove","",noop,conditionDescription});
+  core.add({"/dev/buttons","read,describe","",noop,buttonsDescription});JsonDocument buttonCapabilities,buttonDirect;assert(!core.describe("/dev/buttons",buttonCapabilities.to<JsonObject>()));ButtonGestures::describe(buttonDirect.to<JsonObject>());assert(buttonCapabilities["presentation_context"]==buttonDirect["presentation_context"]&&buttonCapabilities["multiclick_context"]==buttonDirect["multiclick_context"]);assert(buttonCapabilities["properties"]["buttons.A.pressed"]["type"]=="boolean");assert(buttonCapabilities["events"].is<JsonArray>()&&buttonCapabilities["events"].size()==5);
   core.add({"/action","run","",[](const char*,JsonObjectConst,JsonObject)->const char*{++actions;return nullptr;}});
   core.setEventObserver([](const Event&e){if(!strcmp(e.path,"/sys/conditions")){auto d=parse(e.data);transitions.push_back({e.name,d["id"]|""});}return false;});
   JsonDocument a,r;advance(2000,1950);assert(!batteryHandler("read",a.as<JsonObjectConst>(),r.to<JsonObject>()));assert(r["mv"]==3900);

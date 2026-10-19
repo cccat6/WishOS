@@ -14,8 +14,8 @@ class PosixFileProvider:public FileProvider {
 protected:
  bool&mounted_;const char*base_;const char*resource_;const char*filesystem_;uint32_t unit_;std::recursive_mutex*bus_;
 private:
-std::recursive_mutex localBus_;struct Reader{int fd=-1;char path[320]{};uint64_t used=0;};Reader readers_[2];uint64_t readOrder_=0;
- void closeReader(){for(auto&r:readers_){if(r.fd>=0)::close(r.fd);r={};}}
+std::recursive_mutex localBus_;struct Reader{int fd=-1;char path[320]{};uint64_t used=0;};Reader readers_[2];uint64_t readOrder_=0,readerRevision_=0;
+ void closeReader(){for(auto&r:readers_){if(r.fd>=0)::close(r.fd);r={};}readerRevision_=0;}
  std::atomic<uint64_t>revision_{1};mutable std::mutex spaceMutex_;uint64_t capacity_=0,free_=0;bool known_=false,dirty_=true;std::atomic<bool>background_{false};void*spaceContext_=nullptr;const char*(*requestSpace_)(void*)=nullptr;
  void changedSpace(uint64_t reserve=0){std::lock_guard<std::mutex>lock(spaceMutex_);if(known_)free_=reserve>free_?0:free_-reserve;dirty_=true;}
  struct Fd{int value;~Fd(){if(value>=0)::close(value);}};
@@ -51,9 +51,13 @@ public:
  }
  const char*stat(const char*p,FileInfo&i)override{Guard guard(bus_);if(!guard.held)return "bus_busy";char full[320];if(auto e=path(p,full,sizeof full))return e;struct stat s;if(::stat(full,&s))return error();i={uint64_t(s.st_size),S_ISDIR(s.st_mode)};return nullptr;}
  const char*read(const char*p,uint64_t at,uint8_t*b,size_t n,size_t&got)override{got=0;Guard guard(bus_);if(!guard.held)return "bus_busy";char full[320];if(auto e=path(p,full,sizeof full)){closeReader();return e;}if(at>INT32_MAX)return "invalid_offset";
-  // Alternating a font and an image must not repeatedly reopen the large
-  // font. This bounded weak cache owns no VFS lease; every mutation/remount
-  // closes all descriptors before effects, under the same physical bus lock.
+  auto revision=contentRevision();if(!revision||readerRevision_!=revision){closeReader();readerRevision_=revision;}
+  // Without a cross-operation content identity, a descriptor belongs to this
+  // read only: an external rename may otherwise retain the preceding inode.
+  if(!revision){Fd f{::open(full,O_RDONLY)};if(f.value<0)return error();struct stat info;if(fstat(f.value,&info))return error();if(S_ISDIR(info.st_mode))return "is_directory";if(lseek(f.value,at,SEEK_SET)<0)return error();ssize_t count=::read(f.value,b,n);if(count<0)return error();got=size_t(count);return nullptr;}
+  // Alternating a font and an image on a coherently versioned volume must not
+  // reopen the large font. This bounded weak cache owns no VFS lease; content
+  // epoch changes and mutation/remount close it under the same bus arbiter.
   Reader*reader=nullptr;for(auto&r:readers_)if(r.fd>=0&&!strcmp(r.path,full)){reader=&r;break;}
   if(!reader){reader=&readers_[0];for(auto&r:readers_)if(r.fd<0||r.used<reader->used)reader=&r;if(reader->fd>=0)::close(reader->fd);*reader={};reader->fd=::open(full,O_RDONLY);if(reader->fd<0)return error();struct stat s;if(fstat(reader->fd,&s)){auto e=error();closeReader();return e;}if(S_ISDIR(s.st_mode)){closeReader();return "is_directory";}memcpy(reader->path,full,strlen(full)+1);}
   reader->used=++readOrder_;if(lseek(reader->fd,at,SEEK_SET)<0){auto e=error();closeReader();return e;}ssize_t r=::read(reader->fd,b,n);if(r<0){auto e=error();closeReader();return e;}got=size_t(r);return nullptr;}

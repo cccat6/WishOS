@@ -4,10 +4,164 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
+        {
+          "type": "container",
+          "placement": {
+            "x": 8,
+            "y": 56,
+            "width": 128,
+            "height": 132
+          },
+          "style": {
+            "bgColor": "#FFFFFF",
+            "radius": 12,
+            "borderWidth": 0,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "qrcode",
+              "id": "qr",
+              "placement": {
+                "x": 8,
+                "y": 10,
+                "width": 112,
+                "height": 112
+              },
+              "qrcodeProps": {
+                "text": "http://192.168.4.1/control/setup.html"
+              },
+              "style": {}
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 144,
+            "y": 56,
+            "width": 168,
+            "height": 132
+          },
+          "style": {
+            "bgColor": "#DCEBDA",
+            "radius": 12,
+            "borderWidth": 0,
+            "padding": 0
+          },
+          "children": [
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 6,
+                "width": 148,
+                "height": 18
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#17241E"
+              },
+              "labelProps": {
+                "text": "Wi-Fi",
+                "metrics": "ink",
+                "longMode": "ellipsis",
+                "verticalAlign": "center"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 24,
+                "width": 148,
+                "height": 26
+              },
+              "style": {
+                "fontSize": 18,
+                "lineHeight": 19,
+                "textColor": "#17241E"
+              },
+              "labelProps": {
+                "text": "—",
+                "longMode": "ellipsis",
+                "missingGlyph": "replace",
+                "metrics": "ink",
+                "minFontSize": 14,
+                "verticalAlign": "center"
+              },
+              "id": "ssid"
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 55,
+                "width": 148,
+                "height": 18
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#17241E"
+              },
+              "labelProps": {
+                "text": "后台地址",
+                "metrics": "ink",
+                "longMode": "ellipsis",
+                "verticalAlign": "center"
+              }
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 76,
+                "width": 148,
+                "height": 22
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#17241E"
+              },
+              "labelProps": {
+                "text": "—",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "verticalAlign": "center"
+              },
+              "id": "address"
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 10,
+                "y": 105,
+                "width": 148,
+                "height": 18
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 17,
+                "textColor": "#424B45",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "verticalAlign": "center"
+              },
+              "id": "mac"
+            }
+          ]
+        },
         {
           "type": "button",
           "id": "home",
@@ -25,10 +179,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +195,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,155 +223,14 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
-                "text": "设备设置",
+                "text": "扫码设置",
                 "longMode": "ellipsis",
                 "metrics": "ink"
               }
-            }
-          ]
-        },
-        {
-          "type": "qrcode",
-          "id": "qr",
-          "placement": {
-            "x": 16,
-            "y": 64,
-            "width": 128,
-            "height": 128
-          },
-          "qrcodeProps": {
-            "text": "http://192.168.4.1/control/setup.html"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 156,
-            "y": 58,
-            "width": 156,
-            "height": 25
-          },
-          "style": {
-            "fontSize": 15,
-            "lineHeight": 20,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "扫码进行完整设置",
-            "longMode": "ellipsis"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 156,
-            "y": 91,
-            "width": 156,
-            "height": 21
-          },
-          "style": {
-            "fontSize": 11,
-            "lineHeight": 16,
-            "textColor": "#60645B"
-          },
-          "labelProps": {
-            "text": "Wi-Fi",
-            "longMode": "ellipsis"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 156,
-            "y": 108,
-            "width": 156,
-            "height": 25
-          },
-          "style": {
-            "fontSize": 15,
-            "lineHeight": 20,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "—",
-            "longMode": "ellipsis",
-            "missingGlyph": "replace"
-          },
-          "id": "ssid"
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 156,
-            "y": 139,
-            "width": 156,
-            "height": 21
-          },
-          "style": {
-            "fontSize": 11,
-            "lineHeight": 16,
-            "textColor": "#60645B"
-          },
-          "labelProps": {
-            "text": "后台地址",
-            "longMode": "ellipsis"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 156,
-            "y": 156,
-            "width": 156,
-            "height": 25
-          },
-          "style": {
-            "fontSize": 15,
-            "lineHeight": 20,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "—",
-            "longMode": "ellipsis"
-          },
-          "id": "address"
-        },
-        {
-          "type": "container",
-          "placement": {
-            "x": 156,
-            "y": 178,
-            "width": 156,
-            "height": 18
-          },
-          "style": {
-            "padding": 0,
-            "borderWidth": 0,
-            "bgOpacity": 0
-          },
-          "children": [
-            {
-              "type": "label",
-              "placement": {
-                "align": "center",
-                "width": 156
-              },
-              "style": {
-                "fontSize": 12,
-                "lineHeight": 17,
-                "textColor": "#60645B",
-                "textAlign": "left"
-              },
-              "labelProps": {
-                "text": "",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              },
-              "id": "mac"
             }
           ]
         },
@@ -238,9 +252,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -250,9 +264,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 15,
-                "lineHeight": 20,
-                "textColor": "#262822"
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "本机设置",
@@ -285,7 +299,7 @@
               "style": {
                 "fontSize": 12,
                 "lineHeight": 17,
-                "textColor": "#60645B",
+                "textColor": "#424B45",
                 "textAlign": "right"
               },
               "labelProps": {

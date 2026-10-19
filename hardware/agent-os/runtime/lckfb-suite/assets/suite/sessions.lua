@@ -1,6 +1,6 @@
 -- Cloud session references are app preferences. History and memory stay in the
 -- selected Harness; all control requests pass through the system AI broker.
-local C=notes.require('../suite/common.lua');local S={operations={},busy=false};local notify;local pending;local prefix;local serial=0;local createAfterStatus=false
+local C=notes.require('../suite/common.lua');local S={operations={},busy=false};local notify;local pending;local prefix;local serial=0;local createAfterStatus=false;local ensuring=false
 local function ref(input,value) for _,key in ipairs({'runtime_id','session_id','session_scope'}) do if value and value[key] then input[key]=value[key] end end end
 function S.reference() return type(C.preferences.conversation)=='table' and C.preferences.conversation or nil end
 function S.title() local title=type(S.session)=='table' and S.session.title;return title and title~='' and title or C.t('当前会话','Current conversation') end
@@ -16,11 +16,19 @@ function S.request(operation,args)
   local state=C.call('/services/ai','read',{id=e.data.id});C.call('/services/ai','release',{id=e.data.id})
   if not pending or pending.id~=e.data.id then return end
   pending=nil;S.busy=false
-  if e.event~='completed' then notify('failed',state and state.error or C.t('会话请求未完成','Session request failed'))
+  if e.event~='completed' then ensuring=false;notify('failed',state and state.error or C.t('会话请求未完成','Session request failed'))
+  elseif ensuring then
+   if S.reference() then ensuring=false;notify('ready',S.reference())
+   elseif operation=='status' and S.supports('create') and not C.preferences.pending_creation then S.create()
+   else ensuring=false;notify('failed',C.preferences.pending_creation and C.t('请核对上次会话创建结果','Check the previous session creation') or C.t('请在 Hub 连接可用的 Agent','Connect an available Agent in Hub')) end
   elseif createAfterStatus then createAfterStatus=false;S.create() else notify('idle',operation) end
  end)
  if not sent.ok then S.busy=false;notify('failed',sent.error);return nil,sent.error end
  pending={id=sent.result.id,key=sent.result.request_id,operation=operation};return sent.result
+end
+function S.ensure()
+ if S.reference() then notify('ready',S.reference());return end
+ ensuring=true;if not S.busy then return S.status() end
 end
 function S.status()
  local input={};ref(input,S.reference());if C.preferences.pending_creation then input.operation_id=C.preferences.pending_creation end
@@ -60,6 +68,6 @@ function S.stop()
   C.call('/services/ai','cancel',{id=pending.id});local state=C.call('/services/ai','read',{id=pending.id})
   if state and (state.state=='completed' or state.state=='failed') then C.call('/services/ai','release',{id=pending.id}) end
  end
- pending=nil;S.busy=false
+ pending=nil;S.busy=false;ensuring=false
 end
 return S

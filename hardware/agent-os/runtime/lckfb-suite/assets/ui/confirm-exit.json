@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -25,10 +25,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +41,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,7 +69,7 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -88,9 +89,9 @@
             "height": 30
           },
           "style": {
-            "fontSize": 20,
-            "lineHeight": 25,
-            "textColor": "#262822"
+            "fontSize": 18,
+            "lineHeight": 23,
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "手机仍在连接设备设置",
@@ -106,9 +107,9 @@
             "height": 26
           },
           "style": {
-            "fontSize": 16,
-            "lineHeight": 21,
-            "textColor": "#262822"
+            "fontSize": 14,
+            "lineHeight": 19,
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "离开会断开手机设置会话。",
@@ -119,19 +120,22 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 146,
+            "y": 144,
             "width": 296,
-            "height": 23
+            "height": 40
           },
           "style": {
-            "fontSize": 13,
-            "lineHeight": 18,
-            "textColor": "#60645B"
+            "fontSize": 12,
+            "lineHeight": 16,
+            "textColor": "#424B45"
           },
           "labelProps": {
-            "text": "再次长按用户键可强制回桌面。",
-            "longMode": "ellipsis"
-          }
+            "text": "",
+            "metrics": "line",
+            "longMode": "wrap",
+            "missingGlyph": "replace"
+          },
+          "id": "navigation_hint"
         },
         {
           "type": "button",
@@ -151,9 +155,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -163,9 +167,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 16,
-                "lineHeight": 21,
-                "textColor": "#262822"
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "继续设置",
@@ -193,9 +197,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -205,9 +209,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 16,
-                "lineHeight": 21,
-                "textColor": "#262822"
+                "fontSize": 14,
+                "lineHeight": 19,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "断开并离开",

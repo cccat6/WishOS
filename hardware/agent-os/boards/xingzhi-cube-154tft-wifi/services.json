@@ -1,0 +1,22 @@
+{
+  "downloads": {
+    "targets": [
+      {
+        "provider": "flash",
+        "root": "/wishos/downloads",
+        "quota_bytes": "10354688",
+        "allow_internal": true
+      }
+    ]
+  },
+  "volatile_storage": [
+    {
+      "provider": "ram",
+      "quota_bytes": 262144
+    }
+  ],
+  "runtime": {
+    "compile_cache_bytes": 98304,
+    "compile_cache_memory": "external"
+  }
+}

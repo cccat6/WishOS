@@ -1,0 +1,143 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F6F7F2",
+        "padding": 0
+      },
+      "children": [
+        {
+          "type": "container",
+          "placement": {
+            "x": 12,
+            "y": 50,
+            "width": 216,
+            "height": 52
+          },
+          "style": {
+            "padding": 0,
+            "borderWidth": 0,
+            "radius": 12,
+            "bgColor": "#DCEBDA"
+          }
+        },
+        {
+          "id": "title",
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 8,
+            "width": 216,
+            "height": 32
+          },
+          "style": {
+            "fontSize": 20,
+            "lineHeight": 24,
+            "textColor": "#242722",
+            "textAlign": "left"
+          },
+          "labelProps": {
+            "text": "",
+            "metrics": "ink",
+            "longMode": "clip",
+            "verticalAlign": "center"
+          }
+        },
+        {
+          "id": "message",
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 113,
+            "width": 216,
+            "height": 30
+          },
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 22,
+            "textColor": "#17241E",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace",
+            "metrics": "ink",
+            "longMode": "ellipsis",
+            "verticalAlign": "center",
+            "minFontSize": 14
+          }
+        },
+        {
+          "id": "hint",
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 207,
+            "width": 216,
+            "height": 22
+          },
+          "style": {
+            "fontSize": 14,
+            "lineHeight": 18,
+            "textColor": "#424B45",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "metrics": "ink",
+            "longMode": "clip",
+            "verticalAlign": "center"
+          }
+        },
+        {
+          "id": "ssid",
+          "type": "label",
+          "placement": {
+            "x": 20,
+            "y": 62,
+            "width": 200,
+            "height": 34
+          },
+          "style": {
+            "fontSize": 22,
+            "lineHeight": 26,
+            "textColor": "#17241E",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "missingGlyph": "replace",
+            "metrics": "ink",
+            "longMode": "ellipsis",
+            "verticalAlign": "center",
+            "minFontSize": 14
+          }
+        },
+        {
+          "id": "mac",
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 166,
+            "width": 216,
+            "height": 24
+          },
+          "style": {
+            "fontSize": 14,
+            "lineHeight": 18,
+            "textColor": "#424B45",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "longMode": "clip",
+            "metrics": "ink",
+            "verticalAlign": "center"
+          }
+        }
+      ]
+    }
+  ]
+}

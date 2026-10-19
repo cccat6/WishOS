@@ -4,260 +4,385 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
         {
           "type": "button",
-          "id": "home",
           "placement": {
             "x": 8,
             "y": 4,
             "width": 44,
             "height": 44
           },
-          "layout": {
-            "type": "flex",
-            "flexFlow": "row",
-            "mainAlign": "center",
-            "crossAlign": "center",
-            "gap": 10
-          },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
-            "padding": 0
+            "padding": 0,
+            "bgColor": "#F6F7F2",
+            "borderWidth": 0,
+            "radius": 12
           },
           "children": [
             {
               "type": "image",
               "placement": {
-                "width": 28,
-                "height": 28
+                "width": 24,
+                "height": 24
               },
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
               }
+            },
+            {
+              "id": "home_label",
+              "type": "label",
+              "placement": {
+                "width": "content",
+                "height": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 18,
+                "textColor": "#17241E",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace"
+              }
             }
-          ]
+          ],
+          "id": "home",
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 8
+          }
         },
         {
-          "type": "container",
+          "id": "heading",
+          "type": "label",
           "placement": {
             "x": 64,
             "y": 4,
-            "width": 248,
+            "width": 136,
+            "height": 44
+          },
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 22,
+            "textColor": "#17241E",
+            "textAlign": "left"
+          },
+          "labelProps": {
+            "text": "Talk",
+            "longMode": "ellipsis",
+            "metrics": "ink",
+            "missingGlyph": "replace",
+            "verticalAlign": "center"
+          }
+        },
+        {
+          "type": "button",
+          "placement": {
+            "x": 204,
+            "y": 4,
+            "width": 50,
             "height": 44
           },
           "style": {
             "padding": 0,
+            "bgColor": "#DCEBDA",
             "borderWidth": 0,
-            "bgOpacity": 0
+            "radius": 12
+          },
+          "children": [
+            {
+              "id": "output_label",
+              "type": "label",
+              "placement": {
+                "width": "content",
+                "height": "content"
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#17241E",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "Text",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace"
+              }
+            }
+          ],
+          "id": "output",
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 8
+          }
+        },
+        {
+          "type": "button",
+          "placement": {
+            "x": 260,
+            "y": 4,
+            "width": 52,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "radius": 12
+          },
+          "children": [
+            {
+              "id": "sessions_label",
+              "type": "label",
+              "placement": {
+                "width": "content",
+                "height": "content"
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#17241E",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "Chats",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace"
+              }
+            }
+          ],
+          "id": "sessions",
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 8
+          }
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 12,
+            "y": 57,
+            "width": 296,
+            "height": 114
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "radius": 14
+          },
+          "children": [
+            {
+              "id": "answer",
+              "type": "label",
+              "placement": {
+                "x": 12,
+                "y": 4,
+                "width": 272,
+                "height": 88
+              },
+              "style": {
+                "fontSize": 18,
+                "lineHeight": 22,
+                "textColor": "#17241E",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "wrap",
+                "metrics": "line",
+                "missingGlyph": "replace"
+              }
+            }
+          ]
+        },
+        {
+          "id": "page",
+          "type": "label",
+          "placement": {
+            "x": 123,
+            "y": 152,
+            "width": 74,
+            "height": 15
+          },
+          "style": {
+            "fontSize": 12,
+            "lineHeight": 16,
+            "textColor": "#4F5952",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "longMode": "ellipsis",
+            "metrics": "ink",
+            "missingGlyph": "replace",
+            "verticalAlign": "center"
+          }
+        },
+        {
+          "type": "button",
+          "placement": {
+            "x": 12,
+            "y": 184,
+            "width": 88,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "radius": 12
+          },
+          "children": [
+            {
+              "id": "previous_label",
+              "type": "label",
+              "placement": {
+                "width": "content",
+                "height": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 18,
+                "textColor": "#17241E",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "Previous",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace"
+              }
+            }
+          ],
+          "id": "previous",
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 8
+          }
+        },
+        {
+          "type": "button",
+          "placement": {
+            "x": 220,
+            "y": 184,
+            "width": 88,
+            "height": 44
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "radius": 12
+          },
+          "children": [
+            {
+              "id": "next_label",
+              "type": "label",
+              "placement": {
+                "width": "content",
+                "height": "content"
+              },
+              "style": {
+                "fontSize": 14,
+                "lineHeight": 18,
+                "textColor": "#17241E",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "Next",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace"
+              }
+            }
+          ],
+          "id": "next",
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 8
+          }
+        },
+        {
+          "type": "button",
+          "id": "record",
+          "placement": {
+            "x": 108,
+            "y": 184,
+            "width": 104,
+            "height": 44
+          },
+          "layout": {
+            "type": "flex",
+            "flexFlow": "row",
+            "mainAlign": "center",
+            "crossAlign": "center",
+            "gap": 6
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#F5DDC8",
+            "radius": 12,
+            "borderWidth": 0
           },
           "children": [
             {
               "type": "label",
               "placement": {
-                "align": "center",
-                "width": 248
+                "width": "content",
+                "height": "content"
               },
               "style": {
-                "fontSize": 22,
-                "lineHeight": 27,
-                "textColor": "#262822",
-                "textAlign": "left"
+                "fontSize": 14,
+                "textColor": "#17241E"
               },
               "labelProps": {
-                "text": "Talk to your Agent",
-                "longMode": "ellipsis",
-                "metrics": "ink"
+                "text": "Talk again",
+                "metrics": "ink",
+                "longMode": "clip"
               }
             }
           ]
         },
         {
           "type": "image",
+          "id": "activity",
           "placement": {
-            "x": 278,
-            "y": 10,
-            "width": 32,
-            "height": 32
+            "x": 24,
+            "y": 152,
+            "width": 16,
+            "height": 16
           },
           "imageProps": {
             "src": "../brand/done-11.png",
             "fit": "contain"
-          },
-          "id": "activity"
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 56,
-            "width": 296,
-            "height": 118
-          },
-          "style": {
-            "fontSize": 17,
-            "lineHeight": 22,
-            "textColor": "#262822"
-          },
-          "labelProps": {
-            "text": "",
-            "longMode": "wrap",
-            "missingGlyph": "replace"
-          },
-          "id": "answer"
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 173,
-            "width": 296,
-            "height": 18
-          },
-          "style": {
-            "fontSize": 12,
-            "lineHeight": 17,
-            "textColor": "#60645B",
-            "textAlign": "center"
-          },
-          "labelProps": {
-            "text": "",
-            "longMode": "ellipsis"
-          },
-          "id": "page"
-        },
-        {
-          "type": "button",
-          "id": "previous",
-          "placement": {
-            "x": 8,
-            "y": 196,
-            "width": 96,
-            "height": 44
-          },
-          "layout": {
-            "type": "flex",
-            "flexFlow": "row",
-            "mainAlign": "center",
-            "crossAlign": "center",
-            "gap": 10
-          },
-          "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
-            "padding": 0
-          },
-          "children": [
-            {
-              "type": "label",
-              "placement": {
-                "width": "content"
-              },
-              "style": {
-                "fontSize": 14,
-                "lineHeight": 19,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": "Previous",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              }
-            }
-          ]
-        },
-        {
-          "type": "button",
-          "id": "record",
-          "placement": {
-            "x": 112,
-            "y": 196,
-            "width": 96,
-            "height": 44
-          },
-          "layout": {
-            "type": "flex",
-            "flexFlow": "row",
-            "mainAlign": "center",
-            "crossAlign": "center",
-            "gap": 10
-          },
-          "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
-            "padding": 0
-          },
-          "children": [
-            {
-              "type": "label",
-              "placement": {
-                "width": "content"
-              },
-              "style": {
-                "fontSize": 14,
-                "lineHeight": 19,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": "Say more",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              }
-            }
-          ]
-        },
-        {
-          "type": "button",
-          "id": "next",
-          "placement": {
-            "x": 216,
-            "y": 196,
-            "width": 96,
-            "height": 44
-          },
-          "layout": {
-            "type": "flex",
-            "flexFlow": "row",
-            "mainAlign": "center",
-            "crossAlign": "center",
-            "gap": 10
-          },
-          "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
-            "padding": 0
-          },
-          "children": [
-            {
-              "type": "label",
-              "placement": {
-                "width": "content"
-              },
-              "style": {
-                "fontSize": 14,
-                "lineHeight": 19,
-                "textColor": "#262822"
-              },
-              "labelProps": {
-                "text": "Next",
-                "longMode": "ellipsis",
-                "metrics": "ink"
-              }
-            }
-          ]
+          }
         }
       ]
     }

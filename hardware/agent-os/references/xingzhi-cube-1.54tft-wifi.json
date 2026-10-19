@@ -1,0 +1,69 @@
+{
+  "format": "notes-hardware-reference/1",
+  "id": "xingzhi-cube-1.54tft-wifi",
+  "status": "device_identified_native_port_in_progress",
+  "source_commit": "e0d2390a1ca415473508bbc0c66eaf1d8dc04e37",
+  "sources": [
+    "https://github.com/78/xiaozhi-esp32/tree/e0d2390a1ca415473508bbc0c66eaf1d8dc04e37/main/boards/nologo/xingzhi-cube-1.54tft-wifi"
+  ],
+  "processor": {
+    "family": "ESP32-S3",
+    "psram_bytes": 8388608
+  },
+  "display": {
+    "controller": "ST7789",
+    "width": 240,
+    "height": 240,
+    "spi_mode": 3,
+    "clock_hz": 80000000,
+    "pins": {
+      "MOSI": 10,
+      "SCLK": 9,
+      "DC": 8,
+      "CS": 14,
+      "RESET": 18,
+      "BACKLIGHT": 13
+    },
+    "backlight_high": true,
+    "inverted_colors": true
+  },
+  "audio": {
+    "capture": "standard I2S microphone",
+    "capture_pins": {
+      "WS": 4,
+      "BCLK": 5,
+      "DATA": 6
+    },
+    "playback": "standard I2S amplifier",
+    "playback_pins": {
+      "BCLK": 15,
+      "WS": 16,
+      "DATA": 7
+    },
+    "separate_clock_controllers": true
+  },
+  "buttons": {
+    "USER": 0
+  },
+  "power": {
+    "hold_gpio": 21,
+    "hold_high": true,
+    "charging_input_gpio": 38,
+    "battery_adc_unit": 2,
+    "battery_adc_channel": 6
+  },
+  "checks": [
+    "Verify flash capacity before selecting a partition layout",
+    "Keep GPIO21 high during startup; charging input semantics need physical validation",
+    "Hardware resources remain device-selected; no camera, SD or touch is inferred from ESP32-S3",
+    "Reuse the system renderer and SPI LCD presentation; default UI remains runtime application files",
+    "Select only the finished unit's observed one-button topology; upstream volume-key declarations are not evidence of installed buttons"
+  ],
+  "upstream_reference_buttons": {
+    "CENTER": 0,
+    "UP": 40,
+    "DOWN": 39
+  },
+  "observed_button_count": 1,
+  "button_evidence": "User confirmed one physical key and reported its short press advanced the menu; USER(index0/GPIO0) recorded gesture1 and the boot identity remained unchanged. Raw press/release events expired before asynchronous capture."
+}

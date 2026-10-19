@@ -1,0 +1,44 @@
+{
+  "launcher": "launcher",
+  "voice": "voice",
+  "applications": [
+    {
+      "id": "launcher",
+      "title": "桌面",
+      "manifest": "/system/apps/launcher.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "tests/fixtures/runtime",
+        "ref": "main"
+      },
+      "fallback_manifest": "/system/recovery/launcher.json"
+    },
+    {
+      "id": "voice",
+      "title": "语音对话",
+      "manifest": "/system/apps/voice.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "tests/fixtures/runtime",
+        "ref": "main"
+      }
+    },
+    {
+      "id": "photo",
+      "title": "手机传图",
+      "manifest": "/system/apps/photo.json",
+      "source": {
+        "repository": "https://github.com/cccat6/WishOS",
+        "path": "tests/fixtures/runtime",
+        "ref": "main"
+      }
+    }
+  ],
+  "navigation": {
+    "home_buttons": 1,
+    "voice_buttons": 2,
+    "home_hold_ms": 1800,
+    "voice_hold_ms": 600,
+    "debounce_ms": 30
+  }
+}

@@ -8,7 +8,7 @@
     "path": "hardware/agent-os/runtime/lckfb-suite"
   },
   "help": {
-    "controls": "扫码在同一局域网配置；手机连接期间离开需确认。再次长按用户键可强制返回桌面。"
+    "controls": "单击切换选项，双击确认，三击返回桌面。长按用户键说话，松开发送。可用触屏直接点选；返回上层可选中返回。"
   },
   "memory_bytes": 196608,
   "instruction_budget": 200000,

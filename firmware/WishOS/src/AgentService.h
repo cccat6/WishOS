@@ -6,25 +6,25 @@ namespace notesos {
 // calls. The OS owns its lifetime; application messages have explicit recipients.
 class AgentService {
  struct Task {
-  uint32_t id=0,origin=0,remote=0,index=0,count=0,effect=0,recipient=0,follows=0,transfer=0;
+  uint32_t id=0,origin=0,temporaryOwner=0,remote=0,index=0,count=0,effect=0,recipient=0,follows=0,transfer=0;
   uint64_t deadline=0,position=0,fileSize=0;
   char state[24]{},error[80]{},key[65]{},inputHash[65]{},operation[65]{},root[256]{},plan[256]{},effectPath[80]{},effectMethod[40]{};
   bool detached=false,filePlan=false,stop=false,inCall=false,appPending=false,ownsOperation=false;
-  JsonDocument envelope,action,previous;
+  JsonDocument envelope,action,previous,progress;uint32_t progressSequence=0;uint64_t progressAt=0;
   Vfs::Access*lease=nullptr;FileProvider*provider=nullptr;uint8_t*line=nullptr;size_t lineSize=0,lineLimit=2048;
  };
  struct Receipt{char key[65]{},hash[65]{},error[80]{};bool used=false;uint32_t completed=0;};
- Core&core_;AssetTransfers&assets_;Vfs&vfs_;Task tasks_[4];Receipt receipts_[8];unsigned receiptAt_=0;uint32_t next_=1,owner_=0;JsonDocument config_;
+ Core&core_;AssetTransfers&assets_;Vfs&vfs_;Task tasks_[4];Receipt receipts_[8];unsigned receiptAt_=0;uint32_t next_=1,owner_=0;bool hook_=false;JsonDocument config_;
  static bool terminal(const Task&t){return !strcmp(t.state,"completed")||!strcmp(t.state,"failed");}
  Task*find(uint32_t id){for(auto&t:tasks_)if(t.id&&t.id==id)return &t;return nullptr;}
  Receipt*receipt(const char*key){if(*key)for(auto&r:receipts_)if(r.used&&!strcmp(r.key,key))return &r;return nullptr;}
  static void digest(JsonVariantConst value,char out[65]){Sha256 hash;struct Writer{Sha256&h;size_t write(uint8_t b){h.update(&b,1);return 1;}size_t write(const uint8_t*p,size_t n){h.update(p,n);return n;}}writer{hash};serializeJson(value,writer);hash.finish(out);}
  void notify(Task&t,const char*event,uint32_t recipient=0){JsonDocument d;d["id"]=t.id;d["step"]=t.index;
   if(!strcmp(event,"application_action")){d["topic"]=t.action["topic"]|"result";if(t.action["wait"]=="queued")d["data"]=t.action["data"];}
-  else{d["request_id"]=t.key;d["state"]=t.state;d["steps"]=t.count;d["ok"]=!strcmp(event,"completed");if(*t.error)d["error"]=t.error;}
+  else{if(!strcmp(event,"progress"))d["sequence"]=t.progressSequence;d["request_id"]=t.key;d["state"]=t.state;d["steps"]=t.count;d["ok"]=!strcmp(event,"completed");if(*t.error)d["error"]=t.error;}
   core_.emit("/services/ai",event,d.as<JsonObjectConst>(),recipient?recipient:t.origin&&!t.detached?t.origin:owner_);
  }
- void cleanup(Task&t){if(t.transfer){JsonDocument a,o;a["id"]=t.transfer;assets_.invoke("release",a.as<JsonObjectConst>(),o.to<JsonObject>());t.transfer=0;}delete t.lease;t.lease=nullptr;if(t.provider)vfs_.unpin(t.id+0x71000000u);t.provider=nullptr;core_.resources().freeAllocation(t.line);t.line=nullptr;assets_.cancelRemote(t.remote);}
+ void cleanup(Task&t){if(t.temporaryOwner){for(size_t i=0;i<vfs_.count();++i)vfs_.at(i)->retireTemporary(t.temporaryOwner);core_.releaseOwner(t.temporaryOwner);t.temporaryOwner=0;}if(t.transfer){JsonDocument a,o;a["id"]=t.transfer;assets_.invoke("release",a.as<JsonObjectConst>(),o.to<JsonObject>());t.transfer=0;}delete t.lease;t.lease=nullptr;if(t.provider)vfs_.unpin(t.id+0x71000000u);t.provider=nullptr;core_.resources().freeAllocation(t.line);t.line=nullptr;assets_.cancelRemote(t.remote);}
  void finish(Task&t,const char*error=nullptr){copy(t.error,sizeof t.error,error?error:"");strcpy(t.state,error?"failed":"completed");t.appPending=false;t.recipient=0;
   if(t.ownsOperation&&*t.operation){auto*r=receipt(t.operation);if(!r)r=&receipts_[receiptAt_++%8];r->used=true;copy(r->key,sizeof r->key,t.operation);copy(r->error,sizeof r->error,t.error);digest(t.envelope.as<JsonVariantConst>(),r->hash);r->completed=t.index;}
   cleanup(t);notify(t,error?"failed":"completed");
@@ -46,7 +46,7 @@ class AgentService {
    if(!r["transfer_id"].is<uint32_t>())return "ai_transfer_id";if(auto e=assets_.verified(r["transfer_id"],".",t.root,sizeof t.root))return e;t.transfer=r["transfer_id"];const char*relative;auto p=vfs_.resolve(t.root,relative);if(!p||!p->available())return "storage_unavailable";
    t.lease=new(std::nothrow)Vfs::Access(vfs_,false);if(!t.lease)return "memory_low";if(auto e=t.lease->add(t.root,p->caseInsensitive()))return e;if(!vfs_.pin(*p,t.id+0x71000000u))return "provider_lease_capacity";t.provider=p;
    if(r.containsKey("sequence")){if(auto e=assets_.verified(r["transfer_id"],r["sequence"]["path"],t.plan,sizeof t.plan))return e;vfs_.resolve(t.plan,relative);FileInfo info;if(auto e=p->stat(relative,info))return e;if(info.directory)return "ai_sequence_file";t.fileSize=info.size;t.filePlan=true;t.line=(uint8_t*)core_.resources().allocate(t.lineLimit+1);if(!t.line)return "memory_low";}
-   JsonDocument a,o;a["id"]=r["transfer_id"];if(auto e=assets_.invoke("release",a.as<JsonObjectConst>(),o.to<JsonObject>()))return e;t.transfer=0;
+   t.temporaryOwner=assets_.claimTemporary(r["transfer_id"]);JsonDocument a,o;a["id"]=r["transfer_id"];if(auto e=assets_.invoke("release",a.as<JsonObjectConst>(),o.to<JsonObject>()))return e;t.transfer=0;
   }
   return nullptr;
  }
@@ -82,8 +82,9 @@ class AgentService {
  void cancelRemote(Task&t){JsonDocument a,o;a["id"]=t.remote;a["ok"]=false;a["result"]["error"]="cancelled";core_.invoke("/services/remote","complete",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner_);a.remove("ok");a.remove("result");core_.invoke("/services/remote","release",a.as<JsonObjectConst>(),o.to<JsonObject>(),owner_);}
 public:
  static constexpr const char*Methods="read,read_action,read_result,acknowledge,configure,submit,cancel,release";using Save=bool(*)(const char*,size_t);
- AgentService(Core&c,AssetTransfers&a,Vfs&v):core_(c),assets_(a),vfs_(v){owner_=core_.acquireOwner();config_["route"]="wishos.ai";config_["timeout_ms"]=900000;config_["max_action_bytes"]=2048;core_.onOwnerRelease(this,[](void*p,uint32_t owner){auto&s=*static_cast<AgentService*>(p);for(auto&t:s.tasks_){if(t.origin==owner)t.detached=true;if(t.appPending&&t.recipient==owner){t.recipient=0;}}});}
- ~AgentService(){core_.removeOwnerHook(this);for(auto&t:tasks_)cleanup(t);core_.releaseOwner(owner_);}
+ AgentService(Core&c,AssetTransfers&a,Vfs&v):core_(c),assets_(a),vfs_(v){owner_=core_.acquireOwner();config_["route"]="wishos.ai";config_["timeout_ms"]=900000;config_["max_action_bytes"]=2048;hook_=core_.onOwnerRelease(this,[](void*p,uint32_t owner){auto&s=*static_cast<AgentService*>(p);for(auto&t:s.tasks_){if(t.origin==owner)t.detached=true;if(t.appPending&&t.recipient==owner){t.recipient=0;}}});}
+ ~AgentService(){if(hook_)core_.removeOwnerHook(this);for(auto&t:tasks_)cleanup(t);core_.releaseOwner(owner_);}
+ bool ready()const{return owner_&&hook_&&!config_.overflowed();}
  bool restore(const char*s){JsonDocument d,o;if(deserializeJson(d,s))return false;JsonDocument a;a["settings"]=d;return !invoke("configure",a.as<JsonObjectConst>(),o.to<JsonObject>());}
  const char*invoke(const char*m,JsonObjectConst a,JsonObject o,Save save=nullptr){const char*fields=!strcmp(m,"configure")?"settings,persist":!strcmp(m,"submit")?"input,request_id,timeout_ms":!strcmp(m,"acknowledge")?"id,step,ok,result":!strcmp(m,"read_result")?"id,offset,length":!strcmp(m,"read_action")?"id,step":"id";if(auto e=argumentFields(a,fields))return e;
   if(!strcmp(m,"configure")){if(a.containsKey("persist")&&!a["persist"].is<bool>())return "ai_configuration";auto settings=a["settings"].as<JsonObjectConst>();if(settings.isNull())return "ai_configuration";JsonDocument next;next.set(config_);for(auto f:settings){if(!Core::containsMethod("route,timeout_ms,max_action_bytes",f.key().c_str()))return "unknown_ai_setting";next[f.key()]=f.value();}if(!next["route"].is<const char*>()||!strlen(next["route"])||strlen(next["route"])>64||!next["timeout_ms"].is<uint32_t>()||next["timeout_ms"].as<uint32_t>()<100||next["timeout_ms"].as<uint32_t>()>86400000||!next["max_action_bytes"].is<uint32_t>()||next["max_action_bytes"].as<uint32_t>()<256||next["max_action_bytes"].as<uint32_t>()>MAX_WIRE-512)return "ai_configuration";char text[256];size_t n=serializeJson(next,text,sizeof text);if((a["persist"]|false)&&(!save||!save(text,n)))return "persistence_failed";swap(config_,next);o["configured"]=config_;return nullptr;}
@@ -104,7 +105,7 @@ public:
   if(!strcmp(m,"cancel")){if(terminal(*t))return "ai_request_finished";t->stop=true;copy(t->error,sizeof t->error,"cancelled");if(!strcmp(t->state,"queued"))cancelRemote(*t);if(!t->effect&&!t->inCall)finish(*t,"cancelled");}
   else if(!strcmp(m,"release")){if(!terminal(*t))return "ai_request_pending";cleanup(*t);*t=Task();return nullptr;}
   else if(strcmp(m,"read"))return "unsupported_method";
-  o["id"]=t->id;o["state"]=t->state;o["step"]=t->index;o["steps"]=t->count;o["error"]=t->error;o["cancel_requested"]=t->stop;o["result_bytes"]=measureJson(t->previous);return nullptr;
+  if(t->progressSequence){o["progress"]=t->progress;o["progress_sequence"]=t->progressSequence;o["progress_at_ms"]=t->progressAt;}o["id"]=t->id;o["state"]=t->state;o["step"]=t->index;o["steps"]=t->count;o["error"]=t->error;o["cancel_requested"]=t->stop;o["result_bytes"]=measureJson(t->previous);return nullptr;
  }
  void poll(){for(auto&t:tasks_)if(t.id&&!terminal(t)){
   if(core_.now()>=t.deadline&&!t.stop){t.stop=true;copy(t.error,sizeof t.error,"deadline_exceeded");if(!strcmp(t.state,"queued"))cancelRemote(t);}
@@ -114,14 +115,14 @@ public:
   if(t.appPending){if(!t.recipient)finish(t,"ai_application_unavailable");continue;}
   if(!strcmp(t.state,"validating")){bool end,ready;auto e=nextAction(t,end,ready);if(e){if(!Core::containsMethod("spi_busy,resource_busy",e))finish(t,e);continue;}if(!ready)continue;if(end){t.count=t.index;t.index=0;t.position=0;t.lineSize=0;t.action.clear();strcpy(t.state,"executing");notify(t,"result_ready");}else ++t.index;continue;}
   if(!strcmp(t.state,"executing")){execute(t);continue;}
-  if(strcmp(t.state,"queued"))continue;JsonDocument args,reply;args["id"]=t.remote;auto e=core_.invoke("/services/remote","read",args.as<JsonObjectConst>(),reply.to<JsonObject>(),owner_);if(e){finish(t,e);continue;}if(reply["state"]=="queued")continue;
+  if(strcmp(t.state,"queued"))continue;JsonDocument args,reply;args["id"]=t.remote;args["include_payload"]=false;auto e=core_.invoke("/services/remote","read",args.as<JsonObjectConst>(),reply.to<JsonObject>(),owner_);if(e){finish(t,e);continue;}if(reply["progress_sequence"].as<uint32_t>()>t.progressSequence){JsonDocument next;next.set(reply["progress"]);if(!next.overflowed()){swap(t.progress,next);t.progressSequence=reply["progress_sequence"];t.progressAt=reply["progress_at_ms"];notify(t,"progress");}}if(reply["state"]=="queued")continue;
   if(reply["state"]=="failed"){t.previous.set(reply["result"]);finish(t,reply["result"]["error"]|"ai_remote_failed");}else if(auto error=envelope(t,reply["result"]))finish(t,error);else{
    auto prior=receipt(t.operation);Task*leader=nullptr;if(*t.operation&&!prior)for(auto&other:tasks_)if(&other!=&t&&other.id&&!other.follows&&!strcmp(other.operation,t.operation)){leader=&other;break;}
    if(prior||leader){char expected[65],actual[65];digest(t.envelope.as<JsonVariantConst>(),actual);if(prior)copy(expected,sizeof expected,prior->hash);else digest(leader->envelope.as<JsonVariantConst>(),expected);if(strcmp(actual,expected))finish(t,"ai_operation_conflict");else if(prior){t.index=prior->completed;finish(t,*prior->error?prior->error:nullptr);}else{t.follows=leader->id;strcpy(t.state,"following");}}
    else{t.ownsOperation=true;if(auto error=attach(t))finish(t,error);else strcpy(t.state,"validating");}
   }
-  reply.clear();core_.invoke("/services/remote","release",args.as<JsonObjectConst>(),reply.to<JsonObject>(),owner_);
+  args.remove("include_payload");reply.clear();core_.invoke("/services/remote","release",args.as<JsonObjectConst>(),reply.to<JsonObject>(),owner_);
  }}
- void describe(JsonObject o)const{o["scope"]="system_ai_broker";o["request_format"]="wishos-ai/2";o["request_context"]="system snapshot of current and launch_origin from /sys/apps context";o["result_format"]="wishos-result/2";o["action_types"]="application,system";o["action_order"]="sequential_with_declared_service_completions";o["application_recipients"]="origin,foreground";o["application_wait"]="processed_by_acknowledge_or_explicit_queued";o["sequence_sources"]="inline_actions_or_verified_jsonl_file";o["argument_references"]="$asset relative path; $previous slash-separated object path";o["pending_capacity"]=4;o["inline_request_limit_bytes"]=MAX_WIRE-512;o["inline_result_limit_bytes"]=1536;o["action_limit_bytes"]=config_["max_action_bytes"];o["sequence_count_limit"]=nullptr;o["lifetime"]="current_boot";o["failure"]="stop_without_rollback_or_automatic_replay";o["cancellation"]="stop_after_inflight_native_completion";o["duplicate_operation_receipts"]=8;asyncContract(o,"submit","/services/ai")["id"]="id";auto settled=o["async"]["submit"]["settled"].to<JsonObject>();settled["field"]="state";settled["events"]["completed"]="completed";settled["events"]["failed"]="failed";}
+ void describe(JsonObject o)const{o["scope"]="system_ai_broker";o["progress"]["event"]="progress";o["progress"]["read"]="retained progress, progress_sequence, progress_at_ms";o["request_format"]="wishos-ai/2";o["request_context"]="system snapshot of current and launch_origin from /sys/apps context";o["result_format"]="wishos-result/2";o["action_types"]="application,system";o["action_order"]="sequential_with_declared_service_completions";o["application_recipients"]="origin,foreground";o["application_wait"]="processed_by_acknowledge_or_explicit_queued";o["sequence_sources"]="inline_actions_or_verified_jsonl_file";o["argument_references"]="$asset relative path; $previous slash-separated object path";o["pending_capacity"]=4;o["inline_request_limit_bytes"]=MAX_WIRE-512;o["inline_result_limit_bytes"]=1536;o["action_limit_bytes"]=config_["max_action_bytes"];o["sequence_count_limit"]=nullptr;o["lifetime"]="current_boot";o["failure"]="stop_without_rollback_or_automatic_replay";o["cancellation"]="stop_after_inflight_native_completion";o["duplicate_operation_receipts"]=8;asyncContract(o,"submit","/services/ai")["id"]="id";auto settled=o["async"]["submit"]["settled"].to<JsonObject>();settled["field"]="state";settled["events"]["completed"]="completed";settled["events"]["failed"]="failed";}
 };
 }

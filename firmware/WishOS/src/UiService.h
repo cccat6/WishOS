@@ -1,10 +1,15 @@
 // Brookesia JSON-UI 0.1.x compatibility subset, rendered by the upstream LVGL library.
 // Unsupported node/style/resource features are reported, never silently advertised.
-struct UiView {uint32_t owner=0;uint16_t rotation=0;char values[1025]="{}",focus[49]{},hidden[385]{};};
+struct UiView {uint32_t owner=0;uint16_t rotation=0;bool bindingUpdate=false;char values[1025]="{}",focus[49]{},hidden[385]{};};
 // UI transactions can be called from a bounded VM callback. Large model copies
 // use the same resource allocator as rendering, not recursive native stacks.
 template<class T>struct UiScratch {T*value=nullptr;UiScratch(){auto block=core.resources().allocate(sizeof(T));if(block)value=new(block)T;}~UiScratch(){if(value){value->~T();core.resources().freeAllocation(value);}}};
 static unsigned uiMissingGlyphs=0;
+// Font policy is frozen with the candidate UI tree. Every node in one
+// presentation uses the same defaults, including validation-only candidates.
+// This avoids reparsing all system UI settings for each label and font face.
+struct UiFontPolicy {char file[256]{};unsigned cacheGlyphs=32,cacheFaces=0;};
+static UiFontPolicy uiFontPolicy;
 static UiView uiRenderedView;static JsonDocument uiValues;
 static const char*validateUiView(JsonObjectConst a,UiView&v){
  if(a.containsKey("rotation")){if(!a["rotation"].is<uint16_t>()||a["rotation"].as<uint16_t>()>270||a["rotation"].as<uint16_t>()%90)return "ui_rotation";v.rotation=a["rotation"];}
@@ -14,22 +19,18 @@ static const char*validateUiView(JsonObjectConst a,UiView&v){
   for(auto f:values)if(!strlen(f.key().c_str())||strlen(f.key().c_str())>48||!f.value().is<const char*>())return "ui_values_type";serializeJson(values,v.values,sizeof v.values);}
  return nullptr;
 }
-static lv_display_t* uiDisplay=nullptr;static lv_obj_t* uiRoot=nullptr;static uint8_t uiDrawBuffer[boardpack::DISPLAY_WIDTH*8*2];
+static lv_display_t* uiDisplay=nullptr;static lv_obj_t* uiRoot=nullptr;
 struct UiSink {void*context;void(*write)(void*,const lv_area_t&,const uint16_t*);};
 // Named element geometry belongs to the rendered UI tree, not application
 // coordinate tables. Hit tests use the completed foreground presentation.
-// Decoder entries survive model updates while their source volume generation
-// remains valid. Providers without a change token opt out of reuse.
-struct UiImageGeneration {FileProvider*provider=nullptr;uint64_t revision=0;};
-static UiImageGeneration uiImageGenerations[8];
+// Source facts authorize reuse per image path, provider and content epoch.
+// Preparing a changed image retires only that path's header/decoded cache.
 static uint32_t uiAppliedImageCache=UINT32_MAX,uiAppliedHeaderCache=UINT32_MAX;
-static void observeUiImageGeneration(FileProvider&provider){
- auto revision=provider.changeRevision();UiImageGeneration*slot=nullptr;
- for(auto&entry:uiImageGenerations)if(entry.provider==&provider){slot=&entry;break;}else if(!entry.provider&&!slot)slot=&entry;
- if(!slot||slot->provider!=&provider||!revision||slot->revision!=revision)lv_image_cache_drop(nullptr);
- if(slot)*slot={&provider,revision};
-}
-struct UiNodeRef {lv_obj_t*node;char id[48];UiNodeRef*next;};
+#include "UiImageMetadata.inc"
+static void applyUiImageCachePolicy(){auto bytes=policies.get<uint32_t>("/sys/ui","image_cache_bytes",0);if(uiAppliedImageCache!=bytes)configureUiImageCache(bytes);auto headers=bytes?32u:0u;if(uiAppliedHeaderCache!=headers){lv_image_header_cache_resize(headers,true);uiAppliedHeaderCache=headers;}}
+struct UiNodeRef {lv_obj_t*node;char id[48];UiNodeRef*next;FileProvider*provider=nullptr;uint64_t revision=0;};
+struct UiTemplateIdentity{FileProvider*provider=nullptr;uint64_t revision=0,fontRegistry=0;char path[256]{};};
+static UiTemplateIdentity uiTemplate;static uint64_t uiFontRegistryRevision=1;
 static UiNodeRef*uiNodeRefs=nullptr;
 static void freeUiNodeRefs(UiNodeRef*nodes){while(nodes){auto next=nodes->next;core.resources().freeAllocation(nodes);nodes=next;}}
 struct UiHitRegion {char id[48];lv_area_t box;int parent=-1;bool target=false;};
@@ -50,6 +51,7 @@ static void commitUiGeometry(PresentationState::Stamp stamp){auto next=uiPrepare
 
 static UiSink*uiSink=nullptr;static char uiBase[256]{},uiCurrent[256]{},uiPresented[256]{};
 static unsigned uiDepth=0;static const char*uiError="none";
+#include "UiDrawBuffer.inc"
 static const char*uiReadError=nullptr;
 // LVGL stops drawing on decoder failure. Propagate that failure to the display
 // transaction instead of committing a frame with a silently missing image.
@@ -78,6 +80,7 @@ static void reapOrphanFonts(){for(unsigned i=0;i<4;++i){auto&f=fontFiles[i];if(f
 struct LvFile{FileProvider*p;char relative[256]{};uint64_t at=0;FileReadCache<16> cache;LvFile(FileProvider&provider,const char*path):p(&provider),cache(provider,relative){copy(relative,sizeof relative,path);}};
 static const char*loadJsonFile(const char*path,JsonDocument&doc){
  char full[256];const char*rel;FileProvider*p;if(!resolveFile(path,full,rel,p))return "invalid_ui_path";
+ Vfs::Access lease(vfs,false);if(auto error=lease.add(full,p->caseInsensitive()))return error;if(!p->available())return "provider_unavailable";
  FileInfo info;if(auto e=p->stat(rel,info))return e;if(info.directory||!info.size||info.size>16384)return "ui_document_limit";
  char*text=static_cast<char*>(core.resources().allocate(size_t(info.size)+1));if(!text)return "ui_memory_budget";size_t got=0;auto e=p->read(rel,0,(uint8_t*)text,info.size,got);
  if(!e&&got!=info.size)e="short_read";if(!e){text[got]=0;if(deserializeJson(doc,text,got,DeserializationOption::NestingLimit(16)))e="invalid_json";}core.resources().freeAllocation(text);return e;
@@ -105,8 +108,10 @@ static const char*validateUiNode(JsonObjectConst node,UiValidation&validation,un
  auto layout=node["layout"].as<JsonObjectConst>();for(auto p:layout)if(!Policies::choice("type,flexFlow,gap,mainAlign,crossAlign",p.key().c_str()))return "ui_layout_property";for(auto key:{"type","flexFlow","mainAlign","crossAlign"})if(layout.containsKey(key)&&!layout[key].is<const char*>())return "layout_type";if(layout.containsKey("gap")){int n;if(!parseUiDimension(layout["gap"],n)||n==LV_SIZE_CONTENT)return "ui_dimension";}for(auto key:{"mainAlign","crossAlign"})if(!Policies::choice("start,center,end",layout[key]|"start"))return "flex_alignment";if(!Policies::choice("none,flex",layout["type"]|"none"))return "layout_not_supported";
  if(layout.containsKey("flexFlow")&&!Policies::choice("row,column",layout["flexFlow"]|"column"))return "layout_not_supported";
  if(node["labelProps"].containsKey("missingGlyph")&&!node["labelProps"]["missingGlyph"].is<const char*>())return "missing_glyph_policy";if(!Policies::choice("error,replace",node["labelProps"]["missingGlyph"]|"error"))return "missing_glyph_policy";
- for(auto p:node["labelProps"].as<JsonObjectConst>())if(!Policies::choice("text,missingGlyph,longMode,metrics",p.key().c_str()))return "ui_label_property";
+ for(auto p:node["labelProps"].as<JsonObjectConst>())if(!Policies::choice("text,missingGlyph,longMode,metrics,verticalAlign,minFontSize",p.key().c_str()))return "ui_label_property";
  if(node["labelProps"].containsKey("longMode")&&!node["labelProps"]["longMode"].is<const char*>())return "ui_label_long_mode";
+ if(node["labelProps"].containsKey("minFontSize")&&(node["type"]!="label"||!node["labelProps"]["minFontSize"].is<unsigned>()||node["labelProps"]["minFontSize"].as<unsigned>()<8||node["labelProps"]["minFontSize"].as<unsigned>()>96||node["labelProps"]["metrics"]!="ink"||!node["placement"]["width"].is<int>()||node["placement"]["width"].as<int>()<1))return "ui_label_font_fit";
+ if(node["labelProps"].containsKey("verticalAlign")&&(!node["labelProps"]["verticalAlign"].is<const char*>()||!Policies::choice("start,center,end",node["labelProps"]["verticalAlign"])||node["type"]!="label"||node["labelProps"]["metrics"]!="ink"||!node["placement"]["height"].is<int>()||node["placement"]["height"].as<int>()<1))return "ui_label_vertical_align";
  if(node["labelProps"].containsKey("text")&&!node["labelProps"]["text"].is<const char*>())return "ui_label_text";if(!Policies::choice("wrap,clip,ellipsis",node["labelProps"]["longMode"]|"wrap"))return "ui_label_long_mode";if(node["labelProps"].containsKey("metrics")&&!node["labelProps"]["metrics"].is<const char*>())return "ui_label_metrics";if(!Policies::choice("line,ink",node["labelProps"]["metrics"]|"line"))return "ui_label_metrics";if(node["labelProps"]["metrics"]=="ink"&&!strcmp(node["labelProps"]["longMode"]|"wrap","wrap"))return "ink_metrics_require_single_line";
  for(auto p:node["imageProps"].as<JsonObjectConst>())if(!Policies::choice("src,fit",p.key().c_str()))return "ui_image_property";
  if(node["imageProps"].containsKey("src")&&!node["imageProps"]["src"].is<const char*>())return "ui_image_source";if(node["imageProps"].containsKey("fit")&&!node["imageProps"]["fit"].is<const char*>())return "ui_image_fit";
@@ -129,8 +134,9 @@ static bool lvGlyph(const lv_font_t*f,lv_font_glyph_dsc_t*d,uint32_t cp,uint32_t
 static const void*lvBitmap(lv_font_glyph_dsc_t*d,lv_draw_buf_t*buf){if(!buf)return nullptr;size_t stride=lv_draw_buf_width_to_stride(d->box_w,LV_COLOR_FORMAT_A8);return nm::nativeGlyphAlpha(d->gid.index,uintptr_t(d->resolved_font->dsc),buf->data,stride)?buf:nullptr;}
 #include "UiVectorFonts.inc"
 static const lv_font_t*selectFont(unsigned size,const char*name="system"){
+ if(!strcmp(name,"builtin")){for(unsigned i=0;i<sizeof fontSizes;++i)if(size==fontSizes[i])return &localFonts[i];return nullptr;}
  if(strcmp(name,"system")){if(strchr(name,'/')||strstr(name,".ttf"))return vectorFont(name,size);for(uint32_t owner:{uiRenderedView.owner,uint32_t(0)})for(auto&f:fontFiles)if(f.font&&f.owner==owner&&!strcmp(f.name,name)&&(f.size==size||f.scalable&&!f.size))return f.scalable?vectorFont(f.path,size):f.font;return nullptr;}
- JsonDocument settings;policies.resolve("/sys/ui","system",settings.to<JsonObject>());const char*file=settings["font_file"]|"";if(*file)return vectorFont(file,size);
+ if(*uiFontPolicy.file)return vectorFont(uiFontPolicy.file,size);
  for(unsigned i=0;i<sizeof fontSizes;++i)if(size==fontSizes[i])return &localFonts[i];return nullptr;
 }
 
@@ -147,9 +153,9 @@ static bool initUi(){if(uiDisplay)return true;if(!bindUiMemory(core.resources())
  fs.read_cb=[](lv_fs_drv_t*,void*x,void*out,uint32_t n,uint32_t*got)->lv_fs_res_t{auto f=(LvFile*)x;size_t z=0;memset(out,0,n);auto e=f->cache.read(f->at,(uint8_t*)out,n,z);*got=z;f->at+=z;if(e)uiReadError=e;return e?LV_FS_RES_FS_ERR:LV_FS_RES_OK;};
  fs.seek_cb=[](lv_fs_drv_t*,void*x,uint32_t at,lv_fs_whence_t whence)->lv_fs_res_t{auto f=(LvFile*)x;FileInfo info;if(whence==LV_FS_SEEK_SET)f->at=at;else if(whence==LV_FS_SEEK_CUR)f->at+=at;else{if(f->p->stat(f->relative,info))return LV_FS_RES_FS_ERR;f->at=info.size+at;}return f->at<=UINT32_MAX?LV_FS_RES_OK:LV_FS_RES_INV_PARAM;};
  fs.tell_cb=[](lv_fs_drv_t*,void*x,uint32_t*at)->lv_fs_res_t{*at=((LvFile*)x)->at;return LV_FS_RES_OK;};lv_fs_drv_register(&fs);
- uiDisplay=lv_display_create(boardpack::DISPLAY_WIDTH,boardpack::DISPLAY_HEIGHT);if(!uiDisplay){lv_deinit();releaseUiDecoders();return false;}lv_display_set_color_format(uiDisplay,LV_COLOR_FORMAT_RGB565);lv_display_set_buffers(uiDisplay,uiDrawBuffer,nullptr,sizeof(uiDrawBuffer),LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_flush_cb(uiDisplay,uiFlush);uiRoot=lv_screen_active();lv_obj_set_style_bg_color(uiRoot,lv_color_white(),0);return !uiMemoryFailed();
+ uiDisplay=lv_display_create(boardpack::DISPLAY_WIDTH,boardpack::DISPLAY_HEIGHT);if(!uiDisplay){lv_deinit();releaseUiDecoders();return false;}lv_display_set_color_format(uiDisplay,LV_COLOR_FORMAT_RGB565);auto buffer=static_cast<uint8_t*>(core.resources().allocate(uiDefaultDrawBufferBytes));if(!buffer){lv_display_delete(uiDisplay);uiDisplay=nullptr;lv_deinit();releaseUiDecoders();return false;}bindUiDrawBuffer(buffer,uiDefaultDrawBufferBytes);lv_display_set_flush_cb(uiDisplay,uiFlush);uiRoot=lv_screen_active();lv_obj_set_style_bg_color(uiRoot,lv_color_white(),0);return !uiMemoryFailed();
 }
-static void resetUiRenderer(){uiIdleRetire=false;uiAppliedImageCache=uiAppliedHeaderCache=UINT32_MAX;for(auto&entry:uiImageGenerations)entry={};if(uiDisplay){lv_obj_clean(uiRoot);freeUiNodeRefs(uiNodeRefs);uiNodeRefs=nullptr;releaseUiGeometry(uiPreparedGeometry);releaseUiGeometry(uiVisibleGeometry);uiPreparedGeometry=uiVisibleGeometry=nullptr;uiVisibleStamp={};reapVectorFonts(true);lv_deinit();uiDisplay=nullptr;uiRoot=nullptr;releaseUiDecoders();}reapOrphanFonts();}
+static void resetUiRenderer(){uiTemplate={};uiIdleRetire=false;clearUiImageMetadata();uiAppliedImageCache=uiAppliedHeaderCache=uiAppliedDecodedImageCache=UINT32_MAX; if(uiDisplay){lv_obj_clean(uiRoot);freeUiNodeRefs(uiNodeRefs);uiNodeRefs=nullptr;releaseUiGeometry(uiPreparedGeometry);releaseUiGeometry(uiVisibleGeometry);uiPreparedGeometry=uiVisibleGeometry=nullptr;uiVisibleStamp={};reapVectorFonts(true);lv_deinit();uiDisplay=nullptr;uiRoot=nullptr;core.resources().freeAllocation(uiDrawBuffer);uiDrawBuffer=nullptr;uiDrawBufferBytes=0;releaseUiDecoders();}reapOrphanFonts();}
 static char* uiFallbackText(const char*text,const lv_font_t*font,bool replace){
  size_t n=strlen(text);char*out=static_cast<char*>(core.resources().allocate(n+1));if(!out)return nullptr;size_t at=0,wrote=0;
  while(at<n){uint8_t lead=text[at];size_t length=lead<128?1:(lead&0xe0)==0xc0?2:(lead&0xf0)==0xe0?3:(lead&0xf8)==0xf0?4:1;bool valid=at+length<=n;uint32_t cp=length==1?lead:lead&((1<<(7-length))-1);
@@ -159,10 +165,28 @@ static char* uiFallbackText(const char*text,const lv_font_t*font,bool replace){
  }out[wrote]=0;return out;
 }
 // Keep image decoder scratch buffers out of every recursive node frame.
+struct UiImageAdmission{FileProvider*provider=nullptr;uint64_t revision=0;lv_image_header_t header{};char qualified[260]{};};
+[[gnu::noinline]] static bool admitUiImage(const char*full,UiImageAdmission&source){const char*relative;auto provider=vfs.resolve(full,relative);if(!provider){uiError="image_not_found";return false;}
+ Vfs::Access temporaryLease(vfs,false);if(uiLeaseOwner?!vfs.lockRead(full,uiLeaseOwner):temporaryLease.add(full,provider->caseInsensitive())!=nullptr){uiError="asset_lease_capacity";return false;}
+ snprintf(source.qualified,sizeof source.qualified,"V:%s",full);auto qualified=source.qualified;
+ if(!provider->available()){invalidateUiImageMetadata(*provider,0);lv_image_cache_drop(qualified);uiError="provider_unavailable";return false;}
+ auto revision=provider->contentRevision();invalidateUiImageMetadata(*provider,revision);FileInfo info;auto&hdr=source.header;bool png=false;uiReadError=nullptr;
+ if(auto cached=findUiImageMetadata(*provider,full,revision,qualified)){info=cached->file;hdr=cached->header;png=cached->png;}
+ else{
+  lv_image_cache_drop(qualified);
+  if(auto e=provider->stat(relative,info)){uiError=e;return false;}if(info.directory){uiError="is_directory";return false;}
+  if(lv_image_decoder_get_info(qualified,&hdr)!=LV_RESULT_OK){uiError=uiReadError?uiReadError:"image_decode_not_available";return false;}
+  uint8_t signature[8]{};size_t signatureBytes=0;if(auto e=provider->read(relative,0,signature,sizeof signature,signatureBytes)){uiError=e;return false;}const uint8_t pngSignature[]={137,80,78,71,13,10,26,10};png=signatureBytes==8&&!memcmp(signature,pngSignature,8);
+  if(provider->available()&&provider->contentRevision()==revision)rememberUiImageMetadata(*provider,full,revision,info,hdr,png);
+ }
+ if(!hdr.w||!hdr.h||hdr.w>2048||hdr.h>2048){uiError="image_dimensions_limit";return false;}
+ auto pngBudget=policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384);if(png&&(uint64_t(hdr.w)*hdr.h*4>pngBudget||info.size>pngBudget)){uiError="large_png_requires_streamable_asset";return false;}source.provider=provider;source.revision=revision;return true;
+}
 [[gnu::noinline]] static bool configureUiImage(JsonObjectConst node,lv_obj_t*o,JsonObjectConst style){
- const char*src=uiValues[node["id"]|""]|(node["imageProps"]["src"]|"");char full[256];if(!normalizePath(uiBase,src,full,sizeof(full))){uiError="invalid_image_path";return false;}if(uiLeaseOwner&&!vfs.lockRead(full,uiLeaseOwner)){uiError="asset_lease_capacity";return false;}const char*relative;auto provider=vfs.resolve(full,relative);FileInfo info;if(!provider){uiError="image_not_found";return false;}if(auto e=provider->stat(relative,info)){uiError=e;return false;}if(info.directory){uiError="is_directory";return false;}
- observeUiImageGeneration(*provider);char qualified[260];snprintf(qualified,sizeof(qualified),"V:%s",full);lv_image_header_t hdr{};uiReadError=nullptr;if(lv_image_decoder_get_info(qualified,&hdr)!=LV_RESULT_OK){uiError=uiReadError?uiReadError:"image_decode_not_available";return false;}if(!hdr.w||!hdr.h||hdr.w>2048||hdr.h>2048){uiError="image_dimensions_limit";return false;}uint8_t signature[8]{};size_t signatureBytes=0;if(auto error=provider->read(relative,0,signature,sizeof signature,signatureBytes)){uiError=error;return false;}const uint8_t pngSignature[]={137,80,78,71,13,10,26,10};bool png=signatureBytes==8&&!memcmp(signature,pngSignature,8);if(png&&(uint64_t(hdr.w)*hdr.h*4>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384)||info.size>policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384))){uiError="large_png_requires_streamable_asset";return false;}lv_image_set_src(o,qualified);if(!style["imageOpacity"].isNull()){int opacity=dimension(style["imageOpacity"],255);lv_obj_set_style_image_opa(o,opacity,0);}
- const char*fit=node["imageProps"]["fit"]|"none";if(strcmp(fit,"none"))lv_image_set_inner_align(o,!strcmp(fit,"contain")?LV_IMAGE_ALIGN_CONTAIN:LV_IMAGE_ALIGN_COVER);return true;
+ const char*src=uiValues[node["id"]|""]|(node["imageProps"]["src"]|"");char full[256];if(!normalizePath(uiBase,src,full,sizeof full)){uiError="invalid_image_path";return false;}Vfs::Access lease(vfs,false);const char*relative;auto provider=vfs.resolve(full,relative);if(provider)if(lease.add(full,provider->caseInsensitive())){uiError="asset_lease_capacity";return false;}UiImageAdmission source;if(!admitUiImage(full,source))return false;
+ lv_image_set_src(o,source.qualified);if(!style["imageOpacity"].isNull()){int opacity=dimension(style["imageOpacity"],255);lv_obj_set_style_image_opa(o,opacity,0);}
+ const char*fit=node["imageProps"]["fit"]|"none";if(strcmp(fit,"none"))lv_image_set_inner_align(o,!strcmp(fit,"contain")?LV_IMAGE_ALIGN_CONTAIN:LV_IMAGE_ALIGN_COVER);
+ for(auto ref=uiNodeRefs;ref;ref=ref->next)if(ref->node==o){ref->provider=source.provider;ref->revision=source.revision;break;}return true;
 }
 // Fonts can carry substantial asymmetric leading. Opt-in single-line controls
 // use glyph ink extents for their intrinsic box; regular paragraphs keep the
@@ -174,8 +198,8 @@ static bool buildNode(JsonObjectConst node,lv_obj_t*parent,unsigned depth=0,UiTe
  ++uiNodes; // Full structure was checked by validateUiDocument before allocation.
  const char*type=node["type"]|"";bool root=!strcmp(type,"viewScreen"),label=!strcmp(type,"label"),image=!strcmp(type,"image");
  auto o=root?parent:label?lv_label_create(parent):image?lv_image_create(parent):!strcmp(type,"qrcode")?lv_qrcode_create(parent):!strcmp(type,"button")?lv_button_create(parent):lv_obj_create(parent);
- if(!o){uiError="ui_memory_budget";return false;}lv_obj_remove_flag(o,LV_OBJ_FLAG_SCROLLABLE);
- const char*id=node["id"]|"";if(*id){lv_obj_add_flag(o,LV_OBJ_FLAG_CLICKABLE);auto memory=core.resources().allocate(sizeof(UiNodeRef));if(!memory){uiError="ui_memory_budget";return false;}auto ref=new(memory)UiNodeRef{o,{},uiNodeRefs};copy(ref->id,sizeof ref->id,id);uiNodeRefs=ref;}
+ if(!o){uiError="ui_memory_budget";return false;}lv_obj_remove_flag(o,LV_OBJ_FLAG_SCROLLABLE);lv_obj_set_style_shadow_width(o,0,0);
+ const char*id=node["id"]|"";if(*id)lv_obj_add_flag(o,LV_OBJ_FLAG_CLICKABLE);if(*id||image){auto memory=core.resources().allocate(sizeof(UiNodeRef));if(!memory){uiError="ui_memory_budget";return false;}auto ref=new(memory)UiNodeRef{o,{},uiNodeRefs};copy(ref->id,sizeof ref->id,id);uiNodeRefs=ref;}
 
  int inkHeight=0;auto style=node["style"].as<JsonObjectConst>();int lineHeight=style.containsKey("lineHeight")?dimension(style["lineHeight"],0):inherited.lineHeight;auto place=node["placement"].as<JsonObjectConst>();auto layout=node["layout"].as<JsonObjectConst>();
  if(!style["bgColor"].isNull()){lv_obj_set_style_bg_color(o,lv_color_hex(rgb(style["bgColor"],0xffffff)),0);lv_obj_set_style_bg_opa(o,LV_OPA_COVER,0);}
@@ -192,28 +216,33 @@ static bool buildNode(JsonObjectConst node,lv_obj_t*parent,unsigned depth=0,UiTe
  if(lineHeight&&font)lv_obj_set_style_text_line_space(o,lineHeight-int(font->line_height),0);
  if(*uiRenderedView.focus&&!strcmp(node["id"]|"",uiRenderedView.focus)){lv_obj_set_style_border_width(o,2,0);lv_obj_set_style_border_color(o,lv_color_black(),0);}
  if(label){const char*text=uiValues[node["id"]|""]|(node["labelProps"]["text"]|"");const char*missing=node["labelProps"]["missingGlyph"]|"error";
- char*safe=uiFallbackText(text,font,!strcmp(missing,"replace"));if(!safe){if(!strcmp(uiError,"none"))uiError="ui_memory_budget";return false;}if(node["labelProps"]["metrics"]=="ink")for(char*p=safe;*p;++p)if(*p=='\n'||*p=='\r')*p=' ';lv_label_set_text(o,safe);if(node["labelProps"]["metrics"]=="ink")inkHeight=uiInkBox(o,font,safe);core.resources().freeAllocation(safe);auto mode=node["labelProps"]["longMode"]|"wrap";lv_label_set_long_mode(o,!strcmp(mode,"ellipsis")?LV_LABEL_LONG_DOT:!strcmp(mode,"clip")?LV_LABEL_LONG_CLIP:LV_LABEL_LONG_WRAP);lv_obj_set_width(o,LV_PCT(100));}
+ char*safe=uiFallbackText(text,font,!strcmp(missing,"replace"));if(!safe){if(!strcmp(uiError,"none"))uiError="ui_memory_budget";return false;}if(node["labelProps"]["metrics"]=="ink")for(char*p=safe;*p;++p)if(*p=='\n'||*p=='\r')*p=' ';if(node["labelProps"].containsKey("minFontSize")){unsigned minimum=node["labelProps"]["minFontSize"];if(minimum>size){core.resources().freeAllocation(safe);uiError="ui_label_font_fit";return false;}int available=dimension(place["width"],0)-std::max(0,int(lv_obj_get_style_pad_left(o,0)))-std::max(0,int(lv_obj_get_style_pad_right(o,0)));int width=lv_text_get_width(safe,strlen(safe),font,0);if(width>available&&size>minimum){size=std::max(minimum,unsigned(std::max(0,available)*size/width));for(;;){font=selectFont(size,fontName);if(!font){core.resources().freeAllocation(safe);return false;}if(size==minimum||lv_text_get_width(safe,strlen(safe),font,0)<=available)break;--size;}lv_obj_set_style_text_font(o,font,0);}}lv_label_set_text(o,safe);if(node["labelProps"]["metrics"]=="ink")inkHeight=uiInkBox(o,font,safe);core.resources().freeAllocation(safe);auto mode=node["labelProps"]["longMode"]|"wrap";lv_label_set_long_mode(o,!strcmp(mode,"ellipsis")?LV_LABEL_LONG_DOT:!strcmp(mode,"clip")?LV_LABEL_LONG_CLIP:LV_LABEL_LONG_WRAP);lv_obj_set_width(o,LV_PCT(100));}
  if(image&&!configureUiImage(node,o,style))return false;
  if(!strcmp(type,"qrcode")){auto text=uiValues[node["id"]|""]|(node["qrcodeProps"]["text"]|"");int size=dimension(place["width"],128);if(size<32||size>512||strlen(text)>512){uiError="qrcode_range";return false;}lv_qrcode_set_size(o,size);lv_qrcode_set_dark_color(o,lv_color_black());lv_qrcode_set_light_color(o,lv_color_white());if(lv_qrcode_update(o,text,strlen(text))!=LV_RESULT_OK){uiError="qrcode_data";return false;}}
 
  if(!root){if(!place["width"].isNull())lv_obj_set_width(o,dimension(place["width"],LV_SIZE_CONTENT));else if(!label&&!image&&strcmp(type,"qrcode"))lv_obj_set_width(o,LV_PCT(100));
   if(!place["height"].isNull())lv_obj_set_height(o,dimension(place["height"],LV_SIZE_CONTENT));else lv_obj_set_height(o,inkHeight?inkHeight:LV_SIZE_CONTENT);
   if(!strcmp(place["align"]|"","center"))lv_obj_center(o);if(!place["x"].isNull()||!place["y"].isNull())lv_obj_set_pos(o,dimension(place["x"],0),dimension(place["y"],0));}
+ if(label&&inkHeight&&node["labelProps"].containsKey("verticalAlign")){const char*align=node["labelProps"]["verticalAlign"];int extra=std::max(0,dimension(place["height"],inkHeight)-inkHeight);if(strcmp(align,"start"))lv_obj_set_style_pad_top(o,lv_obj_get_style_pad_top(o,0)+(!strcmp(align,"center")?extra/2:extra),0);}
  const char*lt=layout["type"]|"none";if(!strcmp(lt,"flex")){const char*flow=layout["flexFlow"]|"column";lv_obj_set_flex_flow(o,!strcmp(flow,"row")?LV_FLEX_FLOW_ROW:LV_FLEX_FLOW_COLUMN);lv_obj_set_style_pad_row(o,dimension(layout["gap"],0),0);lv_obj_set_style_pad_column(o,dimension(layout["gap"],0),0);auto align=[](const char*s){return !strcmp(s,"center")?LV_FLEX_ALIGN_CENTER:!strcmp(s,"end")?LV_FLEX_ALIGN_END:LV_FLEX_ALIGN_START;};lv_obj_set_flex_align(o,align(layout["mainAlign"]|"start"),align(layout["crossAlign"]|"start"),align(layout["crossAlign"]|"start"));}
  for(auto child:node["children"].as<JsonArrayConst>())if(!buildNode(child.as<JsonObjectConst>(),o,depth+1,{size,fontName,lineHeight,textColor,textAlign}))return false;return true;
 }
 static bool prepareUiDocument(const char*path,JsonObjectConst d,const UiView&view,bool validateOnly){
  if(auto e=validateUiDocument(path,d)){uiError=e;return false;}if(!initUi()){uiError="ui_memory_budget";return false;}clearUiMemoryFailure();
- auto imageCache=policies.get<uint32_t>("/sys/ui","image_cache_bytes",0);if(uiAppliedImageCache!=imageCache){lv_image_cache_resize(imageCache,true);uiAppliedImageCache=imageCache;}
- auto headerCount=imageCache?32u:0u;if(uiAppliedHeaderCache!=headerCount){lv_image_header_cache_resize(headerCount,true);uiAppliedHeaderCache=headerCount;}
+ ++uiFontPreparation;UiFontPolicy previousFontPolicy=uiFontPolicy;JsonDocument fontSettings;policies.resolve("/sys/ui","system",fontSettings.to<JsonObject>());
+ if(fontSettings.overflowed()){uiError="ui_memory_budget";reapVectorFonts(false,0);return false;}
+ copy(uiFontPolicy.file,sizeof uiFontPolicy.file,fontSettings["font_file"]|"");uiFontPolicy.cacheGlyphs=fontSettings["font_cache_glyphs"]|32u;uiFontPolicy.cacheFaces=fontSettings["font_face_cache"]|0u;
+ fontSettings.clear();
+ UiDrawBufferCandidate drawBuffer;if(!drawBuffer.prepare()){uiFontPolicy=previousFontPolicy;return false;}
+ applyUiImageCachePolicy();
  char rootBase[256];copy(rootBase,sizeof(rootBase),path);char*slash=strrchr(rootBase,'/');if(slash)*slash=0;
- UiScratch<UiView> savedView;if(!savedView.value){uiError="ui_memory_budget";return false;}auto&previousView=*savedView.value;previousView=uiRenderedView;char previousBase[sizeof uiBase];copy(previousBase,sizeof previousBase,uiBase);JsonDocument previousValues;swap(uiValues,previousValues);
- auto restore=[&](){swap(uiValues,previousValues);copy(uiBase,sizeof uiBase,previousBase);uiRenderedView=previousView;lv_display_set_resolution(uiDisplay,previousView.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,previousView.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT);};uiRenderedView=view;
+ UiScratch<UiView> savedView;if(!savedView.value){uiFontPolicy=previousFontPolicy;uiError="ui_memory_budget";reapVectorFonts(false,0);return false;}auto&previousView=*savedView.value;previousView=uiRenderedView;char previousBase[sizeof uiBase];copy(previousBase,sizeof previousBase,uiBase);JsonDocument previousValues;swap(uiValues,previousValues);
+ auto restore=[&](){swap(uiValues,previousValues);copy(uiBase,sizeof uiBase,previousBase);uiRenderedView=previousView;uiFontPolicy=previousFontPolicy;lv_display_set_resolution(uiDisplay,previousView.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,previousView.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT);};uiRenderedView=view;
  if(deserializeJson(uiValues,view.values)){restore();uiError="ui_values_invalid";return false;}
  lv_display_set_resolution(uiDisplay,view.rotation%180?boardpack::DISPLAY_HEIGHT:boardpack::DISPLAY_WIDTH,view.rotation%180?boardpack::DISPLAY_WIDTH:boardpack::DISPLAY_HEIGHT);
- auto candidate=lv_obj_create(nullptr);if(!candidate){restore();uiError="ui_memory_budget";return false;}
+ auto candidate=lv_obj_create(nullptr);if(!candidate){restore();uiError="ui_memory_budget";reapVectorFonts(false,0);return false;}
  auto previousRefs=uiNodeRefs;uiNodeRefs=nullptr;
- unsigned oldNodes=uiNodes,oldMissing=uiMissingGlyphs;uiNodes=0;uiMissingGlyphs=0;uiError="none";bool ok=true;
+ unsigned oldNodes=uiNodes,oldMissing=uiMissingGlyphs;uiNodes=0;uiMissingGlyphs=0;uiError="none";uiReadError=nullptr;bool ok=true;
  for(auto a:d["assets"].as<JsonArrayConst>()){
    JsonDocument external;JsonObjectConst obj;copy(uiBase,sizeof(uiBase),rootBase);
    if(a.is<const char*>()){
@@ -224,15 +253,24 @@ static bool prepareUiDocument(const char*path,JsonObjectConst d,const UiView&vie
    }else obj=a.as<JsonObjectConst>();
    if(!buildNode(obj,candidate)){ok=false;break;}
  }
+ if(ok)if(auto error=checkPreparedVectorFonts()){uiError=error;ok=false;}
  UiGeometry*geometry=nullptr;if(ok&&!validateOnly){lv_obj_update_layout(candidate);geometry=captureUiGeometry(candidate,view.rotation);if(!geometry){uiError="ui_memory_budget";ok=false;}}
  if(uiMemoryFailed()){uiError="ui_memory_budget";ok=false;}
- if(!ok||validateOnly){releaseUiGeometry(geometry);lv_obj_delete(candidate);freeUiNodeRefs(uiNodeRefs);uiNodeRefs=previousRefs;uiNodes=oldNodes;uiMissingGlyphs=oldMissing;restore();reapVectorFonts(false,0);return ok;}
+ if(!ok||validateOnly){releaseUiGeometry(geometry);lv_obj_delete(candidate);freeUiNodeRefs(uiNodeRefs);uiNodeRefs=previousRefs;uiNodes=oldNodes;uiMissingGlyphs=oldMissing;restore();discardVectorPreparation();return ok;}
  // Candidate layout was settled before geometry capture. Loading the screen
  // keeps the same root dimensions, so a second full-tree layout pass here only
  // duplicates the most expensive part of a presentation switch and delays input.
- releaseUiGeometry(uiPreparedGeometry);uiPreparedGeometry=geometry;auto previous=uiRoot;uiRoot=candidate;lv_screen_load(uiRoot);lv_obj_delete(previous);freeUiNodeRefs(previousRefs);reapVectorFonts();reapOrphanFonts();return true;
+ drawBuffer.commit();uiTemplate={};releaseUiGeometry(uiPreparedGeometry);uiPreparedGeometry=geometry;auto previous=uiRoot;uiRoot=candidate;lv_screen_load(uiRoot);lv_obj_delete(previous);freeUiNodeRefs(previousRefs);reapVectorFonts();reapOrphanFonts();return true;
 }
-static bool prepareUi(const char*path,const UiView&view=UiView{},bool validateOnly=false){JsonDocument doc;if(auto e=loadJsonFile(path,doc)){uiError=e;return false;}return prepareUiDocument(path,doc.as<JsonObjectConst>(),view,validateOnly);}
+#include "UiImageBindings.inc"
+static bool prepareUi(const char*path,const UiView&view=UiView{},bool validateOnly=false){
+ const char*relative;auto provider=vfs.resolve(path,relative);auto revision=provider?provider->contentRevision():0;
+ if(!validateOnly&&view.bindingUpdate){auto updated=updateUiImageBindings(path,view);if(updated>=0)return updated!=0;}
+ JsonDocument doc;if(auto e=loadJsonFile(path,doc)){uiError=e;if(!strcmp(e,"ui_memory_budget"))reapVectorFonts(false,0);return false;}
+ if(!prepareUiDocument(path,doc.as<JsonObjectConst>(),view,validateOnly))return false;
+ if(!validateOnly&&provider&&revision&&provider->available()&&provider->contentRevision()==revision){bool inlineAssets=true;for(auto asset:doc["assets"].as<JsonArrayConst>())inlineAssets&=asset.is<JsonObjectConst>();if(inlineAssets){uiTemplate.provider=provider;uiTemplate.revision=revision;uiTemplate.fontRegistry=uiFontRegistryRevision;copy(uiTemplate.path,sizeof uiTemplate.path,path);}}
+ return true;
+}
 // An explicit bounded raster region can be advanced over several event-loop
 // turns. The renderer owns LVGL invalidation; layout was settled by prepareUi.
 static bool renderUiRegion(const lv_area_t&area,UiSink&sink,bool exact=false){if(!uiDisplay)return false;clearUiMemoryFailure();uiReadError=nullptr;uiSink=&sink;if(exact)uiDisplay->inv_p=0;lv_obj_invalidate_area(uiRoot,&area);lv_refr_now(uiDisplay);uiSink=nullptr;if(uiMemoryFailed())uiReadError="ui_memory_budget";if(uiReadError){uiError=uiReadError;lv_image_cache_drop(nullptr);return false;}return true;}
@@ -273,7 +311,9 @@ static const char*displayViewStamp(JsonObjectConst a,PresentationState::Stamp&st
  if(a.containsKey("view_revision")&&(!a["view_revision"].is<uint32_t>()||a["view_revision"].as<uint32_t>()!=stamp.revision))return "view_revision_conflict";return nullptr;
 }
 static bool uiUsesFont(lv_obj_t*node,const lv_font_t*font){if(!node)return false;if(lv_obj_get_style_text_font(node,LV_PART_MAIN)==font)return true;for(uint32_t i=0;i<lv_obj_get_child_count(node);++i)if(uiUsesFont(lv_obj_get_child(node,i),font))return true;return false;}
+#include "UiFontCheck.inc"
 static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
+ if(!strcmp(m,"font_check"))return uiFontCheck(a,out);
  if(!strcmp(m,"read")){out["application"]["file"]=uiAppFile;out["application"]["entry"]=uiAppEntry;out["application"]["owner"]=uiAppOwner;out["application"]["binding_count"]=uiRuleCount;}
  if(!strcmp(m,"validate")){if(auto e=argumentFields(a,"path,rotation,values,focus,hidden,driver,schema_only"))return e;if(a.containsKey("schema_only")&&!a["schema_only"].is<bool>())return "validation_mode_type";if(!a["path"].is<const char*>())return "invalid_ui_path";char path[256];if(!normalizePath("/",a["path"],path,sizeof path))return "invalid_ui_path";UiScratch<UiView> viewStorage;if(!viewStorage.value)return "ui_memory_budget";auto&view=*viewStorage.value;view.owner=core.callerOwner();if(auto e=validateUiView(a,view))return e;if(a.containsKey("driver")){if(!a["driver"].is<const char*>())return "driver_id_limit";if(auto e=validateUiDriver(a["driver"]))return e;}uint32_t previous=uiLeaseOwner;constexpr uint32_t lease=0xffffffe8u;uiLeaseOwner=lease;bool valid;if(a["schema_only"]==true){JsonDocument d;auto error=loadJsonFile(path,d);if(!error)error=validateUiDocument(path,d.as<JsonObjectConst>());valid=!error;if(error)uiError=error;out["render_ready"]=false;}else valid=prepareUi(path,view,true);uiLeaseOwner=previous;vfs.release(lease);if(!valid)return uiError;out["validated"]=true;out["presented"]=false;return nullptr;}
  if(Policies::choice("create,activate,close,back,open,update,refresh",m)){
@@ -283,7 +323,12 @@ static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
   if(a.containsKey("history")&&(!a["history"].is<const char*>()||!Policies::choice("push,replace",a["history"])))return "ui_history_mode";
  }
 
- if(!strcmp(m,"read")||!strcmp(m,"capabilities")){out["path"]=uiCurrent;out["presented_path"]=uiPresented;out["history_depth"]=uiDepth;out["renderer"]="lvgl-9.3";out["format"]="brookesia-json-ui-0.1.x-subset";out["validation"]["document_method"]="validate";out["validation"]["rules_method"]="validate_app";out["validation"]["schema_only"]=true;out["nodes"]="viewScreen,container,label,button,image,qrcode";out["layout"]="absolute,flex-row,flex-column";out["images"]="png,jpeg,lvgl-bin";out["image_fit"]="none,contain,cover";out["label_overflow"]="wrap,clip,ellipsis";out["label_metrics"]="line,ink";out["flex_alignment"]="start,center,end";out["qrcode"]="text_or_value_by_node_id";if(!strcmp(m,"capabilities")){out["coordinate_range"]="-32767..32767_pixels";out["qrcode_size_range"]="32..512_square_pixels";}out["external_fonts"]="truetype-file,nmf1-indexed-1bpp";out["scalable_font_sizes"]["minimum"]=8;out["scalable_font_sizes"]["maximum"]=96;out["font_glyph_buffer_bytes"]=PackedFont::MAX_BITMAP_BYTES;out["max_document_bytes"]=16384;out["max_nodes"]=32;out["max_depth"]=8;out["png_decode_budget_bytes"]=policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384);out["png_budget_scope"]="resource_policy";out["svg"]= "host_compile_to_streamable_bin";out["styles"]="bgColor,bgOpacity,textColor,textAlign,fontSize,font,lineHeight,padding,paddingLeft,paddingRight,paddingTop,paddingBottom,radius,borderWidth,borderColor,imageOpacity";out["draw_buffer_bytes"]=sizeof(uiDrawBuffer);out["output_color_format"]="rgb565";out["dynamic_document_reload"]=true;out["pointer_hit_test"]="completed_foreground_geometry";out["image_source_updates"]="values_by_node_id";out["recompile_for_ui_change"]=false;out["admission"]="schema_before_queue; resources_at_frame_preparation";out["font_fallback_substitutions"]=uiMissingGlyphs;presentationState.describe(out["presentation"].to<JsonObject>());uint32_t target=a["view_id"]|presentationState.active();if(a.containsKey("view_id")&&(!a["view_id"].is<uint32_t>()||!presentationState.get(target)))return "view_not_found";auto active=uiDocument(target);out["view_id"]=target;if(auto item=presentationState.get(target))out["revision"]=item->revision;if(active){out["path"]=active->path;out["driver"]=active->driver;out["scheduled_revision"]=active->scheduled.revision;out["job_id"]=active->lastJob;out["admission_error"]=active->admissionError;JsonDocument values;if(!deserializeJson(values,active->view.values))out["values"]=values.as<JsonObjectConst>();}out["rotation"]=active?active->view.rotation:0;out["rendered_rotation"]=uiRenderedView.rotation;out["focus"]=active?active->view.focus:"";out["values_limit_bytes"]=1024;out["presentation_scope"]="whole_refresh";out["events"]="created,updated,activated,closed";out["update_activates_view"]=false;out["error"]=uiError;return nullptr;}
+ if(!strcmp(m,"read")||!strcmp(m,"capabilities")){out["path"]=uiCurrent;out["presented_path"]=uiPresented;out["history_depth"]=uiDepth;out["renderer"]="lvgl-9.3";out["format"]="brookesia-json-ui-0.1.x-subset";out["validation"]["document_method"]="validate";out["validation"]["rules_method"]="validate_app";out["validation"]["schema_only"]=true;out["nodes"]="viewScreen,container,label,button,image,qrcode";out["layout"]="absolute,flex-row,flex-column";out["images"]="png,jpeg,lvgl-bin";out["image_fit"]="none,contain,cover";out["label_overflow"]="wrap,clip,ellipsis";out["label_metrics"]="line,ink";out["label_vertical_align"]="start,center,end";out["label_font_fit"]="minFontSize";out["flex_alignment"]="start,center,end";out["qrcode"]="text_or_value_by_node_id";if(!strcmp(m,"capabilities")){out["coordinate_range"]="-32767..32767_pixels";out["qrcode_size_range"]="32..512_square_pixels";}out["font_check"]["method"]="font_check";out["font_check"]["max_codepoints"]=uiFontCheckLimit;out["external_fonts"]="truetype-file,nmf1-indexed-1bpp";out["scalable_font_sizes"]["minimum"]=8;out["scalable_font_sizes"]["maximum"]=96;out["font_glyph_buffer_bytes"]=PackedFont::MAX_BITMAP_BYTES;out["max_document_bytes"]=16384;out["max_nodes"]=32;out["max_depth"]=8;out["png_decode_budget_bytes"]=policies.get<uint32_t>("/sys/ui","png_decode_budget_bytes",16384);out["png_budget_scope"]="resource_policy";out["svg"]= "host_compile_to_streamable_bin";out["styles"]="bgColor,bgOpacity,textColor,textAlign,fontSize,font,lineHeight,padding,paddingLeft,paddingRight,paddingTop,paddingBottom,radius,borderWidth,borderColor,imageOpacity";out["draw_buffer_bytes"]=uiDrawBufferBytes;out["desired_draw_buffer_bytes"]=desiredUiDrawBufferBytes();out["draw_buffer_pending"]=uiDrawBufferBytes!=desiredUiDrawBufferBytes();out["draw_buffer_memory"]="resource_budget_auto";out["output_color_format"]="rgb565";out["dynamic_document_reload"]=true;out["pointer_hit_test"]="completed_foreground_geometry";out["elements"]["method"]="elements";out["elements"]["page_limit"]=8;out["elements"]["coordinates"]="logical_completed_frame";out["image_source_updates"]="values_by_node_id";out["recompile_for_ui_change"]=false;out["admission"]="schema_before_queue; resources_at_frame_preparation";out["font_fallback_substitutions"]=uiMissingGlyphs;presentationState.describe(out["presentation"].to<JsonObject>());uint32_t target=a["view_id"]|presentationState.active();if(a.containsKey("view_id")&&(!a["view_id"].is<uint32_t>()||!presentationState.get(target)))return "view_not_found";auto active=uiDocument(target);out["view_id"]=target;if(auto item=presentationState.get(target))out["revision"]=item->revision;if(active){out["path"]=active->path;out["driver"]=active->driver;out["scheduled_revision"]=active->scheduled.revision;out["job_id"]=active->lastJob;out["admission_error"]=active->admissionError;JsonDocument values;if(!deserializeJson(values,active->view.values))out["values"]=values.as<JsonObjectConst>();}out["rotation"]=active?active->view.rotation:0;out["rendered_rotation"]=uiRenderedView.rotation;out["focus"]=active?active->view.focus:"";out["values_limit_bytes"]=1024;out["presentation_scope"]="whole_refresh";out["events"]="created,updated,activated,closed";out["update_activates_view"]=false;out["error"]=uiError;return nullptr;}
+ if(!strcmp(m,"elements")){if(auto e=argumentFields(a,"view_id,cursor,limit"))return e;for(auto k:{"view_id","cursor","limit"})if(a.containsKey(k)&&!a[k].is<uint32_t>())return "ui_elements_type";uint32_t id=a["view_id"]|presentationState.active();if(auto e=presentationState.access(id,core.callerOwner()))return e;
+  if(id!=presentationState.active()||uiVisibleStamp.view!=id||!uiVisibleGeometry)return "presentation_not_ready";unsigned cursor=a["cursor"]|0u,limit=a["limit"]|8u;if(!limit||limit>8||cursor>uiVisibleGeometry->count)return "ui_elements_page";
+  auto items=out["elements"].to<JsonArray>();for(;cursor<uiVisibleGeometry->count&&items.size()<limit;++cursor){auto&v=uiVisibleGeometry->items()[cursor];if(!*v.id)continue;auto n=items.add<JsonObject>();n["id"]=v.id;n["target"]=v.target;n["x"]=v.box.x1;n["y"]=v.box.y1;n["width"]=v.box.x2-v.box.x1+1;n["height"]=v.box.y2-v.box.y1+1;}
+  out["cursor"]=cursor;out["more"]=cursor<uiVisibleGeometry->count;out["view_id"]=id;out["revision"]=uiVisibleStamp.revision;out["activation"]=uiVisibleStamp.activation;out["rotation"]=uiVisibleGeometry->rotation;return nullptr;
+ }
  if(!strcmp(m,"hit_test")){if(auto e=argumentFields(a,"view_id,x,y"))return e;if(!a["x"].is<int>()||!a["y"].is<int>())return "pointer_coordinate_type";if(a.containsKey("view_id")&&(!a["view_id"].is<uint32_t>()||!a["view_id"].as<uint32_t>()))return "view_id_type";uint32_t id=a["view_id"]|presentationState.active();if(auto e=presentationState.access(id,core.callerOwner()))return e;
   auto shown=uiVisibleStamp;if(id!=presentationState.active()||shown.view!=id||!uiVisibleGeometry)return "presentation_not_ready";
   int x=a["x"],y=a["y"];if(x<0||y<0||x>=boardpack::DISPLAY_WIDTH||y>=boardpack::DISPLAY_HEIGHT)return "pointer_coordinate_range";
@@ -291,20 +336,20 @@ static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
   auto ids=out["ids"].to<JsonArray>();for(int i=int(uiVisibleGeometry->count)-1;i>=0;--i){auto&item=uiVisibleGeometry->items()[i];auto&box=item.box;if(item.target&&x>=box.x1&&x<=box.x2&&y>=box.y1&&y<=box.y2){for(int ancestor=i;ancestor>=0;ancestor=uiVisibleGeometry->items()[ancestor].parent){const char*name=uiVisibleGeometry->items()[ancestor].id;if(*name)ids.add(name);}break;}}
   out["id"]=ids.size()?ids[0].as<const char*>():"";out["view_id"]=id;out["revision"]=shown.revision;out["x"]=x;out["y"]=y;return nullptr;
  }
- if(!strcmp(m,"fonts")){auto arr=out["fonts"].to<JsonArray>();JsonDocument cfg;policies.resolve("/sys/ui","system",cfg.to<JsonObject>());const char*systemFile=cfg["font_file"]|"";if(*systemFile){auto f=arr.add<JsonObject>();f["id"]="system";f["file"]=systemFile;f["format"]="truetype-file";f["scalable"]=true;f["minimum_size"]=8;f["maximum_size"]=96;}else for(auto size:fontSizes){auto f=arr.add<JsonObject>();f["id"]="system";f["size"]=size;f["storage"]="internal_flash";f["purpose"]="recovery_fallback";}for(auto&f:fontFiles)if(f.font&&(!core.callerOwner()||!f.owner||f.owner==core.callerOwner())){auto x=arr.add<JsonObject>();x["id"]=f.name;x["size"]=f.size;x["file"]=f.path;x["owner"]=f.owner;x["retiring"]=f.orphan;x["scalable"]=f.scalable;}return nullptr;}
- if(!strcmp(m,"font_unregister")){const char*name=a["id"]|"";unsigned size=a["size"]|0u;for(auto&f:fontFiles)if(f.font&&!strcmp(f.name,name)&&f.size==size&&(!core.callerOwner()||!f.owner||f.owner==core.callerOwner())){if(core.callerOwner()&&f.owner!=core.callerOwner())return "font_owned_by_other";if(uiUsesFont(uiRoot,f.font)||f.scalable&&uiUsesVectorFile(f.path))return "font_in_use";vfs.release(0xff000000u+unsigned(&f-fontFiles));f={};return nullptr;}return "font_not_found";}
+ if(!strcmp(m,"fonts")){auto arr=out["fonts"].to<JsonArray>();for(auto size:fontSizes){auto f=arr.add<JsonObject>();f["id"]="builtin";f["size"]=size;f["storage"]="internal_flash";f["scalable"]=false;}JsonDocument cfg;policies.resolve("/sys/ui","system",cfg.to<JsonObject>());const char*systemFile=cfg["font_file"]|"";if(*systemFile){auto f=arr.add<JsonObject>();f["id"]="system";f["file"]=systemFile;f["format"]="truetype-file";f["scalable"]=true;f["minimum_size"]=8;f["maximum_size"]=96;}else for(auto size:fontSizes){auto f=arr.add<JsonObject>();f["id"]="system";f["size"]=size;f["storage"]="internal_flash";f["purpose"]="recovery_fallback";}for(auto&f:fontFiles)if(f.font&&(!core.callerOwner()||!f.owner||f.owner==core.callerOwner())){auto x=arr.add<JsonObject>();x["id"]=f.name;x["size"]=f.size;x["file"]=f.path;x["owner"]=f.owner;x["retiring"]=f.orphan;x["scalable"]=f.scalable;}return nullptr;}
+ if(!strcmp(m,"font_unregister")){const char*name=a["id"]|"";unsigned size=a["size"]|0u;for(auto&f:fontFiles)if(f.font&&!strcmp(f.name,name)&&f.size==size&&(!core.callerOwner()||!f.owner||f.owner==core.callerOwner())){if(core.callerOwner()&&f.owner!=core.callerOwner())return "font_owned_by_other";if(uiUsesFont(uiRoot,f.font)||f.scalable&&uiUsesVectorFile(f.path))return "font_in_use";vfs.release(0xff000000u+unsigned(&f-fontFiles));f={};++uiFontRegistryRevision;return nullptr;}return "font_not_found";}
  if(!strcmp(m,"font_register")){if(!initUiLifecycle())return "lifecycle_capacity";if(!initUi())return "ui_memory_budget";reapOrphanFonts();const char*name=a["id"]|"",*path=a["file"]|"";unsigned size=a["size"]|0u;if(!*name||strlen(name)>47||(size&&size<8)||size>96)return "font_parameters";
   FontFile*slot=nullptr;for(auto&f:fontFiles){if(f.font&&f.owner==core.callerOwner()&&!strcmp(f.name,name)&&f.size==(size?size:f.scalable?0:24))return "font_already_registered";if(!f.font&&!slot)slot=&f;}if(!slot)return "font_capacity";
-  if(!strcmp(name,"system"))return "font_id_reserved";
+  if(!strcmp(name,"system")||!strcmp(name,"builtin"))return "font_id_reserved";
   char full[256];if(!normalizePath("/",path,full,sizeof full))return "font_path";const char*relative;auto provider=vfs.resolve(full,relative);if(!provider)return "font_path";
   uint32_t owner=0xff000000u+unsigned(slot-fontFiles);if(!vfs.lockRead(full,owner))return "font_lease_capacity";
   uint8_t signature[4];size_t signatureBytes=0;if(auto e=provider->read(relative,0,signature,4,signatureBytes)){vfs.release(owner);return e;}bool scalable=signatureBytes==4&&fontBe(signature,4)==0x10000;
-  if(scalable){if(auto e=validateVectorFont(full)){vfs.release(owner);return e;}copy(slot->name,sizeof slot->name,name);copy(slot->path,sizeof slot->path,full);slot->size=size;slot->owner=core.callerOwner();slot->scalable=true;slot->font=&slot->face;return nullptr;}if(!size)size=24;
+  if(scalable){if(auto e=validateVectorFont(full)){vfs.release(owner);return e;}copy(slot->name,sizeof slot->name,name);copy(slot->path,sizeof slot->path,full);slot->size=size;slot->owner=core.callerOwner();slot->scalable=true;slot->font=&slot->face;++uiFontRegistryRevision;return nullptr;}if(!size)size=24;
   if(auto e=slot->reader.open(*provider,relative)){vfs.release(owner);return e;}PackedFont::Glyph fallback;if(auto e=slot->reader.find('?',size,fallback)){vfs.release(owner);return e;}
   copy(slot->name,sizeof slot->name,name);copy(slot->path,sizeof slot->path,full);slot->size=size;slot->owner=core.callerOwner();slot->orphan=false;slot->face={};slot->face.line_height=size+8;slot->face.base_line=4;slot->face.dsc=slot;
   slot->face.get_glyph_dsc=[](const lv_font_t*f,lv_font_glyph_dsc_t*d,uint32_t cp,uint32_t)->bool{auto&file=*static_cast<FontFile*>(const_cast<void*>(f->dsc));PackedFont::Glyph g;if(auto e=file.reader.find(cp,file.size,g)){if(strcmp(e,"font_missing_glyph"))uiReadError=e;return false;}d->adv_w=g.advance;d->box_w=g.w;d->box_h=g.h;d->ofs_x=g.x;d->ofs_y=f->line_height-f->base_line-g.y-g.h;d->format=LV_FONT_GLYPH_FORMAT_A8;d->gid.index=g.index;d->stride=0;return true;};
   slot->face.get_glyph_bitmap=[](lv_font_glyph_dsc_t*d,lv_draw_buf_t*buf)->const void*{if(!buf)return nullptr;auto&file=*static_cast<FontFile*>(const_cast<void*>(d->resolved_font->dsc));PackedFont::Glyph g;if(auto e=file.reader.record(d->gid.index,g)){uiReadError=e;return nullptr;}uint8_t bits[PackedFont::MAX_BITMAP_BYTES];if(auto e=file.reader.bitmap(g,bits)){uiReadError=e;return nullptr;}size_t stride=lv_draw_buf_width_to_stride(g.w,LV_COLOR_FORMAT_A8),row=(g.w+7)/8;for(unsigned y=0;y<g.h;++y)for(unsigned x=0;x<g.w;++x)buf->data[y*stride+x]=((bits[y*row+x/8]>>(7-x%8))&1)?255:0;return buf;};
-  slot->font=&slot->face;return nullptr;
+  slot->font=&slot->face;++uiFontRegistryRevision;return nullptr;
  }
  if(!strcmp(m,"create")){if(!initUiLifecycle())return "lifecycle_capacity";uint32_t id=0;if(auto e=presentationState.create(core.callerOwner(),false,false,id))return e;out["view_id"]=id;out["revision"]=1;out["status"]="created";uiStateChanged("created",id);return nullptr;}
  if(!strcmp(m,"activate")||!strcmp(m,"close")||!strcmp(m,"back")){
@@ -321,23 +366,24 @@ static const char* uiHandler(const char*m,JsonObjectConst a,JsonObject out){
   UiScratch<UiDocument> nextStorage;if(!nextStorage.value)return "ui_memory_budget";auto&next=*nextStorage.value;if(prior)next=*prior;next.view.owner=prior?presentationState.get(id)->owner:core.callerOwner();next.admissionError[0]=0;
   const char*requested=a["path"]|(prior?prior->path:"");if(!*requested)return "navigation_empty";
   if(!normalizePath("/",requested,next.path,sizeof next.path))return "invalid_ui_path";
-  JsonDocument document;if(auto e=loadJsonFile(next.path,document))return e;
+  Vfs::Access schemaLease(vfs,false);bool trusted=!strcmp(m,"update")&&a["force"]!=true&&uiTemplateMatches(next.path,next.view.owner,schemaLease);
+  JsonDocument document;if(!trusted)if(auto e=loadJsonFile(next.path,document))return e;
   if(auto e=validateUiView(a,next.view))return e;
-  if(a.containsKey("force")&&!a["force"].is<bool>())return "ui_force_type";next.force=a["force"]|false;
+  if(a.containsKey("force")&&!a["force"].is<bool>())return "ui_force_type";next.force=a["force"]|false;next.view.bindingUpdate=!strcmp(m,"update")&&!next.force;
   const char*defaultScope=prior?prior->scope:appScope;const char*scope=a["scope"]|defaultScope;if(!Policies::validScope(scope))return "invalid_scope";copy(next.scope,sizeof next.scope,scope);
   JsonDocument config;policies.resolve("/dev/display",scope,config.to<JsonObject>());const char*driver=a["driver"]|(prior?prior->driver:(document["presentation"]["driver"]|(config["driver"]|defaultUiDriver())));
   if(auto e=validateUiDriver(driver))return e;if(strlen(driver)>=sizeof next.driver)return "driver_id_limit";copy(next.driver,sizeof next.driver,driver);
   uint32_t expected=a["expected_revision"]|0u;if(a.containsKey("expected_revision")&&(!a["expected_revision"].is<uint32_t>()||!expected))return "view_revision_type";if(prior&&expected!=0&&presentationState.get(id)->revision!=expected)return "view_revision_conflict";
   // Submission validates the document contract. Native frame preparation owns
   // fonts/decoders and may wait for resource release without faulting its VM.
-  if(auto e=validateUiDocument(next.path,document.as<JsonObjectConst>()))return e;
+  if(!trusted)if(auto e=validateUiDocument(next.path,document.as<JsonObjectConst>()))return e;
   if(prior){auto stamp=presentationState.stamp(id);auto owner=presentationState.get(id)->owner;if(auto e=presentationState.revise(id,core.callerOwner(),expected))return e;finishDeferredUi(stamp,owner,prior,"view_revision_replaced");*prior=next;}
   else{
    auto memory=core.resources().allocate(sizeof(UiDocument));if(!memory)return "ui_memory_budget";auto model=new(memory)UiDocument(next);
    if(auto e=presentationState.create(core.callerOwner(),true,true,id)){model->~UiDocument();core.resources().freeAllocation(model);return e;}unsigned slot=presentationState.slot(id);uiDocuments[slot]=model;
    if(auto e=presentationState.activate(id,strcmp(a["history"]|"push","replace"),core.callerOwner())){presentationState.close(id,0);return e;}
   }
-  uiStateChanged(prior?"updated":"activated",id);pollUiPresentation();auto stamp=presentationState.stamp(id);out["view_id"]=id;out["revision"]=stamp.revision;out["foreground"]=bool(stamp.activation);auto current=uiDocument(id);if(current&&sameStamp(current->scheduled,stamp))out["job_id"]=current->lastJob;out["status"]=current&&*current->admissionError?"presentation_rejected":stamp.activation?"updated_pending_presentation":"updated";if(current&&*current->admissionError)out["admission_error"]=current->admissionError;return nullptr;
+  uiStateChanged(prior?"updated":"activated",id);pollUiPresentation();auto stamp=presentationState.stamp(id);out["view_id"]=id;out["revision"]=stamp.revision;out["activation"]=stamp.activation;out["foreground"]=bool(stamp.activation);auto current=uiDocument(id);if(current&&sameStamp(current->scheduled,stamp))out["job_id"]=current->lastJob;out["status"]=current&&*current->admissionError?"presentation_rejected":stamp.activation?"updated_pending_presentation":"updated";if(current&&*current->admissionError)out["admission_error"]=current->admissionError;return nullptr;
  }
  if(!strcmp(m,"app_load")||!strcmp(m,"validate_app")){
   bool checking=!strcmp(m,"validate_app");if(checking&&a.containsKey("schema_only")&&!a["schema_only"].is<bool>())return "validation_mode_type";if(!checking&&!initUiLifecycle())return "lifecycle_capacity";

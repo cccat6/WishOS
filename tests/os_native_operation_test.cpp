@@ -21,5 +21,12 @@ int main(){Core core;Work state;NativeOperation op(core,"/storage/device",{launc
  // Instance-bound retained executors do not require process-global driver
  // pointers, and preserve the same work/settlement boundary.
  {Work other;other.finish=true;NativeOperation isolated(core,"/other",{nullptr,0,[](void*p,void(*run)(void*),void*job){assert(static_cast<Work*>(p)->finish);task=std::thread(run,job);return true;}},&other,[](void*p,const std::atomic<bool>&)->const char*{static_cast<Work*>(p)->entered=true;return nullptr;},[](void*p){++static_cast<Work*>(p)->published;});assert(!isolated.start("start",out.to<JsonObject>()));task.join();assert(other.entered&&other.published==0);isolated.poll();assert(other.published==1);}
+ // Changing the native journal heap preserves event identities while another
+ // producer publishes. Overflow retains exactly the newest journal records.
+ {Core journal;std::thread producer([&]{for(unsigned i=0;i<200;++i){JsonDocument d;d["value"]=i;assert(journal.emit("/input","sample",d.as<JsonObjectConst>(),3,i));}});
+  for(unsigned i=0;i<50;++i)assert(journal.eventStorage([](size_t n)->void*{return malloc(n);},free));producer.join();assert(journal.sequence()==200);
+  JsonDocument snapshot;journal.events(0,8,snapshot.to<JsonObject>());assert(snapshot["gap"]==true&&snapshot["oldest"]==169);
+  for(unsigned i=0;i<8;++i)assert(snapshot["events"][i]["sequence"]==169+i&&snapshot["events"][i]["data"]["value"]==168+i&&snapshot["events"][i]["target_owner"]==3);
+ }
  std::cout<<"Native worker admission, nonblocking event loop, cooperative cancel, publication and resource cleanup passed\n";
 }

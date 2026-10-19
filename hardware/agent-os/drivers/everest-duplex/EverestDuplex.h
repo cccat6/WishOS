@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <esp_attr.h>
 #include "drivers/i2c/RegisterBus.h"
 #include "audio/Playback.h"

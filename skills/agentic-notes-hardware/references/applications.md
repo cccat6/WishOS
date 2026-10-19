@@ -110,6 +110,46 @@ The system AI service attaches this snapshot as `wishos-ai/2` payload.context.
 Use it to identify a modification target; it does not bypass native package or
 view revision checks. A voice app itself is not automatically the app to modify.
 
+## Foreground voice input
+
+Discover `/sys/apps` voice-input metadata and the protected gesture in
+`/sys/navigation`. Applications that handle voice in place can use the ordinary
+runtime module:
+
+```lua
+local ai = notes.require('/system/lib/ai.lua')
+local voiceEntry
+function on_start()
+  voiceEntry = ai.voice_input(function(input)
+    -- Start your configured mic/AI request through system APIs.
+    -- Include current page/action meanings and the intended Harness session.
+  end, function(input)
+    -- Stop that recording and let the system-owned request finish.
+  end)
+end
+function on_stop()
+  if voiceEntry then voiceEntry.stop() end
+end
+```
+
+The callbacks share a `request_id`. Direct users register
+`voice_input {enabled:true}` and receive `/sys/apps:voice_requested` and
+`/sys/navigation:voice_released`, targeted to the registered foreground instance.
+Registration ends with that instance; a new application registers its own handler.
+Applications without a handler use the configured ordinary voice application,
+with captured launch origin. The helper also handles a still-held protected input
+when that default application finishes loading. Releasing before loading finishes
+clears its pending recording intent.
+
+Provide page and control semantics for voice actions: local navigation can be an
+`application` action handled by that app, while opening another app or updating a
+package uses the corresponding `system` resource call. Determine action ordering
+from the task. A voice request can ask for an operation, a conversation or an app;
+its existence alone does not mean a package update. Keep protected Home reachable
+through the configured independent gesture while recording. On single-key
+devices, discover whether Home uses multiple clicks rather than assuming a longer
+hold. Explain the actual gesture in help.
+
 Session browsing is ordinary app code. Ask the configured Hub through the system
 AI API; keep only selected `{runtime_id,session_id,session_scope}` references,
 mode and unresolved creation operation IDs in app preferences. History and memory

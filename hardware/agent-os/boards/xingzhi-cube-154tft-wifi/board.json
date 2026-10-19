@@ -1,0 +1,67 @@
+{
+  "format": "notes-board/1",
+  "id": "xingzhi-cube-154tft-wifi",
+  "name": "Xingzhi Xiaozhi Cube 1.54 TFT",
+  "mcu": "ESP32-S3",
+  "pins": {
+    "LCD_MOSI": 10,
+    "LCD_SCLK": 9,
+    "LCD_DC": 8,
+    "LCD_CS": 14,
+    "LCD_RST": 18,
+    "LCD_BL": 13,
+    "MIC_BCLK": 5,
+    "MIC_WS": 4,
+    "MIC_DATA": 6,
+    "SPK_BCLK": 15,
+    "SPK_WS": 16,
+    "SPK_DATA": 7,
+    "POWER_HOLD": 21,
+    "CHARGE_SENSE": 38,
+    "BATTERY_ADC": 17,
+    "KEY_USER": 0
+  },
+  "hardware": {
+    "lcd_spi_hz": 80000000,
+    "backlight_active_low": false,
+    "backlight_ledc_timer": 1,
+    "backlight_ledc_channel": 2,
+    "backlight_pwm_hz": 20000,
+    "backlight_pwm_bits": 10
+  },
+  "buttons": [
+    "KEY_USER"
+  ],
+  "display": {
+    "width": 240,
+    "height": 240
+  },
+  "resources": {
+    "heap_reserve_bytes": 24576,
+    "external_heap_reserve_bytes": 262144,
+    "default_vm_memory_bytes": 98304,
+    "application_memory": "auto",
+    "memory_limit_bytes": null
+  },
+  "runtime": "../../runtime/xingzhi-cube-suite",
+  "drivers": [],
+  "platform": "esp32-s3",
+  "composition": "../../compositions/xingzhi-cube-1.54tft-wifi",
+  "fqbn": "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi",
+  "application_bytes": 6291456,
+  "partition_file": "partitions.csv",
+  "application_providers": [
+    "flash"
+  ],
+  "runtime_filesystem": {
+    "format": "littlefs",
+    "partition": "nfs_test",
+    "root": "/factory",
+    "mount": "/storage/flash"
+  },
+  "flash_bytes": 16777216,
+  "assets": {
+    "/services.json": "services.json"
+  },
+  "release_supported": true
+}

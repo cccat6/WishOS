@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include "NativeOperation.h"
 #include "PosixFileProvider.h"
 #include <driver/sdmmc_host.h>

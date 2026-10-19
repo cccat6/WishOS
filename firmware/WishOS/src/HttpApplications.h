@@ -14,7 +14,7 @@ class HttpApplications {
  Request*find(uint32_t id){for(auto r:requests_)if(r&&r->id==id)return r;return nullptr;}
 public:
  explicit HttpApplications(Core&c):core_(c){registered_=core_.onOwnerRelease(this,[](void*p,uint32_t owner){((HttpApplications*)p)->releaseOwner(owner);});}
- void describe(JsonObject o)const{o["route_lifetime"]="owner";o["browser_sessions"]["method"]="session";o["browser_sessions"]["actions"]="open,ping,close";o["browser_sessions"]["ttl_ms"]=30000;o["browser_sessions"]["capacity"]=8;o["browser_sessions"]["binding"]="route_generation_and_owner";}
+ static void describe(JsonObject o){o["route_lifetime"]="owner";o["browser_sessions"]["method"]="session";o["browser_sessions"]["actions"]="open,ping,close";o["browser_sessions"]["ttl_ms"]=30000;o["browser_sessions"]["capacity"]=8;o["browser_sessions"]["binding"]="route_generation_and_owner";}
  ~HttpApplications(){core_.removeOwnerHook(this);clear();}
  void releaseOwner(uint32_t owner){for(auto&s:sessions_)if(s.owner==owner)s=Session();for(auto&r:routes_)if(r&&r->owner==owner){retire(r);}for(auto&r:requests_)if(r&&r->owner==owner){destroy(r);}}
  bool active()const{for(auto r:routes_)if(r)return true;return false;}

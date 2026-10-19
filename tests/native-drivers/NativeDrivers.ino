@@ -7,6 +7,8 @@
 #include "drivers/ft6336/Ft6336.h"
 #include "drivers/pca9557/Pca9557.h"
 #include "drivers/esp-wakenet/EspWakeNet.h"
+#include "drivers/esp-i2s-input/EspI2sInput.h"
+#include "drivers/esp-i2s-output/EspI2sOutput.h"
 using namespace notesos;
 using namespace notesos::drivers;
 static WireI2c bus(Wire,nullptr,100000);
@@ -27,5 +29,9 @@ void setup() {
  // Force the selected archive/model ABI to link. This sketch is never uploaded;
  // no success claim about acoustic detection follows from this fixture.
  ResourceBudget budget;wake.start(JsonObjectConst(),budget);wake.stop();
+ audio::EspI2sInput input({I2S_NUM_0,GPIO_NUM_4,GPIO_NUM_5,GPIO_NUM_6});
+ input.describe(description.to<JsonObject>());input.initialize(16000);input.shutdown();
+ audio::EspI2sOutput output(I2S_NUM_0,GPIO_NUM_4,GPIO_NUM_5,GPIO_NUM_6);
+ output.open({16000,1});output.close();
 }
 void loop() {}

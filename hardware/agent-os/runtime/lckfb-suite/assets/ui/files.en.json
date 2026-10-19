@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -25,10 +25,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#F6F7F2",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +41,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,7 +69,7 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -100,9 +101,9 @@
                 "width": 192
               },
               "style": {
-                "fontSize": 11,
+                "fontSize": 12,
                 "lineHeight": 16,
-                "textColor": "#60645B",
+                "textColor": "#424B45",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -126,83 +127,72 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
             {
-              "type": "container",
+              "type": "image",
               "placement": {
                 "x": 10,
-                "y": 3,
-                "width": 282,
+                "y": 10,
+                "width": 24,
+                "height": 24
+              },
+              "imageProps": {
+                "src": "../icons/document.png",
+                "fit": "contain"
+              },
+              "id": "file0_icon",
+              "style": {}
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 5,
+                "width": 249,
                 "height": 22
               },
               "style": {
-                "padding": 0,
-                "borderWidth": 0,
-                "bgOpacity": 0
+                "fontSize": 14,
+                "lineHeight": 18,
+                "textColor": "#17241E",
+                "textAlign": "left"
               },
-              "children": [
-                {
-                  "type": "label",
-                  "placement": {
-                    "align": "center",
-                    "width": 282
-                  },
-                  "style": {
-                    "fontSize": 15,
-                    "lineHeight": 20,
-                    "textColor": "#262822",
-                    "textAlign": "left"
-                  },
-                  "labelProps": {
-                    "text": "",
-                    "longMode": "ellipsis",
-                    "metrics": "ink",
-                    "missingGlyph": "replace"
-                  },
-                  "id": "file0_title"
-                }
-              ]
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              },
+              "id": "file0_title"
             },
             {
-              "type": "container",
+              "type": "label",
               "placement": {
-                "x": 10,
-                "y": 25,
-                "width": 282,
+                "x": 43,
+                "y": 26,
+                "width": 249,
                 "height": 15
               },
               "style": {
-                "padding": 0,
-                "borderWidth": 0,
-                "bgOpacity": 0
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#424B45",
+                "textAlign": "left"
               },
-              "children": [
-                {
-                  "type": "label",
-                  "placement": {
-                    "align": "center",
-                    "width": 282
-                  },
-                  "style": {
-                    "fontSize": 10,
-                    "lineHeight": 15,
-                    "textColor": "#60645B",
-                    "textAlign": "left"
-                  },
-                  "labelProps": {
-                    "text": "",
-                    "longMode": "ellipsis",
-                    "metrics": "ink",
-                    "missingGlyph": "replace"
-                  },
-                  "id": "file0_meta"
-                }
-              ]
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              },
+              "id": "file0_meta"
             }
           ]
         },
@@ -217,83 +207,72 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
             {
-              "type": "container",
+              "type": "image",
               "placement": {
                 "x": 10,
-                "y": 3,
-                "width": 282,
+                "y": 10,
+                "width": 24,
+                "height": 24
+              },
+              "imageProps": {
+                "src": "../icons/document.png",
+                "fit": "contain"
+              },
+              "id": "file1_icon",
+              "style": {}
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 5,
+                "width": 249,
                 "height": 22
               },
               "style": {
-                "padding": 0,
-                "borderWidth": 0,
-                "bgOpacity": 0
+                "fontSize": 14,
+                "lineHeight": 18,
+                "textColor": "#17241E",
+                "textAlign": "left"
               },
-              "children": [
-                {
-                  "type": "label",
-                  "placement": {
-                    "align": "center",
-                    "width": 282
-                  },
-                  "style": {
-                    "fontSize": 15,
-                    "lineHeight": 20,
-                    "textColor": "#262822",
-                    "textAlign": "left"
-                  },
-                  "labelProps": {
-                    "text": "",
-                    "longMode": "ellipsis",
-                    "metrics": "ink",
-                    "missingGlyph": "replace"
-                  },
-                  "id": "file1_title"
-                }
-              ]
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              },
+              "id": "file1_title"
             },
             {
-              "type": "container",
+              "type": "label",
               "placement": {
-                "x": 10,
-                "y": 25,
-                "width": 282,
+                "x": 43,
+                "y": 26,
+                "width": 249,
                 "height": 15
               },
               "style": {
-                "padding": 0,
-                "borderWidth": 0,
-                "bgOpacity": 0
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#424B45",
+                "textAlign": "left"
               },
-              "children": [
-                {
-                  "type": "label",
-                  "placement": {
-                    "align": "center",
-                    "width": 282
-                  },
-                  "style": {
-                    "fontSize": 10,
-                    "lineHeight": 15,
-                    "textColor": "#60645B",
-                    "textAlign": "left"
-                  },
-                  "labelProps": {
-                    "text": "",
-                    "longMode": "ellipsis",
-                    "metrics": "ink",
-                    "missingGlyph": "replace"
-                  },
-                  "id": "file1_meta"
-                }
-              ]
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              },
+              "id": "file1_meta"
             }
           ]
         },
@@ -308,83 +287,72 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
             {
-              "type": "container",
+              "type": "image",
               "placement": {
                 "x": 10,
-                "y": 3,
-                "width": 282,
+                "y": 10,
+                "width": 24,
+                "height": 24
+              },
+              "imageProps": {
+                "src": "../icons/document.png",
+                "fit": "contain"
+              },
+              "id": "file2_icon",
+              "style": {}
+            },
+            {
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 5,
+                "width": 249,
                 "height": 22
               },
               "style": {
-                "padding": 0,
-                "borderWidth": 0,
-                "bgOpacity": 0
+                "fontSize": 14,
+                "lineHeight": 18,
+                "textColor": "#17241E",
+                "textAlign": "left"
               },
-              "children": [
-                {
-                  "type": "label",
-                  "placement": {
-                    "align": "center",
-                    "width": 282
-                  },
-                  "style": {
-                    "fontSize": 15,
-                    "lineHeight": 20,
-                    "textColor": "#262822",
-                    "textAlign": "left"
-                  },
-                  "labelProps": {
-                    "text": "",
-                    "longMode": "ellipsis",
-                    "metrics": "ink",
-                    "missingGlyph": "replace"
-                  },
-                  "id": "file2_title"
-                }
-              ]
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              },
+              "id": "file2_title"
             },
             {
-              "type": "container",
+              "type": "label",
               "placement": {
-                "x": 10,
-                "y": 25,
-                "width": 282,
+                "x": 43,
+                "y": 26,
+                "width": 249,
                 "height": 15
               },
               "style": {
-                "padding": 0,
-                "borderWidth": 0,
-                "bgOpacity": 0
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#424B45",
+                "textAlign": "left"
               },
-              "children": [
-                {
-                  "type": "label",
-                  "placement": {
-                    "align": "center",
-                    "width": 282
-                  },
-                  "style": {
-                    "fontSize": 10,
-                    "lineHeight": 15,
-                    "textColor": "#60645B",
-                    "textAlign": "left"
-                  },
-                  "labelProps": {
-                    "text": "",
-                    "longMode": "ellipsis",
-                    "metrics": "ink",
-                    "missingGlyph": "replace"
-                  },
-                  "id": "file2_meta"
-                }
-              ]
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              },
+              "id": "file2_meta"
             }
           ]
         },
@@ -397,9 +365,9 @@
             "height": 72
           },
           "style": {
-            "fontSize": 16,
-            "lineHeight": 21,
-            "textColor": "#262822"
+            "fontSize": 14,
+            "lineHeight": 19,
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "",
@@ -426,9 +394,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -440,7 +408,7 @@
               "style": {
                 "fontSize": 14,
                 "lineHeight": 19,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "Previous",
@@ -467,10 +435,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#DCEBDA",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -482,7 +450,7 @@
               "style": {
                 "fontSize": 14,
                 "lineHeight": 19,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "All types",
@@ -511,9 +479,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -525,7 +493,7 @@
               "style": {
                 "fontSize": 14,
                 "lineHeight": 19,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "Next",
@@ -553,9 +521,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -567,7 +535,7 @@
               "style": {
                 "fontSize": 12,
                 "lineHeight": 17,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "Refresh",

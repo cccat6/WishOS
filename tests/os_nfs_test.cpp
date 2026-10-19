@@ -1,5 +1,5 @@
 #include "NfsService.h"
-#include "compositions/agentic-notes-e6/Defaults.h"
+#include "fixtures/composition/Defaults.h"
 #include <Xdr.h>
 #include <cassert>
 #include <vector>
@@ -45,6 +45,16 @@ int main(){
  }
  DurableTestFiles files;size_t n;uint8_t text[]={1,2,3,4};assert(!files.write("/hello",0,text,4,false,n));
  Vfs vfs;assert(vfs.add(files));NfsProviderStorage storage(files,vfs);NfsProviderVfs mapped(storage,files);
+ // Browsing a parent directory shares the local metadata lease semantics.
+ // Content access and removal still conflict with a native writer's file lease.
+ {Vfs::Access writing(vfs,true);assert(!writing.add("/storage/user/hello"));
+  nf::Attr info;char name[256],canonical[256];bool eof=true;
+  assert(storage.stat("/",info)==nf::Ok&&info.type==2);
+  assert(storage.resolve("/",canonical,sizeof canonical,info)==nf::Ok);
+  assert(storage.entry("/",0,name,sizeof name,eof)==nf::Ok&&!eof&&!strcmp(name,"hello"));
+  size_t got=4;uint8_t bytes[4];assert(storage.read("/hello",0,bytes,got)==nf::Jukebox);
+  assert(storage.remove("/hello",false)==nf::Jukebox);
+ }
  uint64_t id;assert(mapped.lookup(mapped.root(),"hello",id)==nf::Ok);
  assert(vfs.lockRead("/storage/user/hello",7));assert(!vfs.canMutate("/storage/USER/HELLO",true));n=4;assert(mapped.write(id,0,text,n)==nf::Jukebox);vfs.release(7);
  nf::SetAttr attr;attr.sizeSet=true;attr.size=2;assert(mapped.setattr(id,attr)==nf::Ok);FileInfo fi;files.stat("/hello",fi);assert(fi.size==2);

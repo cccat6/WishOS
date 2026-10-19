@@ -24,6 +24,7 @@ end
 local function render()
  local v={directory=(dir==root and '/' or dir:sub(#root+1)),filter_label=categories[mode][C.en() and 2 or 1]}
  for i=0,2 do local f=page.entries[i+1];local _,label=kind(f or {name=''})
+  v['file'..i..'_icon']=notes.resolve('../icons/'..(f and f.directory and 'files' or 'document')..'.png')
   v['file'..i..'_title']=f and short_name(f.name) or ''
   v['file'..i..'_meta']=f and (label..(f.directory and '  /' or '  ·  '..size(f.size))) or ''
  end
@@ -61,5 +62,5 @@ function on_start()
  C.action('next',function() if detail then if detailPage*42<utf8.len(detailFile.name..'\n'..dir) then detailPage=detailPage+1;show_detail() end;return end;if not loading and page and page.more then cursors[index+1]=page.next_cursor;index=index+1;show() end end)
  C.action('refresh',function() cursors={0};index=1;show() end)
  C.action('filter',function() mode=mode%#categories+1;cursors={0};index=1;show() end)
- C.button(function() C.launch('voice',{record=true}) end)
+
 end

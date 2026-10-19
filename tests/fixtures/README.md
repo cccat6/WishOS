@@ -1,0 +1,1 @@
+Host fixtures exercise a three-button, small-memory configuration and a six-color raster sink. They contain synthetic display output and configuration data for tests. Product device packages live in hardware/agent-os/boards.

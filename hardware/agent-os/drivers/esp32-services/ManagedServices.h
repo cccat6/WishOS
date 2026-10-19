@@ -1,7 +1,15 @@
 // Native composition integration; portable mechanisms do not know ESP32 pins.
 static Diagnostics diagnostics(core);
 static AssetTransfers transfers(core,vfs,bootId);
-static AgentService agentService(core,transfers,vfs);
+static AgentService*agentService=nullptr;
+static const char*agentStartupError=nullptr;
+static const char*initManagedAgent(){
+ void*storage=core.resources().allocate(sizeof(AgentService));
+ if(!storage)return "ai_memory_budget";
+ auto*service=new(storage)AgentService(core,transfers,vfs);
+ if(!service->ready()){service->~AgentService();core.resources().freeAllocation(storage);return "ai_owner_hook_capacity";}
+ agentService=service;return nullptr;
+}
 class EspTelemetry:public TelemetryBackend {
  std::atomic<int>state_{0};std::atomic<bool>cancel_{false};char url_[256]{},body_[768]{},error_[64]{};uint32_t reservation_=0;ProxySettings proxy_;
  static void run(void*p){auto&s=*static_cast<EspTelemetry*>(p);int status=-1;{
@@ -26,17 +34,19 @@ static const char*proxyHandler(const char*m,JsonObjectConst a,JsonObject o){retu
 static const char*logHandler(const char*m,JsonObjectConst a,JsonObject o){return diagnostics.invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("logs",s)==n;});}
 static const char*telemetryHandler(const char*m,JsonObjectConst a,JsonObject o){return telemetry.invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("telemetry",s)==n;});}
 static const char*transferHandler(const char*m,JsonObjectConst a,JsonObject o){return transfers.invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("downloads",s)==n;});}
-static const char*agentHandler(const char*m,JsonObjectConst a,JsonObject o){return agentService.invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("ai",s)==n;});}
+static const char*agentHandler(const char*m,JsonObjectConst a,JsonObject o){return agentService?agentService->invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("ai",s)==n;}):"ai_service_unavailable";}
 static void registerManagedServices(){
  transfers.identity(bootId);
  core.add({"/net/proxy","read,configure","outbound proxy policy",proxyHandler,[](JsonObject o){networkProxy.describe(o);},"read"});
  core.add({"/sys/logs","read,write,configure","structured bounded diagnostics",logHandler,[](JsonObject o){diagnostics.describe(o);},"read"});
  core.add({"/sys/telemetry","read,configure,flush","optional registration and aggregate diagnostics",telemetryHandler,[](JsonObject o){telemetry.describe(o);},"read"});
  core.add({"/sys/transfers","read,configure,begin,file,copy_file,chunk,close_file,commit,abort,release","verified streamed resources",transferHandler,[](JsonObject o){transfers.describe(o);},"read"});
- core.add({"/services/ai",AgentService::Methods,"managed AI tasks and result application",agentHandler,[](JsonObject o){agentService.describe(o);},"read,read_action,read_result"});
+ if(agentService)core.add({"/services/ai",AgentService::Methods,"managed AI tasks and result application",agentHandler,[](JsonObject o){agentService->describe(o);},"read,read_action,read_result"});
+ else event("/services/ai","unavailable",agentStartupError?agentStartupError:"ai_service_unavailable");
  core.diagnostics(&diagnostics,[](void*p,const char*s,const char*e,JsonObjectConst d,uint32_t owner){static_cast<Diagnostics*>(p)->event(s,e,d,owner);},[](void*p,const char*s,const char*m,const char*e,uint32_t owner){static_cast<Diagnostics*>(p)->call(s,m,e,owner);});
  JsonDocument config,logs;
  for(auto a:boardpack::ASSETS)if(!strcmp(a.path,"/services.json")){deserializeJson(config,a.data,a.size);break;}
+ if(config["runtime"].is<JsonObjectConst>()){JsonDocument result;if(auto e=core.invoke("/sys/runtime","configure",config["runtime"],result.to<JsonObject>())){JsonDocument data;data["error"]=e;core.emit("/sys/runtime","configuration_failed",data.as<JsonObjectConst>());}}
  // Package startup policy is applied once through the same validated storage
  // interface; replacing an ordinary app must not reset system volume quotas.
  for(auto settings:config["volatile_storage"].as<JsonArrayConst>()){JsonDocument result;if(auto e=core.invoke("/sys/storage","configure",settings,result.to<JsonObject>())){JsonDocument data;data["error"]=e;core.emit("/sys/storage","configuration_failed",data.as<JsonObjectConst>());}}
@@ -44,8 +54,8 @@ static void registerManagedServices(){
  auto saved=preferences.getString("logs","");if(saved.length()){JsonDocument a,b;if(!deserializeJson(b,saved)){a["settings"]=b;diagnostics.invoke("configure",a.as<JsonObjectConst>(),out.to<JsonObject>());}}
  saved=preferences.getString("downloads","");if(!saved.length()&&config["downloads"].is<JsonObjectConst>())serializeJson(config["downloads"],saved);if(saved.length())transfers.restore(saved.c_str());
  saved=preferences.getString("proxy","");if(saved.length())networkProxy.restore(saved.c_str());
- saved=preferences.getString("ai","");if(saved.length())agentService.restore(saved.c_str());
+ saved=preferences.getString("ai","");if(agentService&&saved.length())agentService->restore(saved.c_str());
  saved=preferences.getString("telemetry","");if(!saved.length()&&config["telemetry"].is<JsonObjectConst>())serializeJson(config["telemetry"],saved);if(saved.length())telemetry.restore(saved.c_str());
  uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);char id[18];snprintf(id,sizeof id,"%02X:%02X:%02X:%02X:%02X:%02X",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);telemetry.identity(id,bootId);switch(esp_reset_reason()){case ESP_RST_POWERON:telemetry.resetReason("power_on");break;case ESP_RST_SW:telemetry.resetReason("software");break;case ESP_RST_PANIC:telemetry.resetReason("panic");break;case ESP_RST_INT_WDT:case ESP_RST_TASK_WDT:case ESP_RST_WDT:telemetry.resetReason("watchdog");break;case ESP_RST_DEEPSLEEP:telemetry.resetReason("deep_sleep");break;case ESP_RST_BROWNOUT:telemetry.resetReason("brownout");break;case ESP_RST_EXT:telemetry.resetReason("external");break;default:telemetry.resetReason("unknown");}setenv("TZ",timeService.config().timezone,1);tzset();
 }
-static void pollManagedServices(bool suspended=false){diagnostics.poll(uptime());if(!suspended){transfers.poll();agentService.poll();}else telemetryBackend.cancel();telemetry.poll(uptime(),!suspended&&WiFi.status()==WL_CONNECTED);}
+static void pollManagedServices(bool suspended=false){diagnostics.poll(uptime());if(!suspended){transfers.poll();if(agentService)agentService->poll();}else telemetryBackend.cancel();telemetry.poll(uptime(),!suspended&&WiFi.status()==WL_CONNECTED);}

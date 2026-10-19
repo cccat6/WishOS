@@ -1,5 +1,6 @@
 #pragma once
 #include "Policy.h"
+#include "InputPresentation.h"
 #include <algorithm>
 namespace notesos {
 // No pins, clock source or RTOS assumptions. The adapter serializes configuration
@@ -21,10 +22,10 @@ struct ButtonTiming {
  bool operator==(const ButtonTiming&o)const{return debounce==o.debounce&&longPress==o.longPress&&clickWindow==o.clickWindow&&repeat==o.repeat&&maxClicks==o.maxClicks;}
 };
 class ButtonGestures {
- struct Button{char name[17]{};ButtonTiming desired,active;bool raw=false,stable=false,longSent=false;uint32_t changed=0,since=0,pressEdge=0,releaseEdge=0,released=0,repeatAt=0,sequence=0,presentation=0,clicks=0;};
+ struct Button{char name[17]{};ButtonTiming desired,active;bool raw=false,stable=false,longSent=false,consumed=false;uint32_t changed=0,since=0,pressEdge=0,releaseEdge=0,released=0,repeatAt=0,sequence=0,clicks=0;InputPresentation rawPresentation,presentation;};
  Button buttons_[8];size_t count_=0;uint32_t next_=1,revision_=1;bool restoreOk_=true;
  void*context_;void(*send_)(void*,const char*,JsonObjectConst);
- void event(Button&b,const char*name,uint32_t now){JsonDocument d;d["button"]=b.name;d["captured_at_ms"]=now;d["gesture_id"]=b.sequence;d["presentation_id"]=b.presentation;d["held_ms"]=(b.stable?now:b.releaseEdge)-b.pressEdge;d["button_index"]=unsigned(&b-buttons_);d["pressed_mask"]=pressedMask();d["edge_at_ms"]=b.changed;d["pressed_at_ms"]=b.pressEdge;d["long"]=b.longSent;if(!strcmp(name,"click"))d["count"]=b.clicks;send_(context_,name,d.as<JsonObjectConst>());}
+ void event(Button&b,const char*name,uint32_t now){JsonDocument d;d["button"]=b.name;d["captured_at_ms"]=now;d["gesture_id"]=b.sequence;d["presentation_id"]=b.presentation.view;d["presentation_revision"]=b.presentation.revision;d["presentation_activation"]=b.presentation.activation;d["held_ms"]=(b.stable?now:b.releaseEdge)-b.pressEdge;d["button_index"]=unsigned(&b-buttons_);d["pressed_mask"]=pressedMask();d["edge_at_ms"]=b.changed;d["pressed_at_ms"]=b.pressEdge;d["long"]=b.longSent;d["system_consumed"]=b.consumed;if(!strcmp(name,"click"))d["count"]=b.clicks;send_(context_,name,d.as<JsonObjectConst>());}
 public:
  using Persist=bool(*)(const char*,size_t);
  ButtonGestures(std::initializer_list<const char*>names,void*context,void(*send)(void*,const char*,JsonObjectConst)):context_(context),send_(send){for(auto n:names)if(count_<8&&strlen(n)<17)copy(buttons_[count_++].name,17,n);}
@@ -41,30 +42,36 @@ public:
  void commitConfiguration(const ButtonGestures&prepared){for(size_t i=0;i<count_;++i){auto&b=buttons_[i];b.desired=prepared.buttons_[i].desired;if(!b.raw&&!b.stable&&!b.clicks)b.active=b.desired;}revision_=prepared.revision_;restoreOk_=prepared.restoreOk_;}
  bool restore(const char*s){JsonDocument a,o;restoreOk_=!deserializeJson(a,s)&&a.is<JsonObjectConst>()&&!configure(a.as<JsonObjectConst>(),o.to<JsonObject>());return restoreOk_;}
  void read(JsonObject o)const{o["revision"]=revision_;o["restore_valid"]=restoreOk_;o["apply_time"]="next_gesture";auto all=o["buttons"].to<JsonObject>();for(size_t i=0;i<count_;++i){auto&b=buttons_[i];auto x=all[b.name].to<JsonObject>();x["index"]=i;x["pressed"]=b.stable;x["pressed_at_ms"]=b.pressEdge;x["gesture_id"]=b.sequence;x["pending"]=!(b.desired==b.active);b.desired.describe(x["configured"].to<JsonObject>());b.active.describe(x["applied"].to<JsonObject>());}}
- static void describe(JsonObject o){o["events"]="press,release,long_press,repeat,click";o["click_count_range"]="1..8";o["click_delivery"]="after_window_or_max_clicks";o["long_press_cancels_click"]=true;o["configuration_scope"]="device";o["apply_time"]="next_gesture";o["time_unit"]="ms";o["timestamp_basis"]="monotonic_sample_clock_mod_2^32";o["edge_at_ms"]="first_sample_of_accepted_stable_level";o["pressed_mask"]="debounced_batch_snapshot_by_button_index";o["combination_policy"]="runtime_pattern_library";o["debounce_ms_range"]="1..100";o["long_press_ms_range"]="100..60000";o["click_window_ms_range"]="1..2000";o["repeat_ms_range"]="0(off),20..60000";}
+ static void describe(JsonObject o){o["events"]="press,release,long_press,repeat,click";o["click_count_range"]="1..8";o["click_delivery"]="after_window_or_max_clicks";o["long_press_cancels_click"]=true;o["system_consumption"]="current_press_click_sequence_until_release";o["event_fields"]["system_consumed"]["type"]="boolean";o["event_fields"]["system_consumed"]["meaning"]="protected_system_press_claim_raw_facts_remain_observable";o["configuration_scope"]="device";o["apply_time"]="next_gesture";o["time_unit"]="ms";o["timestamp_basis"]="monotonic_sample_clock_mod_2^32";o["edge_at_ms"]="first_sample_of_accepted_stable_level";o["pressed_mask"]="debounced_batch_snapshot_by_button_index";o["combination_policy"]="runtime_pattern_library";o["presentation_context"]="physical_press_view_revision_activation";o["multiclick_context"]="last_physical_press";o["debounce_ms_range"]="1..100";o["long_press_ms_range"]="100..60000";o["click_window_ms_range"]="1..2000";o["repeat_ms_range"]="0(off),20..60000";}
+ // A system input reservation may claim an actual physical press before the
+ // application's independently configured long threshold. Keep raw facts and
+ // suppress only its click sequence through release; never synthesize a hold.
+ void consumeCurrentPress(uint32_t mask){for(size_t i=0;i<count_;++i)if(mask&(1u<<i)){auto&b=buttons_[i];b.consumed=true;b.clicks=0;}}
  uint32_t pressedMask()const{uint32_t mask=0;for(size_t i=0;i<count_;++i)if(buttons_[i].stable)mask|=1u<<i;return mask;}
 private:
- void updateRaw(Button&b,bool down,uint32_t now){
+ void updateRaw(Button&b,bool down,uint32_t now,InputPresentation presentation){
   if(!b.raw&&!b.stable&&b.clicks&&uint32_t(now-b.released)>=b.active.clickWindow){event(b,"click",now);b.clicks=0;}
   if(!b.raw&&!b.stable&&!b.clicks)b.active=b.desired;
-  if(down!=b.raw){b.raw=down;b.changed=now;}
+  if(down!=b.raw){b.raw=down;b.changed=now;if(down){b.rawPresentation=presentation;if(!b.stable)b.consumed=false;}}
  }
  int acceptEdge(Button&b,uint32_t now){if(b.stable==b.raw||uint32_t(now-b.changed)<b.active.debounce)return 0;b.stable=b.raw;
   if(b.stable){b.pressEdge=b.changed;return 1;}b.releaseEdge=b.changed;return -1;
  }
- void deliver(Button&b,int edge,uint32_t now,uint32_t presentation){
-  if(edge>0){if(!b.clicks){b.sequence=next_++;b.presentation=presentation;}b.since=now;b.longSent=false;event(b,"press",now);}
-  else if(edge<0){if(!b.longSent&&uint32_t(b.releaseEdge-b.pressEdge)>=b.active.longPress){b.longSent=true;b.clicks=0;event(b,"long_press",b.releaseEdge);}event(b,"release",now);b.released=now;if(!b.longSent){++b.clicks;if(b.clicks==b.active.maxClicks){event(b,"click",now);b.clicks=0;}}else b.clicks=0;}
+ void deliver(Button&b,int edge,uint32_t now){
+  if(edge>0){if(!b.clicks)b.sequence=next_++;b.presentation=b.rawPresentation;b.since=now;b.longSent=false;event(b,"press",now);}
+  else if(edge<0){if(!b.longSent&&uint32_t(b.releaseEdge-b.pressEdge)>=b.active.longPress){b.longSent=true;b.clicks=0;event(b,"long_press",b.releaseEdge);}event(b,"release",now);b.released=now;if(!b.longSent&&!b.consumed){++b.clicks;if(b.clicks==b.active.maxClicks){event(b,"click",now);b.clicks=0;}}else b.clicks=0;}
   if(b.stable&&b.raw&&!b.longSent&&uint32_t(now-b.pressEdge)>=b.active.longPress){b.longSent=true;b.clicks=0;b.repeatAt=now;event(b,"long_press",now);}
   else if(b.stable&&b.raw&&b.longSent&&b.active.repeat&&uint32_t(now-b.repeatAt)>=b.active.repeat){b.repeatAt=now;event(b,"repeat",now);}
  }
 public:
- void sample(size_t i,bool down,uint32_t now,uint32_t presentation=0){if(i>=count_)return;auto&b=buttons_[i];updateRaw(b,down,now);int edge=acceptEdge(b,now);deliver(b,edge,now,presentation);}
- void sampleAll(const bool*levels,size_t n,uint32_t now,uint32_t presentation=0){
-  int edges[8]{};n=std::min(n,count_);for(size_t i=0;i<n;++i)updateRaw(buttons_[i],levels[i],now);
+ void sample(size_t i,bool down,uint32_t now,InputPresentation presentation){if(i>=count_)return;auto&b=buttons_[i];updateRaw(b,down,now,presentation);int edge=acceptEdge(b,now);deliver(b,edge,now);}
+ void sample(size_t i,bool down,uint32_t now,uint32_t presentation=0){sample(i,down,now,InputPresentation{presentation,0,0});}
+ void sampleAll(const bool*levels,size_t n,uint32_t now,InputPresentation presentation){
+  int edges[8]{};n=std::min(n,count_);for(size_t i=0;i<n;++i)updateRaw(buttons_[i],levels[i],now,presentation);
   for(size_t i=0;i<n;++i)edges[i]=acceptEdge(buttons_[i],now);
-  for(size_t i=0;i<n;++i)deliver(buttons_[i],edges[i],now,presentation);
+  for(size_t i=0;i<n;++i)deliver(buttons_[i],edges[i],now);
  }
+ void sampleAll(const bool*levels,size_t n,uint32_t now,uint32_t presentation=0){sampleAll(levels,n,now,InputPresentation{presentation,0,0});}
 
 };
 }

@@ -11,11 +11,11 @@ static constexpr unsigned WsIncoming=4,WsOutgoing=2;
 #endif
 struct WsMessage{uint32_t id=0,generation=0;bool binary=false;size_t size=0;uint8_t data[1024]{};};
 struct WsSession {
- WebSocketsClient client;String ca,headers;QueueHandle_t incoming=nullptr,outgoing=nullptr;StaticQueue_t outgoingControl{};void*outgoingStorage=nullptr;
+ WebSocketsClient client;String ca,headers;QueueHandle_t incoming=nullptr,outgoing=nullptr;StaticQueue_t incomingControl{},outgoingControl{};void*incomingStorage=nullptr,*outgoingStorage=nullptr;
  std::atomic<bool>sending{false},connected{false},stop{false},done{false},readable{false},waitingMemory{false};std::atomic<uint32_t>drops{0},generation{0},failures{0};
  uint32_t id=0,owner=0,reservation=0;bool firstResult=false,steadyBudget=false;size_t residentBytes=0;WsMessage assembly;bool assembling=false;
  bool outboundDrained()const{return !sending.load()&&uxQueueMessagesWaiting(outgoing)==0;}
- ~WsSession(){client.onEvent([](WStype_t,uint8_t*,size_t){});client.disconnect();if(incoming)vQueueDelete(incoming);if(outgoing)vQueueDelete(outgoing);core.resources().freeAllocation(outgoingStorage);if(reservation)core.resources().release(reservation);}
+ ~WsSession(){client.onEvent([](WStype_t,uint8_t*,size_t){});client.disconnect();if(incoming)vQueueDelete(incoming);if(outgoing)vQueueDelete(outgoing);core.resources().freeAllocation(incomingStorage);core.resources().freeAllocation(outgoingStorage);if(reservation)core.resources().release(reservation);}
 };
 static WsSession*wsSession=nullptr;static WebSocketsClient*wsClient=nullptr;static uint32_t wsOwner=0,nextWs=1,nextWsMessage=1;
 static void wsEvent(WsSession&s,const char*name,uint32_t message=0,size_t bytes=0){
@@ -65,12 +65,13 @@ static const char*wsHandler(const char*m,JsonObjectConst a,JsonObject out){
   if(!strcmp(m,"validate_connect"))return nullptr;
   auto reservation=core.resources().acquire(tls?70000:28000,core.callerOwner());if(!reservation)return "network_memory_budget";
   auto s=new(std::nothrow)WsSession;if(!s){core.resources().release(reservation);return "memory_low";}s->reservation=reservation;s->owner=core.callerOwner();s->id=nextWs++;
-  // Queue payloads use the shared heap policy (PSRAM when present); the
-  // RTOS control structure stays in the native session. No ISR uses this queue.
-  s->incoming=xQueueCreate(WsIncoming,sizeof(WsMessage));s->outgoingStorage=core.resources().allocate(WsOutgoing*sizeof(WsMessage));if(s->outgoingStorage)s->outgoing=xQueueCreateStatic(WsOutgoing,sizeof(WsMessage),static_cast<uint8_t*>(s->outgoingStorage),&s->outgoingControl);if(!s->incoming||!s->outgoing){delete s;return "memory_low";}
+  // Both queue payloads use the shared heap policy (PSRAM when present);
+  // control structures stay in the native session. Neither queue has an ISR producer.
+  s->incomingStorage=core.resources().allocate(WsIncoming*sizeof(WsMessage));if(s->incomingStorage)s->incoming=xQueueCreateStatic(WsIncoming,sizeof(WsMessage),static_cast<uint8_t*>(s->incomingStorage),&s->incomingControl);
+  s->outgoingStorage=core.resources().allocate(WsOutgoing*sizeof(WsMessage));if(s->outgoingStorage)s->outgoing=xQueueCreateStatic(WsOutgoing,sizeof(WsMessage),static_cast<uint8_t*>(s->outgoingStorage),&s->outgoingControl);if(!s->incoming||!s->outgoing){delete s;return "memory_low";}
   s->ca=ca;s->headers=extra;s->client.onEvent([s](WStype_t t,uint8_t*p,size_t n){wsReceive(*s,t,p,n);});s->client.setReconnectInterval(retry);if(ping)s->client.enableHeartbeat(ping,pong,misses);s->client.setExtraHeaders(s->headers.c_str());
   if(tls){if(a["verify_peer"]|true){if(s->ca.length())s->client.beginSslWithCA(host,port,path,s->ca.c_str(),"");else s->client.beginSslWithBundle(host,port,path,platformCaBundleStart,platformCaBundleEnd-platformCaBundleStart,"");}else s->client.beginSSL(host,port,path,nullptr,"");}else s->client.begin(host,port,path,"");
-  s->residentBytes=sizeof(WsSession)+WsIncoming*sizeof(WsMessage)+sizeof(StaticQueue_t)+6144+s->ca.length()+s->headers.length();core.resources().used(reservation,s->residentBytes);
+  s->residentBytes=sizeof(WsSession)+6144+s->ca.length()+s->headers.length();core.resources().used(reservation,s->residentBytes);
   if(xTaskCreate(wsTask,"notes-ws",6144,s,1,nullptr)!=pdPASS){delete s;return "task_allocation_failed";}
   wsSession=s;wsClient=&s->client;wsOwner=s->owner;out["connection_id"]=s->id;out["state"]="connecting";return nullptr;
  }

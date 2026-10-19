@@ -27,6 +27,7 @@ description: 发现并操作 WishOS 系统资源，为设备编写运行时应�
 8. 制作的是可保存、重开并继续修改的工具时，交付完整应用包与本地确定性行为；单次文字／图片／页面可以只是结果，不强迫安装新应用。保存结果须显式选择存储策略。
 9. 修改前读取 `/sys/apps context` 核对当前 app、来源实例、版本和页面引用；明确只改变本次显示还是生成应用新版本。恢复旧版只恢复代码／资源，不声称撤销外部效果；另存为使用独立应用身份，分别约定配置与用户数据。
 10. 离线显示旧数据时保留来源和更新时间。预览按目标几何与色彩能力生成，不把计算机预览当作实屏光学验证。分享／导出默认不包含凭据、私人会话和录音。
+11. 配置未指定的字段继承系统默认。页面通常省略 `style.font`，局部样式只覆盖需要改变的属性；用户选择“默认”时恢复继承。应用启动读取配置，用户明确修改系统设置时才提交全局变更。
 
 ## 按需查阅
 
@@ -35,12 +36,12 @@ description: 发现并操作 WishOS 系统资源，为设备编写运行时应�
 | 系统调用、状态与声明 | [调用流程](references/driver-guide.md)、[资源模型](references/resource-model.md) |
 | 应用加载、模块、后台计算 | [运行时](references/runtime-apps.md)、[应用与 Launcher](references/applications.md) |
 | 事件、异步完成、按钮组合与交互 | [回调](references/callbacks.md)、[交互](references/interactions.md) |
-| 动态页面、字体、图像与显示配置 | [UI](references/dynamic-ui.md)、[显示契约](references/display-interface.md)；仅 E6 设备参考 [E6 配置](references/e6-display.md) |
+| 动态页面、字体、图像与显示配置 | [UI](references/dynamic-ui.md)、[显示契约](references/display-interface.md) |
 | AI 请求、顺序结果、大资源、日志、遥测、时间、代理 | [系统服务](references/managed-services.md) |
 | 应用预检查、不可变版本、文件级替换 | [代码包](references/packages.md) |
 | Wi-Fi、BLE、Socket、Thread、Zigbee | [无线设置](references/wireless-config.md)、[网络](references/connectivity.md) |
 | 麦克风、压缩、唤醒、扬声器 | [音频](references/audio.md) |
 | 文件、NFS 与挂载 | [NFS](references/nfs-service.md)、[系统契约](references/runtime-design.md) |
-| 编译原生设备支持 | [驱动契约](../../../hardware/agent-os/drivers/README.md)、[传感器](../../../hardware/agent-os/drivers/sensor-sampling/README.md)、[执行器](references/actuation.md) |
+| 编译原生设备支持 | [驱动契约](../../hardware/agent-os/drivers/README.md)、[传感器](../../hardware/agent-os/drivers/sensor-sampling/README.md)、[执行器](references/actuation.md) |
 
 用 VFS 路径引用页面、模块、字库与资源。不要隐式格式化用户介质；书籍索引在上位机生成。网络发现、状态读取和链路探测不得写入用户介质。文档中的未来目标不是可调用能力，始终以当前设备的正向声明为准。

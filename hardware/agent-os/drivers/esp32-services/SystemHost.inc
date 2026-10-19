@@ -50,13 +50,15 @@
 #include <NetworkClientSecure.h>
 #include <WebSocketsClient.h>
 #include <atomic>
+#include <new>
 namespace notesos {
 static Core core;static const char*resourceStartupError=nullptr;static Vfs vfs;static Preferences preferences;static BoundedWebServer http(80,core.resources(),MAX_WIRE);static DNSServer dns;
 static char apSsid[40],bootId[17];static bool mounted=false;static uint32_t cursor=0;
+static char serialEmergency[257];static char*serialLine=serialEmergency;static size_t serialLimit=sizeof(serialEmergency)-1;
 static void* allocateRAM(size_t n){return core.resources().allocate(n);}
 static void freeMemoryFile(void*p){core.resources().freeAllocation(p);}
-static MemoryFiles ramFiles("ram","/storage/ram","ram",true,allocateRAM,freeMemoryFile);static SystemFiles systemFiles(&core.resources());static LittleFsProvider flashFiles(LittleFS,mounted,"/nfs-test");
-static FlashVolumeService flashVolume(core,vfs,LittleFS,flashFiles,mounted,"/nfs-test","nfs_test");
+static MemoryFiles ramFiles("ram","/storage/ram","ram",true,allocateRAM,freeMemoryFile);static SystemFiles systemFiles(&core.resources());static LittleFsProvider flashFiles(LittleFS,mounted,boardpack::FLASH_NATIVE_MOUNT,boardpack::FLASH_MOUNT);
+static FlashVolumeService flashVolume(core,vfs,LittleFS,flashFiles,mounted,boardpack::FLASH_NATIVE_MOUNT,boardpack::FLASH_PARTITION);
 static NfsService nfsService(vfs,core.resources(),&core);static esp32_nfs::SocketTransport nfsTransport;static SocketService sockets(core,&networkProxy);static HttpApplications routes(core);static RemoteRequests remoteRequests(core);static ConnectionProfiles connections;
 static uint64_t uptime(){return esp_timer_get_time()/1000;}
 static bool networkActive();static bool webSocketActive();static bool applicationNetworkActive(){return sockets.active()||routes.active()||webSocketActive();}
@@ -73,7 +75,7 @@ static void rememberJob(uint32_t id){jobs[id%8]={};jobs[id%8].id=id;}
 #include "ScriptService.h"
 #include "drivers/esp32-services/ApplicationService.h"
 #include "drivers/esp32-services/ManagedServices.h"
-#include "WorkerService.h"
+#include "drivers/esp32-services/WorkerService.h"
 static FileService fileService(vfs,&core);
 #include WISHOS_NATIVE_DEVICES
 static const char*files(const char*m,JsonObjectConst a,JsonObject o){return fileService.invoke(m,a,o);}
@@ -84,9 +86,12 @@ static void respond(JsonObjectConst request,JsonDocument&reply){invokeEnvelope(c
 static audio::RecordingArchive recordingArchive(vfs);
 #include "drivers/esp32-services/RuntimeAssets.h"
 void begin(){
+#ifdef WISHOS_NATIVE_EARLY_INIT
+ WISHOS_NATIVE_EARLY_INIT();
+#endif
  core.clockSource(uptime);
  Serial.setRxBufferSize(4096);Serial.begin(115200);preferences.begin("agent-os",false);snprintf(bootId,sizeof bootId,"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());
- vfs.add(ramFiles);vfs.add(systemFiles);vfs.add(flashFiles);resourceStartupError=configureEspMemory(core.resources());core.setEventObserver(scriptEvent);beginNativeDevices();
+ vfs.add(ramFiles);vfs.add(systemFiles);vfs.add(flashFiles);resourceStartupError=configureEspMemory(core);if(!resourceStartupError){if(auto memory=core.resources().allocate(MAX_WIRE+1)){serialLine=static_cast<char*>(memory);serialLimit=MAX_WIRE;}agentStartupError=initManagedAgent();}core.setEventObserver(scriptEvent);beginNativeDevices();
  core.onOwnerRelease(&nextJob,[](void*,uint32_t owner){if(networkJob&&networkJob->owner==owner){networkJob->cancel=true;networkJob->orphan=true;}if(wsOwner==owner)stopWebSocket();});
  Device devices[]={
  {"/sys/capabilities","list,describe","resource discovery",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"describe"))return core.describe(a["path"]|"",o);unsigned start=a["cursor"]|0u,limit=a["limit"]|4u;if(!limit||limit>48)return "limit";core.list(o["devices"].to<JsonArray>(),start,limit,a["details"]|false);o["next_cursor"]=start+o["devices"].size();o["more"]=start+o["devices"].size()<core.deviceCount();return nullptr;}},
@@ -98,7 +103,7 @@ void begin(){
  {"/sys/connections","read,configure","application service endpoints",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{return connections.invoke(m,a,o,[](const char*s,size_t n){return preferences.putString("connections",s)==n;});},nullptr,"read"},
  {"/sys/operations","request,read,release","retained asynchronous completion observations",[](const char*m,JsonObjectConst a,JsonObject o){return core.operation(m,a,o);}},
  {"/sys/apps",Applications::Methods,"installed runtime applications and launcher",applicationsHandler,[](JsonObject o){applications.describe(o);},"read,context,list,inspect,validation"},
- {"/sys/runtime","read,validate,load,restart,stop","dynamic Lua application",scriptHandler,[](JsonObject o){ScriptHost::describe(core,o);},"read,validate"},
+ {"/sys/runtime","read,configure,validate,load,restart,stop","dynamic Lua application",scriptHandler,[](JsonObject o){ScriptHost::describe(core,o);},"read,validate"},
  {"/sys/workers","read,submit,cancel,release","isolated FreeRTOS workers",workerHandler,workerAsyncDescription},
  {"/sys/timers","read,write,remove","scheduled events",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write"))return core.timer(a,o);if(!strcmp(m,"remove"))return core.removeTimer(a["id"]|0u)?nullptr:"not_found";core.listTimers(o["timers"].to<JsonArray>());return nullptr;}},
  {"/sys/rules","read,write,remove","event rules",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write"))return core.setRule(a,o);if(!strcmp(m,"remove"))return core.removeRule(a["id"]|0u)?nullptr:"not_found";return core.readRules(a,o);}},
@@ -109,20 +114,20 @@ void begin(){
  {"/net/ws","read,connect,send,receive,close","WS/WSS transport",wsHandler,wsNativeDescription},
  {"/net/tcp","read,status,listen,connect,write,close","TCP transport",[](const char*m,JsonObjectConst a,JsonObject o){return sockets.invoke(m,a,o);}},
  {"/net/http-server","read,route,respond,remove,release,stop,session","application routes",[](const char*m,JsonObjectConst a,JsonObject o){return routes.invoke(m,a,o);},[](JsonObject o){routes.describe(o);http.describe(o);},"read"},
- {"/services/remote","read,submit,peek,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},RemoteRequests::describe},
+ {"/services/remote","read,submit,peek,progress,complete,release","remote services",[](const char*m,JsonObjectConst a,JsonObject o){return remoteRequests.invoke(m,a,o,uptime(),bootId);},RemoteRequests::describe},
  {"/services/nfs","read,start,stop,memory","on-demand NFS",nfs,NfsService::describe,"read"},
  {"/dev/flash","read,mount,format,space,cancel","internal LittleFS volume",[](const char*m,JsonObjectConst a,JsonObject o){return flashVolume.invoke(m,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
  {"/sys/storage","read,configure,mount,format,space,cancel","storage providers",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"configure")){if(auto e=argumentFields(a,"provider,quota_bytes"))return e;if(a["provider"]!="ram"||!a["quota_bytes"].is<uint32_t>())return "memory_volume_setting";if(!ramFiles.budget(a["quota_bytes"].as<uint32_t>()))return "memory_volume_in_use";ramFiles.describe(o);return nullptr;}if(strcmp(m,"read"))return nativeStorage(m,a,o);return describeEspStorage(vfs,a,o);},[](JsonObject o){flashVolume.describe(o);},"read"},
  {"/fs",FileService::Methods,"VFS files",files,[](JsonObject o){fileService.describe(o);}},
  {"/services/time","read,describe,configure,sync","asynchronous NTP",timeHandler},
  {"/sys/clock","read,write","wall and monotonic clock",[](const char*m,JsonObjectConst a,JsonObject o)->const char*{if(!strcmp(m,"write")){ClockChange c;if(auto e=validateClockChange(a,c))return e;if(c.cpu)return "use_power_adapter";if(c.wall){timeval t{time_t(c.unixSeconds),0};if(settimeofday(&t,nullptr))return "clock_failed";timeWasSet=true;}}o["monotonic_ms"]=uptime();o["unix_s"]=int64_t(time(nullptr));o["wall_clock_valid"]=timeWasSet.load()||time(nullptr)>1700000000;return nullptr;}},
- {"/dev/usb","read","USB CDC",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["connected"]=bool(Serial);return nullptr;}}
+ {"/dev/usb","read","USB CDC",[](const char*,JsonObjectConst,JsonObject o)->const char*{o["connected"]=bool(Serial);o["max_request_bytes"]=serialLimit;if(serialLimit<MAX_WIRE)o["error"]="serial_buffer_memory_budget";return nullptr;}}
  };
   const struct {const char*path;const char*methods;} reads[]={{"/dev/usb","read"},{"/dev/wifi","read,describe,profiles,scan_results"},{"/fs","mounts,stat,list,read"},{"/net/default","read,describe,profiles,scan_results"},{"/net/http","read"},{"/net/http-server","read"},{"/net/tcp","status"},{"/net/ws","read"},{"/services/nfs","read"},{"/services/remote","read,peek"},{"/services/time","read,describe"},{"/sys/board","read"},{"/sys/capabilities","list,describe"},{"/sys/clock","read"},{"/sys/events","read"},{"/sys/operations","read"},{"/sys/resources","read"},{"/sys/rules","read"},{"/sys/apps","read,context,list,inspect,validation"},
  {"/sys/runtime","read,validate"},{"/sys/stats","read"},{"/sys/storage","read,list"},{"/sys/timers","read"},{"/sys/workers","read"}};
 for(auto d:devices){for(auto r:reads)if(!strcmp(d.path,r.path))d.readMethods=r.methods;core.add(d);}
  registerNativeDevices();
- connections.restore(preferences.getString("connections","{}").c_str());restoreServiceLink();Network.begin();uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);snprintf(apSsid,sizeof apSsid,"Agentic-Notes-%02X%02X%02X",mac[3],mac[4],mac[5]);restoreWifi();core.clock(uptime());wifiManager.poll(uptime());restoreApplications();timeService.restore(preferences.getString("time_sync","{}").c_str());
+ connections.restore(preferences.getString("connections","{}").c_str());restoreServiceLink();Network.begin();uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);snprintf(apSsid,sizeof apSsid,"WishOS-%02X%02X%02X",mac[3],mac[4],mac[5]);restoreWifi();core.clock(uptime());wifiManager.poll(uptime());restoreApplications();timeService.restore(preferences.getString("time_sync","{}").c_str());
  registerManagedServices();
  for(auto route:boardpack::CONTROL_ASSETS){String path=route;http.on(path.c_str(),HTTP_GET,[path]{serveRuntimeAsset(path.c_str(),path.endsWith(".html")?"text/html; charset=utf-8":path.endsWith(".json")?"application/json":"application/javascript; charset=utf-8");});}
  http.on("/",HTTP_GET,[]{JsonDocument r;if(routes.handle("/","GET","",uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}serveRuntimeAsset("/control/setup.html","text/html; charset=utf-8");});
@@ -130,8 +135,8 @@ for(auto d:devices){for(auto r:reads)if(!strcmp(d.path,r.path))d.readMethods=r.m
  http.onNotFound([]{JsonDocument r;if(routes.handle(http.uri().c_str(),http.method()==HTTP_GET?"GET":http.method()==HTTP_POST?"POST":http.method()==HTTP_PUT?"PUT":http.method()==HTTP_DELETE?"DELETE":"OTHER",http.arg("plain").c_str(),uptime(),r.to<JsonObject>())){http.send(r["status"]|200,r["content_type"]|"text/plain",r["body"]|"");return;}http.sendHeader("Location","/",true);http.send(302,"text/plain","");});http.begin();event("/sys/board","boot");
 }
 void poll(){core.clock(uptime());flashVolume.poll();pollNativeDevices();fileService.poll();boardWifi.service();wifiManager.poll(uptime());scriptHost.tick(uptime());pollApplications();pollManagedServices();workers.poll();timeService.poll(uptime(),WiFi.status()==WL_CONNECTED);pollNetwork();pollWebSocket();pollServiceLink();sockets.poll();routes.tick(uptime());remoteRequests.tick(uptime());nfsService.poll(millis());dns.processNextRequest();http.handleClient();
- static char line[4097];static size_t used=0;static bool overflow=false;
- for(int n=0;n<512&&Serial.available();++n){char ch=Serial.read();if(ch=='\n'){if(used&&!overflow){line[used]=0;JsonDocument a,r;if(deserializeJson(a,line)){r["ok"]=false;r["error"]="invalid_json";}else respond(a.as<JsonObjectConst>(),r);serializeJson(r,Serial);Serial.println();}used=0;overflow=false;}else if(ch!='\r'){if(used<4096&&!overflow)line[used++]=ch;else overflow=true;}}
- core.tick();core.dispatch(cursor);delay(5);
+ static size_t used=0;static bool overflow=false;
+ for(int n=0;n<512&&Serial.available();++n){char ch=Serial.read();if(ch=='\n'){if(used&&!overflow){serialLine[used]=0;JsonDocument a,r;if(deserializeJson(a,serialLine)){r["ok"]=false;r["error"]="invalid_json";}else respond(a.as<JsonObjectConst>(),r);serializeJson(r,Serial);Serial.println();}used=0;overflow=false;}else if(ch!='\r'){if(used<serialLimit&&!overflow)serialLine[used++]=ch;else overflow=true;}}
+ core.tick();core.dispatch(cursor);delay(1);
 }
 }

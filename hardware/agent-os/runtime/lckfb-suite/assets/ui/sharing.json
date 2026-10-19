@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -25,10 +25,10 @@
             "gap": 10
           },
           "style": {
-            "bgColor": "#F7F5EF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -41,7 +41,8 @@
               "imageProps": {
                 "src": "../icons/back.png",
                 "fit": "contain"
-              }
+              },
+              "style": {}
             }
           ]
         },
@@ -68,7 +69,7 @@
               "style": {
                 "fontSize": 22,
                 "lineHeight": 27,
-                "textColor": "#262822",
+                "textColor": "#17241E",
                 "textAlign": "left"
               },
               "labelProps": {
@@ -90,7 +91,7 @@
           "style": {
             "fontSize": 18,
             "lineHeight": 23,
-            "textColor": "#262822"
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "NFS · 局域网存储访问",
@@ -106,9 +107,9 @@
             "height": 72
           },
           "style": {
-            "fontSize": 15,
-            "lineHeight": 20,
-            "textColor": "#262822"
+            "fontSize": 14,
+            "lineHeight": 19,
+            "textColor": "#17241E"
           },
           "labelProps": {
             "text": "—",
@@ -134,9 +135,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -146,9 +147,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 17,
-                "lineHeight": 22,
-                "textColor": "#262822"
+                "fontSize": 18,
+                "lineHeight": 23,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "开启共享",

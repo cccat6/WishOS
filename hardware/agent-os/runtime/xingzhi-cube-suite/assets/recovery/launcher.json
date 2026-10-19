@@ -1,0 +1,9 @@
+{
+  "format": "wishos-app/1",
+  "id": "launcher",
+  "entry": "launcher.lua",
+  "title": "WishOS",
+  "help": {
+    "controls": "Open the displayed URL to repair or replace the launcher."
+  }
+}

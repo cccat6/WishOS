@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -19,7 +19,8 @@
           "imageProps": {
             "src": "../brand/logo.png",
             "fit": "contain"
-          }
+          },
+          "style": {}
         },
         {
           "type": "label",
@@ -30,9 +31,9 @@
             "height": 33
           },
           "style": {
-            "fontSize": 23,
-            "lineHeight": 28,
-            "textColor": "#262822",
+            "fontSize": 22,
+            "lineHeight": 27,
+            "textColor": "#17241E",
             "textAlign": "center"
           },
           "labelProps": {
@@ -45,58 +46,23 @@
           "type": "label",
           "placement": {
             "x": 12,
-            "y": 108,
+            "y": 140,
             "width": 296,
-            "height": 26
+            "height": 40
           },
           "style": {
-            "fontSize": 16,
-            "lineHeight": 21,
-            "textColor": "#262822",
+            "fontSize": 12,
+            "lineHeight": 16,
+            "textColor": "#17241E",
             "textAlign": "center"
           },
           "labelProps": {
-            "text": "Press the user key to talk",
-            "longMode": "ellipsis"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 136,
-            "width": 296,
-            "height": 26
+            "text": "",
+            "metrics": "line",
+            "longMode": "wrap",
+            "missingGlyph": "replace"
           },
-          "style": {
-            "fontSize": 16,
-            "lineHeight": 21,
-            "textColor": "#262822",
-            "textAlign": "center"
-          },
-          "labelProps": {
-            "text": "Tap icons for apps and settings",
-            "longMode": "ellipsis"
-          }
-        },
-        {
-          "type": "label",
-          "placement": {
-            "x": 12,
-            "y": 163,
-            "width": 296,
-            "height": 25
-          },
-          "style": {
-            "fontSize": 15,
-            "lineHeight": 20,
-            "textColor": "#262822",
-            "textAlign": "center"
-          },
-          "labelProps": {
-            "text": "Hold the user key 2s for Home",
-            "longMode": "ellipsis"
-          }
+          "id": "navigation_hint"
         },
         {
           "type": "button",
@@ -116,9 +82,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -128,9 +94,9 @@
                 "width": "content"
               },
               "style": {
-                "fontSize": 17,
-                "lineHeight": 22,
-                "textColor": "#262822"
+                "fontSize": 18,
+                "lineHeight": 23,
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "Open desktop",

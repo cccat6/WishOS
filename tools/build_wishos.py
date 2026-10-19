@@ -48,7 +48,25 @@ def tree_digest(directory):
     return digest.hexdigest()
 
 
+def dependency_inputs():
+    directory=ROOT/'tools/dependencies'
+    paths={p.resolve() for p in directory.glob('*.json')}
+    arduino=directory/'arduino.json'
+    if arduino.exists():
+        for spec in json.loads(arduino.read_text()).get('libraries',{}).values():
+            if spec.get('patch'):paths.add((directory/spec['patch']).resolve())
+    return {p.relative_to(ROOT.resolve()).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(paths)}
+
+
+def verify_dependency_inputs(expected):
+    if dependency_inputs()!=expected:
+        raise RuntimeError('Dependency contracts changed during build; rebuild the selected target')
+
+
 def build(package, stage, output):
+    inputs=dependency_inputs();locked=lock()
+    (output/'firmware-manifest.json').unlink(missing_ok=True)
     verify_cli()
     board,port=stage_sources(package,stage);drivers=driver_packages(board,port)
     flags=list(port.get('flags',[]));dependencies=set(port.get('dependencies',[]))
@@ -72,7 +90,7 @@ def build(package, stage, output):
     common=[cli_path(),'compile',*cli_config(),'--fqbn',port['fqbn']]
     for directory in libraries.values():common.extend(['--library',str(directory)])
     properties=dict(line.split('=',1) for line in subprocess.check_output([*common,'--show-properties=expanded',str(stage)],text=True).splitlines() if '=' in line)
-    toolchain=lock()['toolchains'][port['toolchain']]
+    toolchain=locked['toolchains'][port['toolchain']]
     if ':'.join(port['fqbn'].split(':')[:2])!=toolchain['id']:raise RuntimeError('Port FQBN/toolchain mismatch')
     if properties.get('version')!=toolchain['version']:
         raise RuntimeError('Arduino core version mismatch: '+properties.get('version','unknown'))
@@ -106,11 +124,12 @@ def build(package, stage, output):
               'platform':port['platform_id'],'composition':port['id'],'drivers':list(drivers),'runtime':board.get('runtime'),
               'flash_bytes':board['flash_bytes'],'application_bytes':port['application_bytes'],'image_bytes':image_bytes,
               'revision':revision,'worktree_dirty':dirty,'fqbn':port['fqbn'],
-              'arduino_cli':lock()['cli_version'],'arduino_core':toolchain,
-              'source_sha256':tree_digest(stage/'src'),'lock_sha256':hashlib.sha256(json.dumps(lock(),sort_keys=True).encode()).hexdigest(),
+              'arduino_cli':locked['cli_version'],'arduino_core':toolchain,'dependency_inputs':inputs,
+              'source_sha256':tree_digest(stage/'src'),'lock_sha256':hashlib.sha256(json.dumps(locked,sort_keys=True).encode()).hexdigest(),
               'dependencies':{name:{'directory':path.name,'sha256':tree_digest(path)} for name,path in libraries.items()},
               'files':{file.relative_to(output).as_posix():hashlib.sha256(file.read_bytes()).hexdigest() for file in sorted(output.rglob('*')) if file.is_file() and (file.is_relative_to(notices) or (file.parent==output and (file.suffix in ('.bin','.elf') or file.name in ('partitions.csv','flash_args'))))}}
     if filesystem:manifest['filesystem']=filesystem
+    verify_dependency_inputs(inputs)
     (output/'firmware-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     return manifest
 

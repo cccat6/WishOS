@@ -14,7 +14,7 @@ def main():
  for source in (ROOT/'firmware/WishOS/src').glob('*.h'):shutil.copy2(source,stage/'src'/source.name)
  shutil.copytree(ROOT/'firmware/WishOS/src/lua',stage/'src/lua')
  shutil.copytree(ROOT/'firmware/WishOS/src/audio',stage/'src/audio')
- for name in ['i2c','sensor-sampling','gxhtc3','qmc5883l','qmi8658','ft6336','pca9557','esp-wire-i2c','esp-wakenet']:
+ for name in ['i2c','sensor-sampling','gxhtc3','qmc5883l','qmi8658','ft6336','pca9557','esp-wire-i2c','esp-wakenet','esp-i2s-input','esp-i2s-output']:
   shutil.copytree(ROOT/'hardware/agent-os/drivers'/name,stage/'src/drivers'/name)
  shutil.copy2(ROOT/'tests/native-drivers/NativeDrivers.ino',stage/'NativeDrivers.ino')
  (stage/'build_opt.h').write_text('-I"'+str(stage/'src')+'"\n')

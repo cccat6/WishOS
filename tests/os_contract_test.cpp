@@ -1,8 +1,9 @@
 #include "ConnectionProfiles.h"
 #include "drivers/esp32-services/EspWifiCapabilities.h"
-#include "compositions/agentic-notes-e6/Defaults.h"
+#include "fixtures/composition/Defaults.h"
 #include "CachePath.h"
 #include "DriverRequests.h"
+#include "fixtures/composition/MicRequests.h"
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -40,6 +41,39 @@ int main(){
  assert(sensor.restore(R"({"system":{"/sensors/custom":{"offset":-90,"threshold":-0.5,"direction":1}}})"));
  assert(sensor.get<double>("/sensors/custom","threshold",0)==-0.5);
  sensor.describe(sensorOut.to<JsonArray>());assert(sensorOut[1]["minimum"]==-1.5&&sensorOut[1]["maximum"]==2.5);
+ // Device defaults, persisted overrides and app scope preserve inheritance.
+ {const Setting fields[]={{"/view","font","string","\"builtin\"","",0,255},{"/view","size","integer","16","",8,96}};
+  Policies style(fields,2);assert(style.defaults(R"({"system":{"/view":{"font":"factory.ttf","size":20}}})"));
+  assert(style.restore(R"({"system":{"/view":{"size":24}}})"));JsonDocument result;style.resolve("/view","reader",result.to<JsonObject>());
+  assert(result["font"]=="factory.ttf"&&result["size"]==24);
+  auto change=json(R"({"scope":"reader","changes":[{"resource":"/view","settings":{"font":"reader.ttf"}}]})");assert(!style.apply(change.as<JsonObjectConst>(),result.to<JsonObject>()));
+  style.resolve("/view","reader",result.to<JsonObject>());assert(result["font"]=="reader.ttf"&&result["size"]==24);
+  style.resolve("/view","other",result.to<JsonObject>());assert(result["font"]=="factory.ttf");
+  assert(style.defaults(R"({"system":{"/view":{"font":"updated-default.ttf","size":20}}})"));
+  style.resolve("/view","other",result.to<JsonObject>());assert(result["font"]=="updated-default.ttf"&&result["size"]==24);
+  assert(!style.defaults(R"({"system":{"/view":{"size":200}}})"));style.resolve("/view","other",result.to<JsonObject>());assert(result["font"]=="updated-default.ttf");
+  // "Default" removes the override; it keeps following future system changes.
+  change=json(R"({"scope":"reader","changes":[{"resource":"/view","inherit":["font"]}]})");
+  auto revision=style.revision();assert(!style.apply(change.as<JsonObjectConst>(),result.to<JsonObject>(),true));assert(style.revision()==revision);
+  style.resolve("/view","reader",result.to<JsonObject>());assert(result["font"]=="reader.ttf");
+  assert(!style.apply(change.as<JsonObjectConst>(),result.to<JsonObject>()));style.resolve("/view","reader",result.to<JsonObject>());assert(result["font"]=="updated-default.ttf");
+  change=json(R"({"changes":[{"resource":"/view","settings":{"font":"user-system.ttf"}}]})");assert(!style.apply(change.as<JsonObjectConst>(),result.to<JsonObject>()));style.resolve("/view","reader",result.to<JsonObject>());assert(result["font"]=="user-system.ttf"&&result["size"]==24);
+  change=json(R"({"changes":[{"resource":"/view","inherit":["font","size"]}]})");assert(!style.apply(change.as<JsonObjectConst>(),result.to<JsonObject>()));style.resolve("/view","reader",result.to<JsonObject>());assert(result["font"]=="updated-default.ttf"&&result["size"]==20);
+  change=json(R"({"scope":"reader","changes":[{"resource":"/view","inherit":["font"],"settings":{"font":"conflict.ttf"}}]})");revision=style.revision();assert(!strcmp(style.apply(change.as<JsonObjectConst>(),result.to<JsonObject>()),"setting_and_inherit_conflict"));assert(style.revision()==revision);
+  change=json(R"({"changes":[{"resource":"/view","settings":{"font":"other.ttf"}},{"resource":"/view","inherit":["missing"]}]})");assert(!strcmp(style.apply(change.as<JsonObjectConst>(),result.to<JsonObject>()),"unknown_or_readonly_setting"));style.resolve("/view","reader",result.to<JsonObject>());assert(result["font"]=="updated-default.ttf");
+  style.describe(result.to<JsonArray>());assert(result[0]["default"]=="updated-default.ttf"&&result[0]["inherit"]==true);
+ }
+ // Policy metadata uses the registered heaps too; PSRAM-capable targets retain
+ // internal memory for DMA/task stacks, while a single-heap target still works.
+ {ResourceBudget memory;memory.heap(ResourceBudget::Region::External,{[]()->size_t{return 1048576;},[]()->size_t{return 1048576;},[]()->size_t{return 1048576;},[](void*p,size_t n)->void*{if(!n){free(p);return nullptr;}return realloc(p,n);}});
+  {const Setting fields[]={{"/view","font","string","\"builtin\"","",0,255},{"/view","size","integer","16","",8,96},{"/view","enabled","boolean","true"},{"/view","fraction","number","0.25","",0,1}};Policies style(fields,4,&memory);assert(style.defaults(R"({"system":{"/view":{"font":"factory.ttf","size":20}}})"));assert(style.restore(R"({"reader":{"/view":{"font":"reader.ttf","size":24}}})"));
+   JsonDocument status,result;memory.read(status.to<JsonObject>());assert(status["heaps"][0]["shared_allocated_bytes"]==0&&status["heaps"][1]["shared_allocated_bytes"].as<unsigned>()>0);
+   style.resolve("/view","reader",result.to<JsonObject>());assert(result["font"]=="reader.ttf");style.resolve("/view","other",result.to<JsonObject>());assert(result["font"]=="factory.ttf");
+   JsonDocument limit;limit["memory_limit_bytes"]=uint32_t(memory.promised());assert(!memory.configure(limit.as<JsonObjectConst>()));
+   assert(style.get<unsigned>("/view","size",0,"reader")==24&&style.get<unsigned>("/view","size",0)==20);
+   assert(style.get<bool>("/view","enabled",false)&&style.get<double>("/view","fraction",0)==0.25);
+  }assert(memory.promised()==0);
+ }
  Policies p(SETTINGS,sizeof(SETTINGS)/sizeof(SETTINGS[0]));p.setValidator(platform);
  JsonDocument out;auto original=p.revision();
  assert(!p.restore(R"({"app:reader":{"/sys/storage":{"ram_quota_bytes":3000}}})"));

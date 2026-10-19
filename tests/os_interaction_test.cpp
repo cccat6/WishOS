@@ -9,9 +9,9 @@
 #include <iostream>
 using namespace notesos;
 static JsonDocument parse(const char*s){JsonDocument d;assert(!deserializeJson(d,s));return d;}
-struct Captured{std::string name;unsigned count,gesture;bool longPress;unsigned mask,edge,held;};
+struct Captured{std::string name;unsigned count,gesture;bool longPress;unsigned mask,edge,held;InputPresentation presentation;};
 static std::vector<Captured> events;
-static void receive(void*,const char*n,JsonObjectConst d){events.push_back({n,d["count"]|0u,d["gesture_id"]|0u,d["long"]|false,d["pressed_mask"]|0u,d["edge_at_ms"]|0u,d["held_ms"]|0u});}
+static void receive(void*,const char*n,JsonObjectConst d){events.push_back({n,d["count"]|0u,d["gesture_id"]|0u,d["long"]|false,d["pressed_mask"]|0u,d["edge_at_ms"]|0u,d["held_ms"]|0u,{d["presentation_id"]|0u,d["presentation_revision"]|0u,d["presentation_activation"]|0u}});}
 static unsigned count(const char*n){unsigned out=0;for(auto&e:events)out+=e.name==n;return out;}
 struct TimeBackend:TimeSyncBackend{unsigned starts=0,stops=0;int64_t seconds=0;const char*start(const TimeSyncConfig&)override{++starts;return nullptr;}void stop()override{++stops;}int64_t completion()override{auto t=seconds;seconds=0;return t;}};
 int main(){
@@ -47,6 +47,16 @@ int main(){
  ButtonGestures delayed({"one"},nullptr,receive);events.clear();delayed.sample(0,false,0);delayed.sample(0,true,10);
  delayed.sample(0,true,110);delayed.sample(0,false,110);delayed.sample(0,false,3000);delayed.sample(0,false,3301);
  assert(count("press")==1&&count("release")==1&&count("click")==1&&count("long_press")==0);assert(events.back().held==100);
+ // Capture belongs to the raw press edge, even when replace revises the same
+ // view before debounce/hold/release are interpreted by the OS loop.
+ ButtonGestures stamped({"one"},nullptr,receive);events.clear();InputPresentation original{7,2,3},replaced{7,3,3},reactivated{7,3,4};
+ stamped.sample(0,true,10,original);stamped.sample(0,true,40,replaced);stamped.sample(0,false,80,reactivated);stamped.sample(0,false,110,reactivated);
+ assert(events.size()==2);for(auto&e:events)assert(e.presentation==original);auto sequence=events.back().gesture;
+ // A second physical press in the multiclick window observes its own frame;
+ // sequence identity remains available to applications choosing combinations.
+ stamped.sample(0,true,140,reactivated);stamped.sample(0,true,170,original);stamped.sample(0,false,190,original);stamped.sample(0,false,220,original);stamped.sample(0,false,521,original);
+ assert(events.back().name=="click"&&events.back().count==2&&events.back().gesture==sequence);for(size_t i=2;i<events.size();++i)assert(events[i].presentation==reactivated);
+ bool both[]={true,true};ButtonGestures stampBank({"A","B"},nullptr,receive);events.clear();stampBank.sampleAll(both,2,1000,original);stampBank.sampleAll(both,2,1030,replaced);assert(events.size()==2&&events[0].presentation==original&&events[1].presentation==original);
  OrientationInput orientation;MotionConfig motion;int changes=0;
  for(unsigned t=0;t<=480;t+=80)if(orientation.sample(0,1000,0,t,motion)==0)++changes;assert(changes==1);
  for(unsigned t=560;t<1000;t+=80)assert(orientation.sample(1,1,1000,t,motion)==-1);

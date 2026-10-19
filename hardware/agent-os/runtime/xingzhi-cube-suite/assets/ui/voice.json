@@ -1,0 +1,277 @@
+{
+  "version": "0.1.1",
+  "assets": [
+    {
+      "type": "viewScreen",
+      "style": {
+        "bgColor": "#F6F7F2",
+        "padding": 0
+      },
+      "children": [
+        {
+          "id": "title",
+          "type": "label",
+          "placement": {
+            "x": 12,
+            "y": 15,
+            "width": 120,
+            "height": 25
+          },
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 22,
+            "textColor": "#17241E",
+            "textAlign": "left"
+          },
+          "labelProps": {
+            "text": "对话",
+            "longMode": "ellipsis",
+            "metrics": "ink",
+            "missingGlyph": "replace",
+            "verticalAlign": "center"
+          }
+        },
+        {
+          "id": "output_label",
+          "type": "label",
+          "placement": {
+            "x": 146,
+            "y": 20,
+            "width": 82,
+            "height": 18
+          },
+          "style": {
+            "fontSize": 12,
+            "lineHeight": 16,
+            "textColor": "#304C38",
+            "textAlign": "right"
+          },
+          "labelProps": {
+            "text": "文字回复",
+            "longMode": "ellipsis",
+            "metrics": "ink",
+            "missingGlyph": "replace",
+            "verticalAlign": "center"
+          }
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 12,
+            "y": 51,
+            "width": 216,
+            "height": 104
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "radius": 14
+          },
+          "children": [
+            {
+              "id": "session_title",
+              "type": "label",
+              "placement": {
+                "x": 12,
+                "y": 9,
+                "width": 192,
+                "height": 16
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#4F5952",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "对话",
+                "longMode": "ellipsis",
+                "metrics": "line",
+                "missingGlyph": "replace"
+              }
+            },
+            {
+              "type": "image",
+              "placement": {
+                "x": 12,
+                "y": 36,
+                "width": 22,
+                "height": 22
+              },
+              "imageProps": {
+                "src": "../brand/microphone.png",
+                "fit": "contain"
+              },
+              "id": "activity"
+            },
+            {
+              "id": "message",
+              "type": "label",
+              "placement": {
+                "x": 43,
+                "y": 33,
+                "width": 162,
+                "height": 66
+              },
+              "style": {
+                "fontSize": 18,
+                "lineHeight": 22,
+                "textColor": "#17241E",
+                "textAlign": "left"
+              },
+              "labelProps": {
+                "text": "按住说话，松开发送",
+                "longMode": "wrap",
+                "metrics": "line",
+                "missingGlyph": "replace"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": -47,
+            "y": 163,
+            "width": 96,
+            "height": 28
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#EEECE3",
+            "borderWidth": 0,
+            "radius": 10
+          },
+          "children": [
+            {
+              "id": "previous_choice",
+              "type": "label",
+              "placement": {
+                "x": 50,
+                "y": 8,
+                "width": 43,
+                "height": 16
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#4F5952",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 55,
+            "y": 161,
+            "width": 130,
+            "height": 32
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#FFFFFF",
+            "borderWidth": 0,
+            "radius": 11
+          },
+          "children": [
+            {
+              "id": "detail",
+              "type": "label",
+              "placement": {
+                "x": 4,
+                "y": 7,
+                "width": 122,
+                "height": 22
+              },
+              "style": {
+                "fontSize": 18,
+                "lineHeight": 22,
+                "textColor": "#17241E",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "会话",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "placement": {
+            "x": 191,
+            "y": 163,
+            "width": 96,
+            "height": 28
+          },
+          "style": {
+            "padding": 0,
+            "bgColor": "#EEECE3",
+            "borderWidth": 0,
+            "radius": 10
+          },
+          "children": [
+            {
+              "id": "next_choice",
+              "type": "label",
+              "placement": {
+                "x": 3,
+                "y": 8,
+                "width": 43,
+                "height": 16
+              },
+              "style": {
+                "fontSize": 12,
+                "lineHeight": 16,
+                "textColor": "#4F5952",
+                "textAlign": "center"
+              },
+              "labelProps": {
+                "text": "",
+                "longMode": "ellipsis",
+                "metrics": "ink",
+                "missingGlyph": "replace",
+                "verticalAlign": "center"
+              }
+            }
+          ]
+        },
+        {
+          "id": "hint",
+          "type": "label",
+          "placement": {
+            "x": 8,
+            "y": 197,
+            "width": 224,
+            "height": 40
+          },
+          "style": {
+            "fontSize": 12,
+            "lineHeight": 16,
+            "textColor": "#4F5952",
+            "textAlign": "center"
+          },
+          "labelProps": {
+            "text": "",
+            "metrics": "line",
+            "longMode": "wrap",
+            "missingGlyph": "replace"
+          }
+        }
+      ]
+    }
+  ]
+}

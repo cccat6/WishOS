@@ -4,7 +4,7 @@
     {
       "type": "viewScreen",
       "style": {
-        "bgColor": "#F7F5EF",
+        "bgColor": "#F6F7F2",
         "padding": 0
       },
       "children": [
@@ -19,7 +19,8 @@
           "imageProps": {
             "src": "../brand/logo.png",
             "fit": "contain"
-          }
+          },
+          "style": {}
         },
         {
           "type": "label",
@@ -32,7 +33,7 @@
           "style": {
             "fontSize": 22,
             "lineHeight": 27,
-            "textColor": "#262822",
+            "textColor": "#17241E",
             "textAlign": "center"
           },
           "labelProps": {
@@ -49,9 +50,9 @@
             "height": 26
           },
           "style": {
-            "fontSize": 16,
-            "lineHeight": 21,
-            "textColor": "#262822",
+            "fontSize": 14,
+            "lineHeight": 19,
+            "textColor": "#17241E",
             "textAlign": "center"
           },
           "labelProps": {
@@ -78,9 +79,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -92,7 +93,7 @@
               "style": {
                 "fontSize": 18,
                 "lineHeight": 23,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "简体中文",
@@ -120,9 +121,9 @@
           },
           "style": {
             "bgColor": "#FFFFFF",
-            "borderWidth": 1,
-            "borderColor": "#D9DACF",
-            "radius": 7,
+            "borderWidth": 0,
+            "borderColor": "#BEC8BB",
+            "radius": 12,
             "padding": 0
           },
           "children": [
@@ -134,7 +135,7 @@
               "style": {
                 "fontSize": 18,
                 "lineHeight": 23,
-                "textColor": "#262822"
+                "textColor": "#17241E"
               },
               "labelProps": {
                 "text": "English",
